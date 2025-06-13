@@ -57,10 +57,10 @@ make -j$(nproc)
 
 ```bash
 cd build
-./OpticalPhotonDetector
+./PhotonSim ../macros/test_muon.mac
 ```
 
-This runs the simulation with default parameters (10 events, electron beam, water detector).
+This runs the simulation with default parameters. Multiple macro files are available in the `macros/` directory.
 
 ### Configuration
 
@@ -70,6 +70,24 @@ The detector and physics parameters can be configured by modifying the source co
 - **Material**: Change `fDetectorMaterialName` in `DetectorConstruction.hh`
 - **Particle type**: Modify particle in `PrimaryGeneratorAction.cc`
 - **Energy range**: Adjust `fMinEnergy/fMaxEnergy` in `PrimaryGeneratorAction.hh`
+
+## Project Structure
+
+```
+PhotonSim/
+├── src/              # C++ source files
+├── include/          # Header files  
+├── macros/           # GEANT4 macro files
+│   ├── test_muon.mac
+│   ├── muons_300_1000MeV.mac
+│   └── electrons_100_500MeV.mac
+├── tools/            # Analysis and visualization tools
+│   ├── analysis/     # Python analysis scripts
+│   ├── validation/   # Physics validation tools
+│   └── visualization/ # 3D visualization tools
+├── build/            # Build directory (created by cmake)
+└── README.md
+```
 
 ### Output
 
