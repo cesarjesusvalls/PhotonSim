@@ -349,8 +349,6 @@ class PhotonSimVisualizer:
         self.ax.tick_params(axis='x', colors='white')
         self.ax.tick_params(axis='y', colors='white')
         self.ax.tick_params(axis='z', colors='white')
-        
-        plt.tight_layout()
     
     def next_event(self):
         """Navigate to the next event."""
