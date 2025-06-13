@@ -29,6 +29,13 @@ Thumbs.db
 .idea/
 *.sublime-*
 
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
 # CMake generated files
 CMakeCache.txt
 CMakeFiles/

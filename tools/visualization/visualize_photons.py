@@ -29,13 +29,24 @@ except ImportError:
     print("Error: uproot package required. Install with: pip install uproot")
     sys.exit(1)
 
-try:
-    from ipywidgets import interact, IntSlider, Button, VBox, HBox, Output
-    from IPython.display import display, clear_output
-    JUPYTER_AVAILABLE = True
-except ImportError:
-    JUPYTER_AVAILABLE = False
-    print("Note: ipywidgets not available. Using basic matplotlib interface.")
+def _check_jupyter_environment():
+    """Check if running in a Jupyter environment."""
+    try:
+        from ipywidgets import interact, IntSlider, Button, VBox, HBox, Output
+        from IPython.display import display, clear_output
+        # Check if we're actually in Jupyter/IPython
+        from IPython import get_ipython
+        if get_ipython() is not None:
+            return True
+        else:
+            return False
+    except ImportError:
+        return False
+
+JUPYTER_AVAILABLE = _check_jupyter_environment()
+if not JUPYTER_AVAILABLE:
+    # Silent fallback to matplotlib interface
+    pass
 
 
 class PhotonSimVisualizer:
@@ -53,6 +64,7 @@ class PhotonSimVisualizer:
         self.current_event = 0
         self.n_events = 0
         self.detector_size = 5.0  # Default 5m detector (will be updated from data)
+        self.colorbar = None  # Track current colorbar
         
         # Load data
         self.load_data()
@@ -245,8 +257,16 @@ class PhotonSimVisualizer:
         if event_id is None:
             event_id = self.current_event
             
-        # Clear the plot
-        self.ax.clear()
+        # Clear the plot completely and recreate axes to avoid colorbar layout issues
+        self.fig.clear()
+        self.ax = self.fig.add_subplot(111, projection='3d')
+        self.ax.set_facecolor('black')
+        self.colorbar = None
+        
+        # Recreate navigation buttons if we're in matplotlib interface mode
+        if hasattr(self, 'buttons_created') and self.buttons_created:
+            plt.subplots_adjust(bottom=0.15)
+            self._add_navigation_buttons()
         
         # Get event data
         event_data = self.get_event_data(event_id)
@@ -334,10 +354,10 @@ class PhotonSimVisualizer:
         
         # Add colorbar for time
         if n_photons > 0 and np.max(times_display) > 0:
-            cbar = plt.colorbar(scatter, ax=self.ax, shrink=0.6, aspect=20)
-            cbar.set_label('Creation Time [ns]', color='white')
-            cbar.ax.yaxis.set_tick_params(color='white')
-            cbar.ax.yaxis.label.set_color('white')
+            self.colorbar = plt.colorbar(scatter, ax=self.ax, shrink=0.6, aspect=20)
+            self.colorbar.set_label('Creation Time [ns]', color='white')
+            self.colorbar.ax.yaxis.set_tick_params(color='white')
+            self.colorbar.ax.yaxis.label.set_color('white')
         
         # Constrain view to keep Y-axis vertical
         self.ax.view_init(elev=15, azim=45)  # Set initial view
@@ -389,8 +409,8 @@ class PhotonSimVisualizer:
     def _create_matplotlib_interface(self):
         """Create matplotlib-based interface with keyboard controls and navigation buttons."""
         
-        # Create figure with subplots to accommodate navigation buttons
-        self.fig.clear()
+        # Store reference to whether buttons have been created
+        self.buttons_created = False
         
         # Main 3D plot takes most of the space
         self.ax = self.fig.add_subplot(111, projection='3d')
@@ -401,6 +421,7 @@ class PhotonSimVisualizer:
         
         # Add navigation buttons
         self._add_navigation_buttons()
+        self.buttons_created = True
         
         def on_key(event):
             changed = False
@@ -555,6 +576,9 @@ Mouse + Shift    : Pan view
     
     def _create_jupyter_interface(self):
         """Create Jupyter notebook interface with widgets."""
+        from ipywidgets import interact, IntSlider, Button, VBox, HBox, Output
+        from IPython.display import display, clear_output
+        
         # Event slider
         event_slider = IntSlider(
             value=0, min=0, max=self.n_events-1,
