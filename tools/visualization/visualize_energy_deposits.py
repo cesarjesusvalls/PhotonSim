@@ -178,14 +178,6 @@ class EnergyDepositVisualizer:
             self.ax.plot3D(points[:, 0], points[:, 1], points[:, 2], 
                           color='cyan', alpha=0.3, linewidth=1)
         
-        # Add coordinate axes at origin
-        axis_length = min(x_max - x_min, y_max - y_min, z_max - z_min) * 0.2
-        # X-axis (red)
-        self.ax.plot3D([0, axis_length], [0, 0], [0, 0], color='red', linewidth=3, alpha=0.8)
-        # Y-axis (green)  
-        self.ax.plot3D([0, 0], [0, axis_length], [0, 0], color='green', linewidth=3, alpha=0.8)
-        # Z-axis (blue)
-        self.ax.plot3D([0, 0], [0, 0], [0, axis_length], color='blue', linewidth=3, alpha=0.8)
     
     def get_event_data(self, event_id):
         """
