@@ -65,6 +65,26 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
     G4String particleName = particle->GetParticleName();
     G4int parentID = track->GetParentID();
     dataManager->RegisterTrack(trackID, particleName, parentID);
+    
+    // Track electron creation processes specifically
+    if (trackID > 1 && particleName == "e-") {
+      const G4VProcess* creationProcess = track->GetCreatorProcess();
+      G4String processName = "Unknown";
+      if (creationProcess) {
+        processName = creationProcess->GetProcessName();
+      }
+      
+      static G4int electronCount = 0;
+      if (electronCount < 10) { // Show first 10 electron creations
+        G4cout << "=== ELECTRON CREATION " << electronCount << " ===" << G4endl;
+        G4cout << "Particle: " << particleName << " (ID=" << trackID << ")" << G4endl;
+        G4cout << "Parent ID: " << parentID << G4endl;
+        G4cout << "Creation Process: " << processName << G4endl;
+        G4cout << "Energy: " << track->GetKineticEnergy()/MeV << " MeV" << G4endl;
+        G4cout << "=================================" << G4endl;
+        electronCount++;
+      }
+    }
   }
   
   // Check if this is an optical photon on its first step (creation)

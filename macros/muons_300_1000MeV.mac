@@ -6,6 +6,15 @@
 # Initialize the simulation
 /run/initialize
 
+# Random seeds automatically set by main program
+
+# Disable muon decay processes via macro commands
+/particle/select mu-
+/particle/process/inactivate 1
+/particle/process/inactivate 7
+/particle/select mu+
+/particle/process/inactivate 1
+
 # Configure particle gun for muons
 /gun/particle mu-
 /gun/energy 650 MeV

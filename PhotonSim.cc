@@ -37,6 +37,9 @@
 #include "G4UIExecutive.hh"
 #include "G4UImanager.hh"
 #include "G4VisExecutive.hh"
+#include "Randomize.hh"
+#include <chrono>
+#include <random>
 
 using namespace PhotonSim;
 
@@ -53,6 +56,16 @@ int main(int argc, char** argv)
   // Use G4SteppingVerboseWithUnits
   G4int precision = 4;
   G4SteppingVerbose::UseBestUnit(precision);
+
+  // Set automatic random seeds based on current time
+  auto now = std::chrono::high_resolution_clock::now();
+  auto duration = now.time_since_epoch();
+  auto seed1 = std::chrono::duration_cast<std::chrono::microseconds>(duration).count() % 900000000;
+  auto seed2 = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count() % 900000000;
+  
+  G4cout << "=== AUTOMATIC RANDOM SEED GENERATION ===" << G4endl;
+  G4cout << "Setting random seeds: " << seed1 << " " << seed2 << G4endl;
+  CLHEP::HepRandom::setTheSeeds(new long[2]{seed1, seed2});
 
   // Construct the run manager (single-threaded for stable ROOT output)
   auto runManager = G4RunManagerFactory::CreateRunManager(G4RunManagerType::Serial);

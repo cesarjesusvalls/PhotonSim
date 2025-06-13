@@ -220,6 +220,11 @@ class EnergyDepositVisualizer:
         self.ax = self.fig.add_subplot(111, projection='3d')
         self.ax.set_facecolor('black')
         
+        # Recreate navigation buttons if they were created before
+        if hasattr(self, 'buttons_created') and self.buttons_created:
+            plt.subplots_adjust(bottom=0.15)
+            self._add_navigation_buttons()
+        
         # Get event data
         event_data = self.get_event_data(event_id)
         if event_data is None:
@@ -345,25 +350,47 @@ class EnergyDepositVisualizer:
         
         def on_key(event):
             """Handle keyboard events."""
+            changed = False
             if event.key == 'right' or event.key == 'n':
-                self.next_event()
+                if self.current_event < self.n_events - 1:
+                    self.next_event()
+                    changed = True
             elif event.key == 'left' or event.key == 'p':
-                self.previous_event()
+                if self.current_event > 0:
+                    self.previous_event()
+                    changed = True
             elif event.key == 'r':
                 self.plot_event()
-                plt.draw()
+                changed = True
             elif event.key.isdigit():
                 event_num = int(event.key)
-                if event_num < self.n_events:
+                if 0 <= event_num < self.n_events:
                     self.goto_event(event_num)
+                    changed = True
             elif event.key == 'h':
                 self.show_help()
+            elif event.key == 'y':
+                self._reset_view()
+                changed = True
+            
+            if changed:
+                self._update_buttons()
+                self._update_window_title()
         
         # Connect keyboard events
         self.fig.canvas.mpl_connect('key_press_event', on_key)
         
+        # Add navigation buttons if more than one event
+        if self.n_events > 1:
+            plt.subplots_adjust(bottom=0.15)
+            self._add_navigation_buttons()
+            self.buttons_created = True
+        else:
+            self.buttons_created = False
+        
         # Plot first event
         self.plot_event(0)
+        self._update_window_title()
         
         # Show help and start visualization
         self.show_help()
@@ -389,6 +416,77 @@ class EnergyDepositVisualizer:
             self.current_event = event_id
             self.plot_event()
             plt.draw()
+    
+    def _add_navigation_buttons(self):
+        """Add navigation buttons to the figure."""
+        from matplotlib.widgets import Button
+        
+        # Button positions (left, bottom, width, height)
+        ax_prev = plt.axes([0.1, 0.02, 0.1, 0.05])
+        ax_next = plt.axes([0.25, 0.02, 0.1, 0.05])
+        ax_reset = plt.axes([0.4, 0.02, 0.1, 0.05])
+        ax_info = plt.axes([0.7, 0.02, 0.2, 0.05])
+        
+        self.btn_prev = Button(ax_prev, '← Previous')
+        self.btn_next = Button(ax_next, 'Next →')
+        self.btn_reset = Button(ax_reset, 'Reset View')
+        self.btn_info = Button(ax_info, f'Event {self.current_event + 1}/{self.n_events}')
+        
+        # Button callbacks
+        def on_prev(event):
+            if self.current_event > 0:
+                self.previous_event()
+                self._update_buttons()
+                self._update_window_title()
+        
+        def on_next(event):
+            if self.current_event < self.n_events - 1:
+                self.next_event()
+                self._update_buttons()
+                self._update_window_title()
+        
+        def on_reset(event):
+            self._reset_view()
+        
+        self.btn_prev.on_clicked(on_prev)
+        self.btn_next.on_clicked(on_next)
+        self.btn_reset.on_clicked(on_reset)
+        
+        # Style buttons
+        self.btn_prev.color = 'lightblue'
+        self.btn_next.color = 'lightblue'
+        self.btn_reset.color = 'lightgreen'
+        self.btn_info.color = 'lightgray'
+    
+    def _update_buttons(self):
+        """Update button states and text."""
+        try:
+            if hasattr(self, 'btn_info'):
+                self.btn_info.label.set_text(f'Event {self.current_event + 1}/{self.n_events}')
+                
+            # Update button colors based on availability
+            if hasattr(self, 'btn_prev'):
+                self.btn_prev.color = 'lightblue' if self.current_event > 0 else 'lightgray'
+            if hasattr(self, 'btn_next'):
+                self.btn_next.color = 'lightblue' if self.current_event < self.n_events - 1 else 'lightgray'
+        except:
+            # Buttons might not be initialized yet
+            pass
+    
+    def _reset_view(self):
+        """Reset the 3D view to standard orientation."""
+        self.ax.view_init(elev=20, azim=45)
+        self.fig.canvas.draw()
+    
+    def _update_window_title(self):
+        """Update the window title with current event info."""
+        if hasattr(self, 'fig') and self.fig:
+            event_data = self.get_event_data(self.current_event)
+            if event_data:
+                title = f"PhotonSim Energy Deposits Event {event_data['event_id']}/{self.n_events-1}: "
+                title += f"{event_data['primary_energy']:.1f} MeV, "
+                title += f"{event_data['n_deposits']:,} deposits"
+                self.fig.canvas.manager.set_window_title(title)
     
     def show_help(self):
         """Display help information."""

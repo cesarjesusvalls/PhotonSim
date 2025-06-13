@@ -38,6 +38,11 @@
 #include "G4StoppingPhysics.hh"
 #include "G4IonPhysics.hh"
 #include "G4SystemOfUnits.hh"
+#include "G4ParticleTable.hh"
+#include "G4MuonMinus.hh"
+#include "G4MuonPlus.hh"
+#include "G4ProcessManager.hh"
+#include "G4ProcessVector.hh"
 
 namespace PhotonSim
 {
@@ -61,6 +66,18 @@ PhysicsList::PhysicsList()
 
   // Optical physics - this is crucial for optical photon generation
   RegisterPhysics(new G4OpticalPhysics(0));
+}
+
+void PhysicsList::ConstructParticle()
+{
+  // Call the base class method to construct all particles normally
+  G4VModularPhysicsList::ConstructParticle();
+}
+
+void PhysicsList::ConstructProcess()
+{
+  // Call the base class method to construct all processes normally
+  G4VModularPhysicsList::ConstructProcess();
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
