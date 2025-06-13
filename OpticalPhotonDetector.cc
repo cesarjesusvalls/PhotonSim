@@ -54,8 +54,8 @@ int main(int argc, char** argv)
   G4int precision = 4;
   G4SteppingVerbose::UseBestUnit(precision);
 
-  // Construct the default run manager
-  auto runManager = G4RunManagerFactory::CreateRunManager(G4RunManagerType::Default);
+  // Construct the run manager (single-threaded for stable ROOT output)
+  auto runManager = G4RunManagerFactory::CreateRunManager(G4RunManagerType::Serial);
 
   // Set mandatory initialization classes
   // Detector construction
@@ -86,9 +86,9 @@ int main(int argc, char** argv)
     UImanager->ApplyCommand(command + fileName);
   }
   else {
-    // interactive mode - run a few events for demonstration
+    // interactive mode - run a few events for demonstration  
     UImanager->ApplyCommand("/run/initialize");
-    UImanager->ApplyCommand("/run/beamOn 10");
+    UImanager->ApplyCommand("/run/beamOn 3");
   }
 
   // Finalize data output

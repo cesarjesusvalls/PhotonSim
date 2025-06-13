@@ -67,8 +67,8 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     G4ParticleGun* fParticleGun = nullptr;
     
     // Configurable parameters
-    G4double fMinEnergy = 1.0*MeV;
-    G4double fMaxEnergy = 10.0*MeV;
+    G4double fMinEnergy = 100.0*MeV;
+    G4double fMaxEnergy = 500.0*MeV;
     G4bool fRandomEnergy = true;
     G4double fTrueEnergy = 0.0; // Store the actual energy used for this event
 };

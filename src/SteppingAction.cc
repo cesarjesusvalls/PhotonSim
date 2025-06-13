@@ -40,6 +40,7 @@
 #include "G4ParticleDefinition.hh"
 #include "G4OpticalPhoton.hh"
 #include "G4VProcess.hh"
+#include "G4SystemOfUnits.hh"
 
 namespace OpticalPhotonDetector
 {
@@ -56,31 +57,35 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
   G4Track* track = step->GetTrack();
   G4ParticleDefinition* particle = track->GetDefinition();
   
-  // Only process optical photons
-  if (particle != G4OpticalPhoton::OpticalPhotonDefinition()) {
-    return;
-  }
-  
-  // Get the process that created this step
-  const G4VProcess* process = step->GetPostStepPoint()->GetProcessDefinedStep();
-  if (!process) return;
-  
-  G4String processName = process->GetProcessName();
-  
-  // We're interested in the creation of optical photons
-  // Check if this is a step where optical photons are generated
-  if (processName == "Cerenkov" || processName == "Scintillation") {
-    
-    // Get position and direction at the beginning of this step
-    G4ThreeVector position = step->GetPreStepPoint()->GetPosition();
-    G4ThreeVector direction = step->GetPreStepPoint()->GetMomentumDirection();
-    G4double time = step->GetPreStepPoint()->GetGlobalTime();
-    
-    // Record this optical photon
-    DataManager* dataManager = DataManager::GetInstance();
-    dataManager->AddOpticalPhoton(position.x(), position.y(), position.z(),
-                                 direction.x(), direction.y(), direction.z(),
-                                 time, processName);
+  // Check if this is an optical photon on its first step (creation)
+  if (particle == G4OpticalPhoton::OpticalPhotonDefinition()) {
+    // Only record optical photons at their first step (when they're created)
+    if (track->GetCurrentStepNumber() == 1) {
+      
+      // Get the creation process from the track
+      const G4VProcess* creationProcess = track->GetCreatorProcess();
+      G4String processName = "Unknown";
+      if (creationProcess) {
+        processName = creationProcess->GetProcessName();
+      }
+      
+      // Get position and direction at creation
+      G4ThreeVector position = track->GetPosition();
+      G4ThreeVector direction = track->GetMomentumDirection();
+      G4double time = track->GetGlobalTime();
+      
+      // Record this optical photon using DataManager
+      DataManager* dataManager = DataManager::GetInstance();
+      dataManager->AddOpticalPhoton(position.x(), position.y(), position.z(),
+                                   direction.x(), direction.y(), direction.z(),
+                                   time, processName);
+      
+      // Add some debug output
+      G4cout << "Optical Photon Created by " << processName << " at (" 
+             << position.x()/mm << ", " << position.y()/mm << ", " << position.z()/mm 
+             << ") mm" << G4endl;
+    }
+    return; // Don't process further for optical photons
   }
   
   // Also collect energy deposition in the detector volume for general tracking
