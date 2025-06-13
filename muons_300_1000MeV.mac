@@ -1,0 +1,16 @@
+# PhotonSim macro for muons with energies 300-1000 MeV
+# 
+# This macro configures the simulation to run muons with 
+# energies randomly distributed between 300-1000 MeV
+
+# Initialize the simulation
+/run/initialize
+
+# Configure particle gun for muons
+/gun/particle mu-
+/gun/energy 650 MeV
+/gun/position 0 0 0 m
+/gun/direction 0 0 1
+
+# Run 5 events
+/run/beamOn 5

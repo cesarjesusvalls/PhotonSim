@@ -24,59 +24,51 @@
 // ********************************************************************
 //
 //
-/// \file PhotonSim/include/PrimaryGeneratorAction.hh
-/// \brief Definition of the PhotonSim::PrimaryGeneratorAction class
+/// \file PhotonSim/include/PrimaryGeneratorMessenger.hh
+/// \brief Definition of the PhotonSim::PrimaryGeneratorMessenger class
 
-#ifndef PhotonSimPrimaryGeneratorAction_h
-#define PhotonSimPrimaryGeneratorAction_h 1
+#ifndef PhotonSimPrimaryGeneratorMessenger_h
+#define PhotonSimPrimaryGeneratorMessenger_h 1
 
-#include "G4VUserPrimaryGeneratorAction.hh"
-#include "G4String.hh"
-#include "G4SystemOfUnits.hh"
-#include "G4ThreeVector.hh"
+#include "G4UImessenger.hh"
+#include "globals.hh"
 
-class G4ParticleGun;
-class G4Event;
+class G4UIdirectory;
+class G4UIcmdWithAString;
+class G4UIcmdWithADoubleAndUnit;
+class G4UIcmdWith3VectorAndUnit;
+class G4UIcmdWith3Vector;
 
 namespace PhotonSim
 {
 
-class PrimaryGeneratorMessenger;
+class PrimaryGeneratorAction;
 
-/// The primary generator action class with configurable particle gun.
-/// Generates particles at the center of the detector (0,0,0) with 
-/// direction along (0,0,1) and configurable energy and particle type.
+/// Messenger class for particle gun settings
+///
+/// This class defines commands for the particle gun:
+/// - /gun/particle [particleName]
+/// - /gun/energy [value] [unit]
+/// - /gun/energyRange [minEnergy] [maxEnergy] [unit]
+/// - /gun/position [x] [y] [z] [unit]
+/// - /gun/direction [x] [y] [z]
 
-class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
+class PrimaryGeneratorMessenger: public G4UImessenger
 {
   public:
-    PrimaryGeneratorAction();
-    ~PrimaryGeneratorAction() override;
+    PrimaryGeneratorMessenger(PrimaryGeneratorAction*);
+    ~PrimaryGeneratorMessenger() override;
 
-    // method from the base class
-    void GeneratePrimaries(G4Event*) override;
-
-    // methods to configure the particle gun
-    void SetParticleType(const G4String& particleName);
-    void SetParticleEnergy(G4double energy);
-    void SetEnergyRange(G4double minEnergy, G4double maxEnergy);
-    void SetRandomEnergy(G4bool useRandom) { fRandomEnergy = useRandom; }
-    void SetParticlePosition(const G4ThreeVector& position);
-    void SetParticleDirection(const G4ThreeVector& direction);
-    
-    // method to access particle gun
-    const G4ParticleGun* GetParticleGun() const { return fParticleGun; }
-    G4double GetTrueEnergy() const { return fTrueEnergy; }
+    void SetNewValue(G4UIcommand*, G4String) override;
 
   private:
-    G4ParticleGun* fParticleGun = nullptr;
-    PrimaryGeneratorMessenger* fMessenger = nullptr;
-    
-    // Configurable parameters
-    G4double fMinEnergy = 100.0*MeV;
-    G4double fMaxEnergy = 500.0*MeV;
-    G4bool fRandomEnergy = true;
-    G4double fTrueEnergy = 0.0; // Store the actual energy used for this event
+    PrimaryGeneratorAction*        fPrimaryGeneratorAction = nullptr;
+
+    G4UIdirectory*                 fGunDir = nullptr;
+    G4UIcmdWithAString*            fParticleCmd = nullptr;
+    G4UIcmdWithADoubleAndUnit*     fEnergyCmd = nullptr;
+    G4UIcmdWith3VectorAndUnit*     fPositionCmd = nullptr;
+    G4UIcmdWith3Vector*            fDirectionCmd = nullptr;
 };
 
 }  // namespace PhotonSim

@@ -1,0 +1,16 @@
+# PhotonSim macro for electrons with energies 100-500 MeV
+# 
+# This macro configures the simulation to run electrons with 
+# energies randomly distributed between 100-500 MeV (current default)
+
+# Initialize the simulation
+/run/initialize
+
+# Configure particle gun for electrons
+/gun/particle e-
+/gun/energy 300 MeV
+/gun/position 0 0 0 m
+/gun/direction 0 0 1
+
+# Run 5 events
+/run/beamOn 5

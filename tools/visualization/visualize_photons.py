@@ -328,7 +328,7 @@ class PhotonSimVisualizer:
         ])
         
         # Title with event information
-        title = f"Event {event_data['event_id']}: {event_data['primary_energy']:.1f} MeV electron\n"
+        title = f"Event {event_data['event_id']}: {event_data['primary_energy']:.1f} MeV primary particle\n"
         title += f"{event_data['n_photons']:,} Cherenkov photons"
         self.ax.set_title(title, color='white', fontsize=12)
         

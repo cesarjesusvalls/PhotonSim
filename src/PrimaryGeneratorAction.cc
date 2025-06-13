@@ -28,6 +28,7 @@
 /// \brief Implementation of the PhotonSim::PrimaryGeneratorAction class
 
 #include "PrimaryGeneratorAction.hh"
+#include "PrimaryGeneratorMessenger.hh"
 
 #include "G4ParticleGun.hh"
 #include "G4ParticleTable.hh"
@@ -44,6 +45,9 @@ PrimaryGeneratorAction::PrimaryGeneratorAction()
 {
   G4int n_particle = 1;
   fParticleGun = new G4ParticleGun(n_particle);
+
+  // Create messenger for UI commands
+  fMessenger = new PrimaryGeneratorMessenger(this);
 
   // Default particle: electron with 5 MeV energy
   G4ParticleTable* particleTable = G4ParticleTable::GetParticleTable();
@@ -64,6 +68,7 @@ PrimaryGeneratorAction::PrimaryGeneratorAction()
 
 PrimaryGeneratorAction::~PrimaryGeneratorAction()
 {
+  delete fMessenger;
   delete fParticleGun;
 }
 
@@ -112,6 +117,20 @@ void PrimaryGeneratorAction::SetEnergyRange(G4double minEnergy, G4double maxEner
   fMinEnergy = minEnergy;
   fMaxEnergy = maxEnergy;
   fRandomEnergy = true;
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void PrimaryGeneratorAction::SetParticlePosition(const G4ThreeVector& position)
+{
+  fParticleGun->SetParticlePosition(position);
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void PrimaryGeneratorAction::SetParticleDirection(const G4ThreeVector& direction)
+{
+  fParticleGun->SetParticleMomentumDirection(direction);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
