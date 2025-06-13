@@ -1,5 +1,10 @@
 # Test macro for muon with minimal events
 /run/initialize
+
+# Disable muon decay processes
+/process/inactivate Decay mu+
+/process/inactivate Decay mu-
+
 /gun/particle mu-
 /gun/energy 650 MeV
 /gun/position 0 0 0 m
