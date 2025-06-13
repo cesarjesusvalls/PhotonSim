@@ -280,10 +280,9 @@ class PhotonSimVisualizer:
             
             # Color photons by creation time
             if np.max(times_display) > 0:
-                # Normalize times for color mapping
-                normalized_times = times_display / np.max(times_display)
+                # Use actual times for color mapping (not normalized)
                 scatter = self.ax.scatter(pos_x_display, pos_y_display, pos_z_display,
-                                        c=normalized_times, s=1, alpha=0.6, cmap='plasma')
+                                        c=times_display, s=1, alpha=0.6, cmap='plasma')
             else:
                 # All times are zero, use uniform color
                 scatter = self.ax.scatter(pos_x_display, pos_y_display, pos_z_display,
@@ -340,6 +339,12 @@ class PhotonSimVisualizer:
             cbar.ax.yaxis.set_tick_params(color='white')
             cbar.ax.yaxis.label.set_color('white')
         
+        # Constrain view to keep Y-axis vertical
+        self.ax.view_init(elev=15, azim=45)  # Set initial view
+        
+        # Lock the up vector to keep Y vertical during rotation
+        self.ax.zaxis.set_rotate_label(False)
+        
         # Style the plot
         self.ax.tick_params(axis='x', colors='white')
         self.ax.tick_params(axis='y', colors='white')
@@ -352,6 +357,7 @@ class PhotonSimVisualizer:
         if self.current_event < self.n_events - 1:
             self.current_event += 1
             self.plot_event()
+            self._update_buttons()
             plt.draw()
     
     def previous_event(self):
@@ -359,6 +365,7 @@ class PhotonSimVisualizer:
         if self.current_event > 0:
             self.current_event -= 1
             self.plot_event()
+            self._update_buttons()
             plt.draw()
     
     def goto_event(self, event_id):
@@ -371,6 +378,7 @@ class PhotonSimVisualizer:
         if 0 <= event_id < self.n_events:
             self.current_event = event_id
             self.plot_event()
+            self._update_buttons()
             plt.draw()
     
     def create_interactive_plot(self):
@@ -381,7 +389,21 @@ class PhotonSimVisualizer:
             self._create_matplotlib_interface()
     
     def _create_matplotlib_interface(self):
-        """Create matplotlib-based interface with keyboard controls."""
+        """Create matplotlib-based interface with keyboard controls and navigation buttons."""
+        
+        # Create figure with subplots to accommodate navigation buttons
+        self.fig.clear()
+        
+        # Main 3D plot takes most of the space
+        self.ax = self.fig.add_subplot(111, projection='3d')
+        self.ax.set_facecolor('black')
+        
+        # Adjust layout to make room for buttons
+        plt.subplots_adjust(bottom=0.15)
+        
+        # Add navigation buttons
+        self._add_navigation_buttons()
+        
         def on_key(event):
             changed = False
             if event.key == 'right' or event.key == 'n':
@@ -404,12 +426,31 @@ class PhotonSimVisualizer:
             elif event.key == 'h':
                 # Show help
                 self._show_help()
+            elif event.key == 'y':
+                # Reset view to keep Y vertical
+                self._reset_view()
+                changed = True
             
             if changed:
-                # Update title with current event info
                 self._update_window_title()
         
+        # Mouse motion callback to constrain rotation
+        def on_motion(event):
+            if event.inaxes == self.ax:
+                # Get current view angles
+                elev = self.ax.elev
+                azim = self.ax.azim
+                
+                # Constrain elevation to reasonable range to keep Y somewhat vertical
+                if elev > 80:
+                    self.ax.view_init(elev=80, azim=azim)
+                elif elev < -80:
+                    self.ax.view_init(elev=-80, azim=azim)
+                    
+                self.fig.canvas.draw_idle()
+        
         self.fig.canvas.mpl_connect('key_press_event', on_key)
+        self.fig.canvas.mpl_connect('motion_notify_event', on_motion)
         
         # Plot initial event
         self.plot_event()
@@ -418,13 +459,76 @@ class PhotonSimVisualizer:
         # Show initial help
         print("\n=== PhotonSim Visualization Controls ===")
         print("Arrow keys / N,P : Navigate events")
+        print("Navigation buttons: Use mouse to click ← →")
         print("R                : Refresh view")
+        print("Y                : Reset view (Y vertical)")
         print("0-9              : Jump to event number")
         print("H                : Show this help")
         print("Mouse            : Rotate, zoom, pan")
         print("========================================\n")
         
         plt.show()
+    
+    def _add_navigation_buttons(self):
+        """Add navigation buttons to the figure."""
+        from matplotlib.widgets import Button
+        
+        # Button positions (left, bottom, width, height)
+        ax_prev = plt.axes([0.1, 0.02, 0.1, 0.05])
+        ax_next = plt.axes([0.25, 0.02, 0.1, 0.05])
+        ax_reset = plt.axes([0.4, 0.02, 0.1, 0.05])
+        ax_info = plt.axes([0.7, 0.02, 0.2, 0.05])
+        
+        self.btn_prev = Button(ax_prev, '← Previous')
+        self.btn_next = Button(ax_next, 'Next →')
+        self.btn_reset = Button(ax_reset, 'Reset View')
+        self.btn_info = Button(ax_info, f'Event {self.current_event + 1}/{self.n_events}')
+        
+        # Button callbacks
+        def on_prev(event):
+            if self.current_event > 0:
+                self.previous_event()
+                self._update_buttons()
+                self._update_window_title()
+        
+        def on_next(event):
+            if self.current_event < self.n_events - 1:
+                self.next_event()
+                self._update_buttons()
+                self._update_window_title()
+        
+        def on_reset(event):
+            self._reset_view()
+        
+        self.btn_prev.on_clicked(on_prev)
+        self.btn_next.on_clicked(on_next)
+        self.btn_reset.on_clicked(on_reset)
+        
+        # Style buttons
+        self.btn_prev.color = 'lightblue'
+        self.btn_next.color = 'lightblue'
+        self.btn_reset.color = 'lightgreen'
+        self.btn_info.color = 'lightgray'
+    
+    def _update_buttons(self):
+        """Update button states and text."""
+        try:
+            if hasattr(self, 'btn_info'):
+                self.btn_info.label.set_text(f'Event {self.current_event + 1}/{self.n_events}')
+                
+            # Update button colors based on availability
+            if hasattr(self, 'btn_prev'):
+                self.btn_prev.color = 'lightblue' if self.current_event > 0 else 'lightgray'
+            if hasattr(self, 'btn_next'):
+                self.btn_next.color = 'lightblue' if self.current_event < self.n_events - 1 else 'lightgray'
+        except:
+            # Buttons might not be initialized yet
+            pass
+    
+    def _reset_view(self):
+        """Reset the 3D view to standard orientation with Y vertical."""
+        self.ax.view_init(elev=15, azim=45)
+        self.fig.canvas.draw()
     
     def _update_window_title(self):
         """Update the window title with current event info."""
