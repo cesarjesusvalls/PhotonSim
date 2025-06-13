@@ -83,9 +83,63 @@ The simulation produces a ROOT file `optical_photons.root` containing:
 - `PhotonTime`: Photon creation times (ns)
 - `PhotonProcess`: Creation process name
 
+## Visualization
+
+PhotonSim includes a Python-based interactive 3D visualization tool:
+
+### Quick Start
+
+```bash
+# Install Python dependencies
+pip install uproot matplotlib numpy ipywidgets
+
+# Run visualization
+python visualize_photons.py optical_photons.root
+```
+
+### Features
+
+- **Interactive 3D Plots**: Navigate through events with keyboard controls
+- **Color-coded Photons**: Photons colored by creation time
+- **Detector Geometry**: Wireframe detector outline
+- **Direction Vectors**: Sample of photon directions as arrows
+- **Event Statistics**: Energy and photon count information
+
+### Controls
+
+- **Arrow keys** or **n/p**: Navigate between events
+- **Mouse**: Rotate, zoom, pan 3D view
+- **r**: Refresh current view
+
+See [VISUALIZATION.md](VISUALIZATION.md) for detailed documentation.
+
+### Example Analysis
+
+```python
+from visualize_photons import PhotonSimVisualizer
+
+# Load and analyze data
+viz = PhotonSimVisualizer('optical_photons.root')
+
+# Get event statistics
+event_data = viz.get_event_data(0)
+print(f"Event 0: {event_data['primary_energy']:.1f} MeV")
+print(f"Photons: {event_data['n_photons']:,}")
+
+# Interactive visualization
+viz.create_interactive_plot()
+```
+
 ## Analysis
 
-Example ROOT analysis:
+### Python Analysis (Recommended)
+
+```python
+# Run example analysis
+python example_visualization.py
+```
+
+### ROOT Analysis
 
 ```cpp
 // Open the output file
