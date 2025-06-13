@@ -91,10 +91,10 @@ int main(int argc, char** argv)
     UImanager->ApplyCommand("/run/beamOn 3");
   }
 
-  // Finalize data output
-  dataManager->Finalize();
-
   // Job termination
+  // Finalize data output before deleting managers
+  dataManager->Finalize();
+  
   delete visManager;
   delete runManager;
   

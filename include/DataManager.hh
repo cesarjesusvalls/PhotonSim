@@ -33,6 +33,7 @@
 #include "G4Types.hh"
 #include <vector>
 #include <memory>
+#include <string>
 
 class TFile;
 class TTree;
@@ -79,7 +80,9 @@ class DataManager
     std::vector<G4double> fPhotonDirY;
     std::vector<G4double> fPhotonDirZ;
     std::vector<G4double> fPhotonTime;
-    std::vector<G4String> fPhotonProcess;
+    std::vector<std::string> fPhotonProcess;
+    
+    bool fFinalized = false;  // Flag to prevent double finalization
     
     void ClearEventData();
 };

@@ -84,12 +84,25 @@ void DataManager::Initialize(const G4String& filename)
 
 void DataManager::Finalize()
 {
-  if (fRootFile && fTree) {
-    fRootFile->cd();
-    fTree->Write();
-    fRootFile->Close();
-    G4cout << "ROOT file closed with " << fTree->GetEntries() << " events" << G4endl;
+  if (fFinalized) {
+    return;  // Already finalized, avoid double cleanup
   }
+  
+  try {
+    if (fRootFile && fTree) {
+      fRootFile->cd();
+      fTree->Write();
+      G4cout << "ROOT file closed with " << fTree->GetEntries() << " events" << G4endl;
+      fTree = nullptr;  // Avoid double deletion
+      fRootFile->Close();
+      fRootFile.reset(); // Explicitly reset the unique_ptr
+    }
+  }
+  catch (...) {
+    G4cout << "Exception during ROOT file finalization, but data may have been saved" << G4endl;
+  }
+  
+  fFinalized = true;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -124,7 +137,7 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
   fPhotonDirY.push_back(dy);
   fPhotonDirZ.push_back(dz);
   fPhotonTime.push_back(time / ns); // Store in ns
-  fPhotonProcess.push_back(process);
+  fPhotonProcess.push_back(std::string(process));
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
