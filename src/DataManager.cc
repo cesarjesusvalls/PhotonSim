@@ -23,8 +23,8 @@
 // ********************************************************************
 //
 //
-/// \file OpticalPhotonDetector/src/DataManager.cc
-/// \brief Implementation of the OpticalPhotonDetector::DataManager class
+/// \file PhotonSim/src/DataManager.cc
+/// \brief Implementation of the PhotonSim::DataManager class
 
 #include "DataManager.hh"
 
@@ -33,7 +33,7 @@
 #include "G4SystemOfUnits.hh"
 #include "G4ios.hh"
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -143,4 +143,4 @@ void DataManager::ClearEventData()
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim

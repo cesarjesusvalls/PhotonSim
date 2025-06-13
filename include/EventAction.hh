@@ -35,7 +35,7 @@
 
 class G4Event;
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 class RunAction;
@@ -58,7 +58,7 @@ class EventAction : public G4UserEventAction
     G4double fEdep = 0.;
 };
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 

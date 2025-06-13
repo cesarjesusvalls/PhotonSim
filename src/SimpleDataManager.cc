@@ -1,12 +1,12 @@
 //
-/// \file OpticalPhotonDetector/src/SimpleDataManager.cc
+/// \file PhotonSim/src/SimpleDataManager.cc
 /// \brief Simple data manager implementation
 
 #include "SimpleDataManager.hh"
 #include "G4SystemOfUnits.hh"
 #include "G4ios.hh"
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 SimpleDataManager* SimpleDataManager::fInstance = nullptr;
@@ -88,4 +88,4 @@ void SimpleDataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
   fPhotonCount++;
 }
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim

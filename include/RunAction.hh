@@ -37,7 +37,7 @@
 
 class G4Run;
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 /// Run action class
@@ -62,6 +62,6 @@ class RunAction : public G4UserRunAction
     G4Accumulable<G4double> fEdep2 = 0.;
 };
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim
 
 #endif

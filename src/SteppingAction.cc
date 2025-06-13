@@ -24,8 +24,8 @@
 // ********************************************************************
 //
 //
-/// \file OpticalPhotonDetector/src/SteppingAction.cc
-/// \brief Implementation of the OpticalPhotonDetector::SteppingAction class
+/// \file PhotonSim/src/SteppingAction.cc
+/// \brief Implementation of the PhotonSim::SteppingAction class
 
 #include "SteppingAction.hh"
 #include "DetectorConstruction.hh"
@@ -42,7 +42,7 @@
 #include "G4VProcess.hh"
 #include "G4SystemOfUnits.hh"
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -108,4 +108,4 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim

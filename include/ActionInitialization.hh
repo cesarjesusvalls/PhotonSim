@@ -27,12 +27,12 @@
 /// \file B1/include/ActionInitialization.hh
 /// \brief Definition of the B1::ActionInitialization class
 
-#ifndef B1ActionInitialization_h
-#define B1ActionInitialization_h 1
+#ifndef PhotonSimActionInitialization_h
+#define PhotonSimActionInitialization_h 1
 
 #include "G4VUserActionInitialization.hh"
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 /// Action initialization class.
@@ -47,7 +47,7 @@ class ActionInitialization : public G4VUserActionInitialization
     void Build() const override;
 };
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 

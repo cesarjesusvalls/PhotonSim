@@ -1,5 +1,5 @@
 //
-/// \file OpticalPhotonDetector/include/SimpleDataManager.hh
+/// \file PhotonSim/include/SimpleDataManager.hh
 /// \brief Simple data manager without ROOT dependencies
 
 #ifndef SimpleDataManager_h
@@ -10,7 +10,7 @@
 #include <fstream>
 #include <vector>
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 /// Simple data manager that outputs to CSV files instead of ROOT
@@ -47,6 +47,6 @@ class SimpleDataManager
     bool fInitialized = false;
 };
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim
 
 #endif

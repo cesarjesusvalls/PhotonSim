@@ -24,8 +24,8 @@
 // ********************************************************************
 //
 //
-/// \file OpticalPhotonDetector/src/DetectorConstruction.cc
-/// \brief Implementation of the OpticalPhotonDetector::DetectorConstruction class
+/// \file PhotonSim/src/DetectorConstruction.cc
+/// \brief Implementation of the PhotonSim::DetectorConstruction class
 
 #include "DetectorConstruction.hh"
 
@@ -40,7 +40,7 @@
 #include "G4OpticalSurface.hh"
 #include "G4LogicalSkinSurface.hh"
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -334,4 +334,4 @@ void DetectorConstruction::SetDetectorMaterial(const G4String& materialName)
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim

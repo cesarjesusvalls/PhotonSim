@@ -35,7 +35,7 @@
 #include "G4Event.hh"
 #include "G4RunManager.hh"
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -72,4 +72,4 @@ void EventAction::EndOfEventAction(const G4Event*)
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim

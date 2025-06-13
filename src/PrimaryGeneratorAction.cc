@@ -24,8 +24,8 @@
 // ********************************************************************
 //
 //
-/// \file OpticalPhotonDetector/src/PrimaryGeneratorAction.cc
-/// \brief Implementation of the OpticalPhotonDetector::PrimaryGeneratorAction class
+/// \file PhotonSim/src/PrimaryGeneratorAction.cc
+/// \brief Implementation of the PhotonSim::PrimaryGeneratorAction class
 
 #include "PrimaryGeneratorAction.hh"
 
@@ -35,7 +35,7 @@
 #include "G4SystemOfUnits.hh"
 #include "Randomize.hh"
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -116,4 +116,4 @@ void PrimaryGeneratorAction::SetEnergyRange(G4double minEnergy, G4double maxEner
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim

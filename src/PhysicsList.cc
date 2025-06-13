@@ -23,8 +23,8 @@
 // ********************************************************************
 //
 //
-/// \file OpticalPhotonDetector/src/PhysicsList.cc
-/// \brief Implementation of the OpticalPhotonDetector::PhysicsList class
+/// \file PhotonSim/src/PhysicsList.cc
+/// \brief Implementation of the PhotonSim::PhysicsList class
 
 #include "PhysicsList.hh"
 
@@ -39,7 +39,7 @@
 #include "G4IonPhysics.hh"
 #include "G4SystemOfUnits.hh"
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -79,4 +79,4 @@ void PhysicsList::SetCuts()
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim

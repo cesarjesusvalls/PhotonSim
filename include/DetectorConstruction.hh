@@ -24,11 +24,11 @@
 // ********************************************************************
 //
 //
-/// \file OpticalPhotonDetector/include/DetectorConstruction.hh
-/// \brief Definition of the OpticalPhotonDetector::DetectorConstruction class
+/// \file PhotonSim/include/DetectorConstruction.hh
+/// \brief Definition of the PhotonSim::DetectorConstruction class
 
-#ifndef OpticalDetectorConstruction_h
-#define OpticalDetectorConstruction_h 1
+#ifndef PhotonSimDetectorConstruction_h
+#define PhotonSimDetectorConstruction_h 1
 
 #include "G4VUserDetectorConstruction.hh"
 #include "G4Material.hh"
@@ -37,7 +37,7 @@ class G4VPhysicalVolume;
 class G4LogicalVolume;
 class G4OpticalSurface;
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 /// Detector construction class to define materials and geometry.
@@ -80,7 +80,7 @@ class DetectorConstruction : public G4VUserDetectorConstruction
     G4Material* fLiquidScintillator = nullptr;
 };
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 

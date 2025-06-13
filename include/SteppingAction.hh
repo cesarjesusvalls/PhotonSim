@@ -24,8 +24,8 @@
 // ********************************************************************
 //
 //
-/// \file OpticalPhotonDetector/include/SteppingAction.hh
-/// \brief Definition of the OpticalPhotonDetector::SteppingAction class
+/// \file PhotonSim/include/SteppingAction.hh
+/// \brief Definition of the PhotonSim::SteppingAction class
 
 #ifndef OpticalSteppingAction_h
 #define OpticalSteppingAction_h 1
@@ -35,7 +35,7 @@
 class G4LogicalVolume;
 class G4Step;
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 class EventAction;
@@ -56,7 +56,7 @@ class SteppingAction : public G4UserSteppingAction
     G4LogicalVolume* fDetectorVolume = nullptr;
 };
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 

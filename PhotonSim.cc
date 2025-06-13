@@ -24,8 +24,8 @@
 // ********************************************************************
 //
 //
-/// \file OpticalPhotonDetector.cc
-/// \brief Main program of the OpticalPhotonDetector application
+/// \file PhotonSim.cc
+/// \brief Main program of the PhotonSim application
 
 #include "ActionInitialization.hh"
 #include "DetectorConstruction.hh"
@@ -38,7 +38,7 @@
 #include "G4UImanager.hh"
 #include "G4VisExecutive.hh"
 
-using namespace OpticalPhotonDetector;
+using namespace PhotonSim;
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 

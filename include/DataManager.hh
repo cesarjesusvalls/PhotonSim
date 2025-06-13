@@ -23,8 +23,8 @@
 // ********************************************************************
 //
 //
-/// \file OpticalPhotonDetector/include/DataManager.hh
-/// \brief Definition of the OpticalPhotonDetector::DataManager class
+/// \file PhotonSim/include/DataManager.hh
+/// \brief Definition of the PhotonSim::DataManager class
 
 #ifndef OpticalDataManager_h
 #define OpticalDataManager_h 1
@@ -37,7 +37,7 @@
 class TFile;
 class TTree;
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 /// Singleton class to manage ROOT data output for optical photons
@@ -84,6 +84,6 @@ class DataManager
     void ClearEventData();
 };
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim
 
 #endif

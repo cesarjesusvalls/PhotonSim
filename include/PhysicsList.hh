@@ -23,15 +23,15 @@
 // ********************************************************************
 //
 //
-/// \file OpticalPhotonDetector/include/PhysicsList.hh
-/// \brief Definition of the OpticalPhotonDetector::PhysicsList class
+/// \file PhotonSim/include/PhysicsList.hh
+/// \brief Definition of the PhotonSim::PhysicsList class
 
 #ifndef OpticalPhysicsList_h
 #define OpticalPhysicsList_h 1
 
 #include "G4VModularPhysicsList.hh"
 
-namespace OpticalPhotonDetector
+namespace PhotonSim
 {
 
 /// Physics list including standard electromagnetic processes and optical physics
@@ -45,6 +45,6 @@ class PhysicsList : public G4VModularPhysicsList
     void SetCuts() override;
 };
 
-}  // namespace OpticalPhotonDetector
+}  // namespace PhotonSim
 
 #endif

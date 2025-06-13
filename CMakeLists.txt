@@ -2,7 +2,7 @@
 # Setup the project
 #
 cmake_minimum_required(VERSION 3.16...3.27)
-project(OpticalPhotonDetector)
+project(PhotonSim)
 
 #----------------------------------------------------------------------------
 # Find Geant4 package, activating all available UI and Vis drivers by default
@@ -23,9 +23,9 @@ file(GLOB headers ${PROJECT_SOURCE_DIR}/include/*.hh)
 #----------------------------------------------------------------------------
 # Add the executable, use our local headers, and link it to the Geant4 and ROOT libraries
 #
-add_executable(OpticalPhotonDetector OpticalPhotonDetector.cc ${sources} ${headers})
-target_include_directories(OpticalPhotonDetector PRIVATE include ${ROOT_INCLUDE_DIRS})
-target_link_libraries(OpticalPhotonDetector PRIVATE ${Geant4_LIBRARIES} ${ROOT_LIBRARIES})
+add_executable(PhotonSim PhotonSim.cc ${sources} ${headers})
+target_include_directories(PhotonSim PRIVATE include ${ROOT_INCLUDE_DIRS})
+target_link_libraries(PhotonSim PRIVATE ${Geant4_LIBRARIES} ${ROOT_LIBRARIES})
 
 #----------------------------------------------------------------------------
 # Copy all scripts to the build directory
