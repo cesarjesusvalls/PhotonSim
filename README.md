@@ -8,7 +8,7 @@ PhotonSim is designed to study optical photon production from particle interacti
 
 ## Features
 
-- **Monolithic Detector Geometry**: Configurable detector dimensions (default 10×10×10 meters)
+- **Monolithic Detector Geometry**: Configurable detector dimensions (default 100×100×100 meters)
 - **Multiple Materials**: Water, Liquid Argon, Ice, or Liquid Scintillator with proper optical properties
 - **Configurable Particle Gun**: Shoots particles from detector center (0,0,0) along z-axis (0,0,1)
 - **Optical Physics**: Complete Cerenkov and scintillation processes
@@ -94,7 +94,7 @@ PhotonSim includes a Python-based interactive 3D visualization tool:
 pip install uproot matplotlib numpy ipywidgets
 
 # Run visualization
-python visualize_photons.py optical_photons.root
+python tools/visualization/visualize_photons.py build/optical_photons.root
 ```
 
 ### Features
@@ -116,10 +116,12 @@ See [VISUALIZATION.md](VISUALIZATION.md) for detailed documentation.
 ### Example Analysis
 
 ```python
+import sys
+sys.path.append('tools/visualization')
 from visualize_photons import PhotonSimVisualizer
 
 # Load and analyze data
-viz = PhotonSimVisualizer('optical_photons.root')
+viz = PhotonSimVisualizer('build/optical_photons.root')
 
 # Get event statistics
 event_data = viz.get_event_data(0)
@@ -136,7 +138,10 @@ viz.create_interactive_plot()
 
 ```python
 # Run example analysis
-python example_visualization.py
+python tools/visualization/example_visualization.py
+
+# Run physics validation
+python tools/validation/physics_summary.py
 ```
 
 ### ROOT Analysis

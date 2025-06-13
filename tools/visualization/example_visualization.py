@@ -7,8 +7,13 @@ for analyzing optical photon data.
 """
 
 import numpy as np
-from visualize_photons import PhotonSimVisualizer
 import matplotlib.pyplot as plt
+import sys
+import os
+
+# Add current directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from visualize_photons import PhotonSimVisualizer
 
 def analyze_event_statistics(root_file_path):
     """Analyze statistics across all events."""
@@ -82,7 +87,7 @@ def create_summary_plots(root_file_path):
         photon_counts.append(event_data['n_photons'])
     
     # Create plots
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 10))
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(10, 8))
     fig.suptitle('PhotonSim Simulation Summary', fontsize=16)
     
     # Energy distribution
@@ -144,8 +149,12 @@ def main():
     import sys
     import os
     
-    # Default ROOT file
-    root_file = "optical_photons.root"
+    # Default ROOT file (relative to PhotonSim root)
+    root_file = "../../build/optical_photons.root"
+    
+    # If running from PhotonSim root, try that path too
+    if not os.path.exists(root_file):
+        root_file = "build/optical_photons.root"
     
     # Check if file exists
     if not os.path.exists(root_file):

@@ -109,20 +109,82 @@ class PhotonSimVisualizer:
     def setup_plot(self):
         """Setup the 3D matplotlib figure."""
         plt.style.use('dark_background')
-        self.fig = plt.figure(figsize=(12, 10))
+        self.fig = plt.figure(figsize=(10, 8))
         self.ax = self.fig.add_subplot(111, projection='3d')
         
         # Set up the plot aesthetics
         self.ax.set_facecolor('black')
         self.fig.patch.set_facecolor('black')
+        
+        # Add text for instructions
+        self.fig.text(0.02, 0.02, "Controls: ←/→ or P/N = Navigate events, R = Refresh, Mouse = Rotate/Zoom", 
+                     color='white', fontsize=10)
     
-    def draw_detector_geometry(self):
-        """Draw the detector volume outline."""
-        # Define detector cube vertices (±detector_size in meters)
-        size = self.detector_size
+    def calculate_plot_bounds(self, event_data, padding_factor=1.2):
+        """
+        Calculate optimal plot bounds based on photon distribution.
+        
+        Args:
+            event_data (dict): Event data containing photon positions
+            padding_factor (float): Factor for padding around photon cloud
+            
+        Returns:
+            tuple: (x_range, y_range, z_range) as (min, max) tuples
+        """
+        if len(event_data['pos_x']) == 0:
+            # No photons, use default range around origin
+            default_range = 10.0  # 10 meters
+            return ((-default_range, default_range), 
+                   (-default_range, default_range), 
+                   (-default_range, default_range))
+        
+        # Calculate bounds from photon positions
+        x_min, x_max = np.min(event_data['pos_x']), np.max(event_data['pos_x'])
+        y_min, y_max = np.min(event_data['pos_y']), np.max(event_data['pos_y'])
+        z_min, z_max = np.min(event_data['pos_z']), np.max(event_data['pos_z'])
+        
+        # Add padding and ensure we include origin
+        x_center = (x_min + x_max) / 2
+        y_center = (y_min + y_max) / 2
+        z_center = (z_min + z_max) / 2
+        
+        x_range = max(abs(x_max - x_center), abs(x_min - x_center)) * padding_factor
+        y_range = max(abs(y_max - y_center), abs(y_min - y_center)) * padding_factor
+        z_range = max(abs(z_max - z_center), abs(z_min - z_center)) * padding_factor
+        
+        # Ensure origin is included with some minimum range
+        min_range = 5.0  # 5 meters minimum
+        x_range = max(x_range, min_range, abs(x_center) + min_range)
+        y_range = max(y_range, min_range, abs(y_center) + min_range)
+        z_range = max(z_range, min_range, abs(z_center) + min_range)
+        
+        return ((x_center - x_range, x_center + x_range),
+                (y_center - y_range, y_center + y_range),
+                (z_center - z_range, z_center + z_range))
+    
+    def draw_detector_geometry(self, plot_bounds=None):
+        """
+        Draw the detector volume outline.
+        
+        Args:
+            plot_bounds (tuple): Optional plot bounds to adjust detector visualization
+        """
+        # Use detector size or plot bounds for detector outline
+        if plot_bounds:
+            x_range, y_range, z_range = plot_bounds
+            # Draw a subset of the detector that's visible in the plot
+            x_size = min(self.detector_size, (x_range[1] - x_range[0]) / 2)
+            y_size = min(self.detector_size, (y_range[1] - y_range[0]) / 2)
+            z_size = min(self.detector_size, (z_range[1] - z_range[0]) / 2)
+        else:
+            x_size = y_size = z_size = self.detector_size
+        
+        # Define detector cube vertices
         vertices = np.array([
-            [-size, -size, -size], [size, -size, -size], [size, size, -size], [-size, size, -size],  # bottom face
-            [-size, -size, size], [size, -size, size], [size, size, size], [-size, size, size]      # top face
+            [-x_size, -y_size, -z_size], [x_size, -y_size, -z_size], 
+            [x_size, y_size, -z_size], [-x_size, y_size, -z_size],  # bottom face
+            [-x_size, -y_size, z_size], [x_size, -y_size, z_size], 
+            [x_size, y_size, z_size], [-x_size, y_size, z_size]      # top face
         ])
         
         # Define the edges of the cube
@@ -136,7 +198,16 @@ class PhotonSimVisualizer:
         for edge in edges:
             points = vertices[edge]
             self.ax.plot3D(points[:, 0], points[:, 1], points[:, 2], 
-                          color='cyan', alpha=0.3, linewidth=1)
+                          color='cyan', alpha=0.4, linewidth=1)
+        
+        # Add coordinate axes at origin
+        axis_length = min(x_size, y_size, z_size) * 0.3
+        # X-axis (red)
+        self.ax.plot3D([0, axis_length], [0, 0], [0, 0], color='red', linewidth=3, alpha=0.8)
+        # Y-axis (green)  
+        self.ax.plot3D([0, 0], [0, axis_length], [0, 0], color='green', linewidth=3, alpha=0.8)
+        # Z-axis (blue)
+        self.ax.plot3D([0, 0], [0, 0], [0, axis_length], color='blue', linewidth=3, alpha=0.8)
     
     def get_event_data(self, event_id):
         """
@@ -183,51 +254,79 @@ class PhotonSimVisualizer:
             print(f"Event {event_id} not found")
             return
         
-        # Draw detector geometry
-        self.draw_detector_geometry()
+        # Calculate optimal plot bounds
+        plot_bounds = self.calculate_plot_bounds(event_data)
         
-        # Plot photon positions
+        # Draw detector geometry with smart sizing
+        self.draw_detector_geometry(plot_bounds)
+        
+        # Plot photon positions (with performance optimization)
         n_photons = len(event_data['pos_x'])
         if n_photons > 0:
-            # Color photons by creation time
-            times = event_data['time']
+            # Sample photons for performance if there are too many
+            max_display_photons = 10000  # Limit for smooth interaction
+            if n_photons > max_display_photons:
+                indices = np.random.choice(n_photons, max_display_photons, replace=False)
+                pos_x_display = event_data['pos_x'][indices]
+                pos_y_display = event_data['pos_y'][indices]
+                pos_z_display = event_data['pos_z'][indices]
+                times_display = event_data['time'][indices]
+                print(f"Displaying {max_display_photons:,} of {n_photons:,} photons for performance")
+            else:
+                pos_x_display = event_data['pos_x']
+                pos_y_display = event_data['pos_y']
+                pos_z_display = event_data['pos_z']
+                times_display = event_data['time']
             
-            if np.max(times) > 0:
+            # Color photons by creation time
+            if np.max(times_display) > 0:
                 # Normalize times for color mapping
-                normalized_times = times / np.max(times)
-                scatter = self.ax.scatter(event_data['pos_x'], event_data['pos_y'], event_data['pos_z'],
+                normalized_times = times_display / np.max(times_display)
+                scatter = self.ax.scatter(pos_x_display, pos_y_display, pos_z_display,
                                         c=normalized_times, s=1, alpha=0.6, cmap='plasma')
             else:
                 # All times are zero, use uniform color
-                scatter = self.ax.scatter(event_data['pos_x'], event_data['pos_y'], event_data['pos_z'],
+                scatter = self.ax.scatter(pos_x_display, pos_y_display, pos_z_display,
                                         c='yellow', s=1, alpha=0.6)
             
             # Add some photon direction vectors (sample to avoid overcrowding)
-            n_arrows = min(500, n_photons)  # Limit number of arrows
-            indices = np.random.choice(n_photons, n_arrows, replace=False)
-            
-            arrow_scale = 0.2  # Scale factor for arrow length
-            for i in indices:
-                self.ax.quiver(event_data['pos_x'][i], event_data['pos_y'][i], event_data['pos_z'][i],
-                              event_data['dir_x'][i] * arrow_scale,
-                              event_data['dir_y'][i] * arrow_scale,
-                              event_data['dir_z'][i] * arrow_scale,
-                              color='white', alpha=0.3, arrow_length_ratio=0.1)
+            n_arrows = min(200, len(pos_x_display))  # Limit number of arrows
+            if n_arrows > 0:
+                arrow_indices = np.random.choice(len(pos_x_display), n_arrows, replace=False)
+                
+                # Scale arrows based on plot bounds
+                x_range, y_range, z_range = plot_bounds
+                plot_scale = min(x_range[1] - x_range[0], y_range[1] - y_range[0], z_range[1] - z_range[0])
+                arrow_scale = plot_scale * 0.05  # Arrow length as 5% of plot scale
+                
+                for i in arrow_indices:
+                    self.ax.quiver(pos_x_display[i], pos_y_display[i], pos_z_display[i],
+                                  event_data['dir_x'][i] * arrow_scale,
+                                  event_data['dir_y'][i] * arrow_scale,
+                                  event_data['dir_z'][i] * arrow_scale,
+                                  color='white', alpha=0.4, arrow_length_ratio=0.1)
         
         # Plot primary particle origin
         self.ax.scatter([0], [0], [0], color='red', s=100, marker='*', 
                        label='Primary particle origin')
         
         # Set labels and title
-        self.ax.set_xlabel('X [m]', color='white')
-        self.ax.set_ylabel('Y [m]', color='white')
-        self.ax.set_zlabel('Z [m]', color='white')
+        self.ax.set_xlabel('X [m]', color='white', fontsize=12)
+        self.ax.set_ylabel('Y [m]', color='white', fontsize=12)
+        self.ax.set_zlabel('Z [m]', color='white', fontsize=12)
         
-        # Set equal aspect ratio
-        max_range = self.detector_size * 1.1
-        self.ax.set_xlim([-max_range, max_range])
-        self.ax.set_ylim([-max_range, max_range])
-        self.ax.set_zlim([-max_range, max_range])
+        # Set proportional aspect ratio using smart bounds
+        x_range, y_range, z_range = plot_bounds
+        self.ax.set_xlim(x_range)
+        self.ax.set_ylim(y_range)
+        self.ax.set_zlim(z_range)
+        
+        # Force equal aspect ratio
+        self.ax.set_box_aspect([
+            x_range[1] - x_range[0],
+            y_range[1] - y_range[0], 
+            z_range[1] - z_range[0]
+        ])
         
         # Title with event information
         title = f"Event {event_data['event_id']}: {event_data['primary_energy']:.1f} MeV electron\n"
@@ -284,23 +383,73 @@ class PhotonSimVisualizer:
     def _create_matplotlib_interface(self):
         """Create matplotlib-based interface with keyboard controls."""
         def on_key(event):
+            changed = False
             if event.key == 'right' or event.key == 'n':
-                self.next_event()
+                if self.current_event < self.n_events - 1:
+                    self.next_event()
+                    changed = True
             elif event.key == 'left' or event.key == 'p':
-                self.previous_event()
+                if self.current_event > 0:
+                    self.previous_event()
+                    changed = True
             elif event.key == 'r':
                 self.plot_event()  # Refresh
+                changed = True
+            elif event.key.isdigit():
+                # Jump to specific event by number
+                event_num = int(event.key)
+                if 0 <= event_num < self.n_events:
+                    self.goto_event(event_num)
+                    changed = True
+            elif event.key == 'h':
+                # Show help
+                self._show_help()
+            
+            if changed:
+                # Update title with current event info
+                self._update_window_title()
         
         self.fig.canvas.mpl_connect('key_press_event', on_key)
         
         # Plot initial event
         self.plot_event()
+        self._update_window_title()
         
-        # Add instructions
-        self.fig.suptitle("Use arrow keys or 'n'/'p' to navigate events, 'r' to refresh", 
-                         color='white', y=0.02)
+        # Show initial help
+        print("\n=== PhotonSim Visualization Controls ===")
+        print("Arrow keys / N,P : Navigate events")
+        print("R                : Refresh view")
+        print("0-9              : Jump to event number")
+        print("H                : Show this help")
+        print("Mouse            : Rotate, zoom, pan")
+        print("========================================\n")
         
         plt.show()
+    
+    def _update_window_title(self):
+        """Update the window title with current event info."""
+        if hasattr(self, 'fig') and self.fig:
+            event_data = self.get_event_data(self.current_event)
+            if event_data:
+                title = f"PhotonSim Event {event_data['event_id']}/{self.n_events-1}: "
+                title += f"{event_data['primary_energy']:.1f} MeV, "
+                title += f"{event_data['n_photons']:,} photons"
+                self.fig.canvas.manager.set_window_title(title)
+    
+    def _show_help(self):
+        """Display help information."""
+        help_text = """
+=== PhotonSim Visualization Controls ===
+Arrow keys / N,P : Navigate between events
+R                : Refresh current view  
+0-9              : Jump to event number (0-9)
+H                : Show this help
+Mouse drag       : Rotate 3D view
+Mouse wheel      : Zoom in/out
+Mouse + Shift    : Pan view
+========================================
+        """
+        print(help_text)
     
     def _create_jupyter_interface(self):
         """Create Jupyter notebook interface with widgets."""
