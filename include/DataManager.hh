@@ -34,6 +34,7 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <map>
 
 class TFile;
 class TTree;
@@ -56,7 +57,15 @@ class DataManager
     
     void AddOpticalPhoton(G4double x, G4double y, G4double z,
                          G4double dx, G4double dy, G4double dz,
-                         G4double time, const G4String& process);
+                         G4double time, const G4String& process,
+                         const G4String& parentParticle = "Unknown",
+                         G4int parentID = -1,
+                         G4int trackID = -1);
+    
+    // Track registry for parent particle identification
+    void RegisterTrack(G4int trackID, const G4String& particleName, G4int parentID);
+    G4String GetParticleNameFromTrackID(G4int trackID);
+    void ClearTrackRegistry();
     
   private:
     DataManager() = default;
@@ -81,8 +90,14 @@ class DataManager
     std::vector<G4double> fPhotonDirZ;
     std::vector<G4double> fPhotonTime;
     std::vector<std::string> fPhotonProcess;
+    std::vector<std::string> fPhotonParent;
+    std::vector<G4int> fPhotonParentID;
+    std::vector<G4int> fPhotonTrackID;
     
     bool fFinalized = false;  // Flag to prevent double finalization
+    
+    // Track registry to map track IDs to particle names
+    std::map<G4int, G4String> fTrackRegistry;
     
     void ClearEventData();
 };

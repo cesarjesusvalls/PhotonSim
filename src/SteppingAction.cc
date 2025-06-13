@@ -57,6 +57,16 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
   G4Track* track = step->GetTrack();
   G4ParticleDefinition* particle = track->GetDefinition();
   
+  DataManager* dataManager = DataManager::GetInstance();
+  
+  // Register all new tracks (first step) for parent tracking
+  if (track->GetCurrentStepNumber() == 1) {
+    G4int trackID = track->GetTrackID();
+    G4String particleName = particle->GetParticleName();
+    G4int parentID = track->GetParentID();
+    dataManager->RegisterTrack(trackID, particleName, parentID);
+  }
+  
   // Check if this is an optical photon on its first step (creation)
   if (particle == G4OpticalPhoton::OpticalPhotonDefinition()) {
     // Only record optical photons at their first step (when they're created)
@@ -69,23 +79,61 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
         processName = creationProcess->GetProcessName();
       }
       
+      // Get the parent particle information using our track registry
+      G4String parentParticle = "Unknown";
+      G4int parentID = track->GetParentID();
+      
+      if (parentID == 0) {
+        // Primary particle (original muon)
+        parentParticle = "Primary";
+      } else {
+        // Look up the parent particle name from our registry
+        parentParticle = dataManager->GetParticleNameFromTrackID(parentID);
+        if (parentParticle == "Unknown") {
+          parentParticle = "Secondary_ID_" + std::to_string(parentID);
+        }
+      }
+      
+      // Store ALL photons for investigation (no filtering)
+      
       // Get position and direction at creation
-      G4ThreeVector position = track->GetPosition();
-      G4ThreeVector direction = track->GetMomentumDirection();
+      // Use vertex position (where photon was actually created) instead of current position
+      G4ThreeVector position = track->GetVertexPosition();
+      G4ThreeVector direction = track->GetVertexMomentumDirection();
       G4double time = track->GetGlobalTime();
       
       // Record this optical photon using DataManager
-      DataManager* dataManager = DataManager::GetInstance();
+      G4int trackID = track->GetTrackID();
       dataManager->AddOpticalPhoton(position.x(), position.y(), position.z(),
                                    direction.x(), direction.y(), direction.z(),
-                                   time, processName);
+                                   time, processName, parentParticle,
+                                   parentID, trackID);
       
-      // Add some debug output
-      G4cout << "Optical Photon Created by " << processName << " at (" 
-             << position.x()/mm << ", " << position.y()/mm << ", " << position.z()/mm 
-             << ") mm" << G4endl;
+      // Add some debug output (only for first few photons)
+      static G4int photonCount = 0;
+      if (photonCount < 10) {
+        G4cout << "Optical Photon " << photonCount << " Created by " << processName 
+               << " (parent: " << parentParticle << ") at (" 
+               << position.x()/mm << ", " << position.y()/mm << ", " << position.z()/mm 
+               << ") mm" << G4endl;
+        photonCount++;
+      }
     }
     return; // Don't process further for optical photons
+  }
+  
+  // Debug: Track charged particles to see what's creating Cherenkov light
+  if (particle->GetPDGCharge() != 0) {
+    static G4int particleStepCount = 0;
+    if (particleStepCount < 20) {
+      G4ThreeVector pos = track->GetPosition();
+      G4double distance = sqrt(pos.x()*pos.x() + pos.y()*pos.y() + pos.z()*pos.z());
+      G4cout << "Charged particle: " << particle->GetParticleName() 
+             << " at (" << pos.x()/mm << ", " << pos.y()/mm << ", " << pos.z()/mm 
+             << ") mm, distance=" << distance/mm << "mm, energy=" 
+             << track->GetKineticEnergy()/MeV << " MeV" << G4endl;
+      particleStepCount++;
+    }
   }
   
   // Also collect energy deposition in the detector volume for general tracking

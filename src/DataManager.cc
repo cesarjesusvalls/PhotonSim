@@ -76,6 +76,9 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("PhotonDirZ", &fPhotonDirZ);
   fTree->Branch("PhotonTime", &fPhotonTime);
   fTree->Branch("PhotonProcess", &fPhotonProcess);
+  fTree->Branch("PhotonParent", &fPhotonParent);
+  fTree->Branch("PhotonParentID", &fPhotonParentID);
+  fTree->Branch("PhotonTrackID", &fPhotonTrackID);
   
   G4cout << "ROOT file " << filename << " created for optical photon data" << G4endl;
 }
@@ -128,7 +131,9 @@ void DataManager::EndEvent()
 
 void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
                                   G4double dx, G4double dy, G4double dz,
-                                  G4double time, const G4String& process)
+                                  G4double time, const G4String& process,
+                                  const G4String& parentParticle,
+                                  G4int parentID, G4int trackID)
 {
   fPhotonPosX.push_back(x / mm);   // Store in mm
   fPhotonPosY.push_back(y / mm);
@@ -138,6 +143,34 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
   fPhotonDirZ.push_back(dz);
   fPhotonTime.push_back(time / ns); // Store in ns
   fPhotonProcess.push_back(std::string(process));
+  fPhotonParent.push_back(std::string(parentParticle));
+  fPhotonParentID.push_back(parentID);
+  fPhotonTrackID.push_back(trackID);
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void DataManager::RegisterTrack(G4int trackID, const G4String& particleName, G4int parentID)
+{
+  fTrackRegistry[trackID] = particleName;
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+G4String DataManager::GetParticleNameFromTrackID(G4int trackID)
+{
+  auto it = fTrackRegistry.find(trackID);
+  if (it != fTrackRegistry.end()) {
+    return it->second;
+  }
+  return "Unknown";
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void DataManager::ClearTrackRegistry()
+{
+  fTrackRegistry.clear();
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -152,6 +185,12 @@ void DataManager::ClearEventData()
   fPhotonDirZ.clear();
   fPhotonTime.clear();
   fPhotonProcess.clear();
+  fPhotonParent.clear();
+  fPhotonParentID.clear();
+  fPhotonTrackID.clear();
+  
+  // Clear track registry for new event
+  ClearTrackRegistry();
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
