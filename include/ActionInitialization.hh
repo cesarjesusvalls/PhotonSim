@@ -24,8 +24,8 @@
 // ********************************************************************
 //
 //
-/// \file B1/include/ActionInitialization.hh
-/// \brief Definition of the B1::ActionInitialization class
+/// \file PhotonSim/include/ActionInitialization.hh
+/// \brief Definition of the PhotonSim::ActionInitialization class
 
 #ifndef PhotonSimActionInitialization_h
 #define PhotonSimActionInitialization_h 1

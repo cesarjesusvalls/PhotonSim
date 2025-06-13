@@ -24,8 +24,8 @@
 // ********************************************************************
 //
 //
-/// \file B1/src/EventAction.cc
-/// \brief Implementation of the B1::EventAction class
+/// \file PhotonSim/src/EventAction.cc
+/// \brief Implementation of the PhotonSim::EventAction class
 
 #include "EventAction.hh"
 #include "RunAction.hh"

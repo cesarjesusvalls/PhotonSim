@@ -24,11 +24,11 @@
 // ********************************************************************
 //
 //
-/// \file B1/include/EventAction.hh
-/// \brief Definition of the B1::EventAction class
+/// \file PhotonSim/include/EventAction.hh
+/// \brief Definition of the PhotonSim::EventAction class
 
-#ifndef B1EventAction_h
-#define B1EventAction_h 1
+#ifndef PhotonSimEventAction_h
+#define PhotonSimEventAction_h 1
 
 #include "G4UserEventAction.hh"
 #include "globals.hh"

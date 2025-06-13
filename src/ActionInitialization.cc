@@ -24,8 +24,8 @@
 // ********************************************************************
 //
 //
-/// \file B1/src/ActionInitialization.cc
-/// \brief Implementation of the B1::ActionInitialization class
+/// \file PhotonSim/src/ActionInitialization.cc
+/// \brief Implementation of the PhotonSim::ActionInitialization class
 
 #include "ActionInitialization.hh"
 

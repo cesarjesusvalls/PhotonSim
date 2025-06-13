@@ -24,11 +24,11 @@
 // ********************************************************************
 //
 //
-/// \file B1/include/RunAction.hh
-/// \brief Definition of the B1::RunAction class
+/// \file PhotonSim/include/RunAction.hh
+/// \brief Definition of the PhotonSim::RunAction class
 
-#ifndef B1RunAction_h
-#define B1RunAction_h 1
+#ifndef PhotonSimRunAction_h
+#define PhotonSimRunAction_h 1
 
 #include "G4UserRunAction.hh"
 

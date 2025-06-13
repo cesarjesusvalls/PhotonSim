@@ -28,19 +28,5 @@ target_include_directories(PhotonSim PRIVATE include ${ROOT_INCLUDE_DIRS})
 target_link_libraries(PhotonSim PRIVATE ${Geant4_LIBRARIES} ${ROOT_LIBRARIES})
 
 #----------------------------------------------------------------------------
-# Copy all scripts to the build directory
+# No additional scripts to copy for PhotonSim
 #
-set(PROJECT_SCRIPTS
-  init_vis.mac
-  run1.mac
-  run2.mac
-  vis.mac
-  )
-
-foreach(_script ${PROJECT_SCRIPTS})
-  configure_file(
-    ${PROJECT_SOURCE_DIR}/${_script}
-    ${PROJECT_BINARY_DIR}/${_script}
-    COPYONLY
-    )
-endforeach()
