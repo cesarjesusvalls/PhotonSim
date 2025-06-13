@@ -334,7 +334,7 @@ class PhotonSimVisualizer:
         self.ax.set_title(title, color='white', fontsize=12)
         
         # Add colorbar for time
-        if n_photons > 0 and np.max(times) > 0:
+        if n_photons > 0 and np.max(times_display) > 0:
             cbar = plt.colorbar(scatter, ax=self.ax, shrink=0.6, aspect=20)
             cbar.set_label('Creation Time [ns]', color='white')
             cbar.ax.yaxis.set_tick_params(color='white')
