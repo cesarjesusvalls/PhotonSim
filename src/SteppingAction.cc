@@ -151,6 +151,29 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
   if (volume == fDetectorVolume) {
     G4double edepStep = step->GetTotalEnergyDeposit();
     fEventAction->AddEdep(edepStep);
+    
+    // Store detailed energy deposit information for scintillation analysis
+    if (edepStep > 0.0) {
+      G4ThreeVector stepPos = step->GetPostStepPoint()->GetPosition();
+      G4double stepTime = step->GetPostStepPoint()->GetGlobalTime();
+      G4String particleName = particle->GetParticleName();
+      G4int trackID = track->GetTrackID();
+      G4int parentID = track->GetParentID();
+      
+      dataManager->AddEnergyDeposit(stepPos.x(), stepPos.y(), stepPos.z(),
+                                   edepStep, stepTime, particleName,
+                                   trackID, parentID);
+      
+      // Debug output for first few energy deposits
+      static G4int edepCount = 0;
+      if (edepCount < 10) {
+        G4cout << "Energy Deposit " << edepCount << ": " << edepStep/keV 
+               << " keV by " << particleName << " at (" 
+               << stepPos.x()/mm << ", " << stepPos.y()/mm << ", " << stepPos.z()/mm 
+               << ") mm, t=" << stepTime/ns << " ns" << G4endl;
+        edepCount++;
+      }
+    }
   }
 }
 

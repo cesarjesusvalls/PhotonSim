@@ -62,6 +62,12 @@ class DataManager
                          G4int parentID = -1,
                          G4int trackID = -1);
     
+    void AddEnergyDeposit(G4double x, G4double y, G4double z,
+                         G4double energy, G4double time,
+                         const G4String& particleName,
+                         G4int trackID = -1,
+                         G4int parentID = -1);
+    
     // Track registry for parent particle identification
     void RegisterTrack(G4int trackID, const G4String& particleName, G4int parentID);
     G4String GetParticleNameFromTrackID(G4int trackID);
@@ -80,6 +86,7 @@ class DataManager
     G4int fEventID = 0;
     G4double fPrimaryEnergy = 0.0;
     G4int fNOpticalPhotons = 0;
+    G4int fNEnergyDeposits = 0;
     
     // Optical photon data (vectors for multiple photons per event)
     std::vector<G4double> fPhotonPosX;
@@ -93,6 +100,16 @@ class DataManager
     std::vector<std::string> fPhotonParent;
     std::vector<G4int> fPhotonParentID;
     std::vector<G4int> fPhotonTrackID;
+    
+    // Energy deposit data (vectors for multiple deposits per event)
+    std::vector<G4double> fEdepPosX;
+    std::vector<G4double> fEdepPosY;
+    std::vector<G4double> fEdepPosZ;
+    std::vector<G4double> fEdepEnergy;
+    std::vector<G4double> fEdepTime;
+    std::vector<std::string> fEdepParticle;
+    std::vector<G4int> fEdepTrackID;
+    std::vector<G4int> fEdepParentID;
     
     bool fFinalized = false;  // Flag to prevent double finalization
     

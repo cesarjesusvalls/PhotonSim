@@ -66,6 +66,7 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("EventID", &fEventID, "EventID/I");
   fTree->Branch("PrimaryEnergy", &fPrimaryEnergy, "PrimaryEnergy/D");
   fTree->Branch("NOpticalPhotons", &fNOpticalPhotons, "NOpticalPhotons/I");
+  fTree->Branch("NEnergyDeposits", &fNEnergyDeposits, "NEnergyDeposits/I");
   
   // Optical photon data branches
   fTree->Branch("PhotonPosX", &fPhotonPosX);
@@ -80,7 +81,17 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("PhotonParentID", &fPhotonParentID);
   fTree->Branch("PhotonTrackID", &fPhotonTrackID);
   
-  G4cout << "ROOT file " << filename << " created for optical photon data" << G4endl;
+  // Energy deposit data branches
+  fTree->Branch("EdepPosX", &fEdepPosX);
+  fTree->Branch("EdepPosY", &fEdepPosY);
+  fTree->Branch("EdepPosZ", &fEdepPosZ);
+  fTree->Branch("EdepEnergy", &fEdepEnergy);
+  fTree->Branch("EdepTime", &fEdepTime);
+  fTree->Branch("EdepParticle", &fEdepParticle);
+  fTree->Branch("EdepTrackID", &fEdepTrackID);
+  fTree->Branch("EdepParentID", &fEdepParentID);
+  
+  G4cout << "ROOT file " << filename << " created for optical photon and energy deposit data" << G4endl;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -122,6 +133,7 @@ void DataManager::BeginEvent(G4int eventID, G4double primaryEnergy)
 void DataManager::EndEvent()
 {
   fNOpticalPhotons = fPhotonPosX.size();
+  fNEnergyDeposits = fEdepEnergy.size();
   if (fTree) {
     fTree->Fill();
   }
@@ -146,6 +158,23 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
   fPhotonParent.push_back(std::string(parentParticle));
   fPhotonParentID.push_back(parentID);
   fPhotonTrackID.push_back(trackID);
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void DataManager::AddEnergyDeposit(G4double x, G4double y, G4double z,
+                                  G4double energy, G4double time,
+                                  const G4String& particleName,
+                                  G4int trackID, G4int parentID)
+{
+  fEdepPosX.push_back(x / mm);        // Store in mm
+  fEdepPosY.push_back(y / mm);
+  fEdepPosZ.push_back(z / mm);
+  fEdepEnergy.push_back(energy / MeV); // Store in MeV
+  fEdepTime.push_back(time / ns);      // Store in ns
+  fEdepParticle.push_back(std::string(particleName));
+  fEdepTrackID.push_back(trackID);
+  fEdepParentID.push_back(parentID);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -188,6 +217,16 @@ void DataManager::ClearEventData()
   fPhotonParent.clear();
   fPhotonParentID.clear();
   fPhotonTrackID.clear();
+  
+  // Clear energy deposit data
+  fEdepPosX.clear();
+  fEdepPosY.clear();
+  fEdepPosZ.clear();
+  fEdepEnergy.clear();
+  fEdepTime.clear();
+  fEdepParticle.clear();
+  fEdepTrackID.clear();
+  fEdepParentID.clear();
   
   // Clear track registry for new event
   ClearTrackRegistry();
