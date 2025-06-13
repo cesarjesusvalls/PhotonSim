@@ -164,11 +164,14 @@ class PhotonSimVisualizer:
         y_range = max(abs(y_max - y_center), abs(y_min - y_center)) * padding_factor
         z_range = max(abs(z_max - z_center), abs(z_min - z_center)) * padding_factor
         
-        # Ensure origin is included with some minimum range
-        min_range = 5.0  # 5 meters minimum
-        x_range = max(x_range, min_range, abs(x_center) + min_range)
-        y_range = max(y_range, min_range, abs(y_center) + min_range)
-        z_range = max(z_range, min_range, abs(z_center) + min_range)
+        # Ensure origin is included with adaptive minimum range
+        # Use adaptive minimum based on actual photon distribution
+        actual_extent = max(x_range, y_range, z_range)
+        min_range = max(0.1, actual_extent * 0.1)  # 10cm minimum or 10% of actual extent
+        
+        x_range = max(x_range, min_range, abs(x_center) + min_range/2)
+        y_range = max(y_range, min_range, abs(y_center) + min_range/2)
+        z_range = max(z_range, min_range, abs(z_center) + min_range/2)
         
         return ((x_center - x_range, x_center + x_range),
                 (y_center - y_range, y_center + y_range),
@@ -181,22 +184,24 @@ class PhotonSimVisualizer:
         Args:
             plot_bounds (tuple): Optional plot bounds to adjust detector visualization
         """
-        # Use detector size or plot bounds for detector outline
+        # Use plot bounds to draw meaningful volume outline (cyan box)
         if plot_bounds:
             x_range, y_range, z_range = plot_bounds
-            # Draw a subset of the detector that's visible in the plot
-            x_size = min(self.detector_size, (x_range[1] - x_range[0]) / 2)
-            y_size = min(self.detector_size, (y_range[1] - y_range[0]) / 2)
-            z_size = min(self.detector_size, (z_range[1] - z_range[0]) / 2)
+            # Draw detector outline that exactly matches the meaningful volume
+            x_min, x_max = x_range
+            y_min, y_max = y_range  
+            z_min, z_max = z_range
         else:
-            x_size = y_size = z_size = self.detector_size
+            # Fallback to detector size
+            x_min = x_max = y_min = y_max = z_min = z_max = self.detector_size
+            x_min, y_min, z_min = -x_min, -y_min, -z_min
         
-        # Define detector cube vertices
+        # Define detector cube vertices using actual bounds
         vertices = np.array([
-            [-x_size, -y_size, -z_size], [x_size, -y_size, -z_size], 
-            [x_size, y_size, -z_size], [-x_size, y_size, -z_size],  # bottom face
-            [-x_size, -y_size, z_size], [x_size, -y_size, z_size], 
-            [x_size, y_size, z_size], [-x_size, y_size, z_size]      # top face
+            [x_min, y_min, z_min], [x_max, y_min, z_min], 
+            [x_max, y_max, z_min], [x_min, y_max, z_min],  # bottom face
+            [x_min, y_min, z_max], [x_max, y_min, z_max], 
+            [x_max, y_max, z_max], [x_min, y_max, z_max]   # top face
         ])
         
         # Define the edges of the cube
@@ -213,7 +218,7 @@ class PhotonSimVisualizer:
                           color='cyan', alpha=0.4, linewidth=1)
         
         # Add coordinate axes at origin
-        axis_length = min(x_size, y_size, z_size) * 0.3
+        axis_length = min(x_max - x_min, y_max - y_min, z_max - z_min) * 0.3
         # X-axis (red)
         self.ax.plot3D([0, axis_length], [0, 0], [0, 0], color='red', linewidth=3, alpha=0.8)
         # Y-axis (green)  
