@@ -26,8 +26,8 @@
 /// \file PhotonSim/include/DataManager.hh
 /// \brief Definition of the PhotonSim::DataManager class
 
-#ifndef OpticalDataManager_h
-#define OpticalDataManager_h 1
+#ifndef PhotonSimDataManager_h
+#define PhotonSimDataManager_h 1
 
 #include "G4String.hh"
 #include "G4Types.hh"

@@ -1,4 +1,4 @@
-# PhotonSim - GEANT4 Optical Photon Detector
+# PhotonSim - GEANT4 Optical Photon Simulation
 
 A GEANT4-based application for simulating optical photon generation in monolithic detector volumes.
 
