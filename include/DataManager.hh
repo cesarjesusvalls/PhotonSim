@@ -38,6 +38,7 @@
 
 class TFile;
 class TTree;
+class TH2D;
 
 namespace PhotonSim
 {
@@ -72,6 +73,12 @@ class DataManager
     void RegisterTrack(G4int trackID, const G4String& particleName, G4int parentID);
     G4String GetParticleNameFromTrackID(G4int trackID);
     void ClearTrackRegistry();
+    
+    // Control methods for individual data storage
+    void SetStoreIndividualPhotons(bool store) { fStoreIndividualPhotons = store; }
+    void SetStoreIndividualEdeps(bool store) { fStoreIndividualEdeps = store; }
+    bool GetStoreIndividualPhotons() const { return fStoreIndividualPhotons; }
+    bool GetStoreIndividualEdeps() const { return fStoreIndividualEdeps; }
     
   private:
     DataManager() = default;
@@ -115,6 +122,14 @@ class DataManager
     
     // Track registry to map track IDs to particle names
     std::map<G4int, G4String> fTrackRegistry;
+    
+    // Control flags for individual data storage
+    bool fStoreIndividualPhotons = true;
+    bool fStoreIndividualEdeps = true;
+    
+    // 2D ROOT histograms for aggregated data (500x500 bins)
+    TH2D* fPhotonHist_AngleDistance = nullptr;  // Opening angle vs distance
+    TH2D* fEdepHist_DistanceEnergy = nullptr;   // Distance vs energy deposit
     
     void ClearEventData();
 };

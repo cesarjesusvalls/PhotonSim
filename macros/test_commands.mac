@@ -1,0 +1,14 @@
+# Test macro to verify new commands work
+/run/initialize
+
+# Test the new storage control commands
+/photon/storeIndividual false
+/edep/storeIndividual false
+
+# Simple test with few events
+/gun/particle mu-
+/gun/energy 300 MeV
+/gun/position 0 0 0 m
+/gun/direction 0 0 1
+
+/run/beamOn 5

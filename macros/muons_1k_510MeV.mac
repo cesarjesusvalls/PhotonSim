@@ -1,0 +1,15 @@
+# Macro for 1000 muon events at 510 MeV
+/run/initialize
+
+# Disable muon decay to focus on electromagnetic processes
+/process/inactivate Decay mu+
+/process/inactivate Decay mu-
+
+# Set up primary particle
+/gun/particle mu-
+/gun/energy 510 MeV
+/gun/position 0 0 0 m
+/gun/direction 0 0 1
+
+# Run 1000 events
+/run/beamOn 1000

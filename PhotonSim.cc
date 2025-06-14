@@ -31,6 +31,7 @@
 #include "DetectorConstruction.hh"
 #include "PhysicsList.hh"
 #include "DataManager.hh"
+#include "DataManagerMessenger.hh"
 
 #include "G4RunManagerFactory.hh"
 #include "G4SteppingVerbose.hh"
@@ -83,6 +84,9 @@ int main(int argc, char** argv)
   // Initialize ROOT data manager
   DataManager* dataManager = DataManager::GetInstance();
   dataManager->Initialize("optical_photons.root");
+  
+  // Initialize data manager messenger for macro commands
+  auto dataManagerMessenger = new DataManagerMessenger();
 
   // Initialize visualization with the default graphics system
   auto visManager = new G4VisExecutive(argc, argv);
@@ -108,6 +112,7 @@ int main(int argc, char** argv)
   // Finalize data output before deleting managers
   dataManager->Finalize();
   
+  delete dataManagerMessenger;
   delete visManager;
   delete runManager;
   
