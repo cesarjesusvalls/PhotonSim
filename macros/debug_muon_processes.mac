@@ -1,0 +1,25 @@
+# Debug macro to understand muon process inactivation
+/run/initialize
+
+# Enable verbose output
+/run/verbose 1
+/process/verbose 1
+
+# Check muon processes before inactivation
+/particle/select mu-
+/particle/property/dump
+/particle/process/dump
+
+# Try to inactivate decay process
+/particle/process/inactivate 1
+
+# Check muon processes after inactivation attempt  
+/particle/property/dump
+/particle/process/dump
+
+# Test with one muon
+/gun/particle mu-
+/gun/energy 650 MeV
+/gun/position 0 0 0 m
+/gun/direction 0 0 1
+/run/beamOn 1

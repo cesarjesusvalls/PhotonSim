@@ -1,0 +1,12 @@
+# Macro for 1000 muon events
+/run/initialize
+
+# Disable muon decay processes for consistent behavior
+/process/inactivate Decay mu+
+/process/inactivate Decay mu-
+
+/gun/particle mu-
+/gun/energy 650 MeV
+/gun/position 0 0 0 m
+/gun/direction 0 0 1
+/run/beamOn 1000
