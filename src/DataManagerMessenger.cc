@@ -31,6 +31,7 @@
 
 #include "G4UIdirectory.hh"
 #include "G4UIcmdWithABool.hh"
+#include "G4UIcmdWithAString.hh"
 #include "G4UImanager.hh"
 #include "G4ApplicationState.hh"
 #include "G4ios.hh"
@@ -50,6 +51,9 @@ DataManagerMessenger::DataManagerMessenger()
   fEdepDir = new G4UIdirectory("/edep/");
   fEdepDir->SetGuidance("Commands for energy deposit data control");
   
+  fOutputDir = new G4UIdirectory("/output/");
+  fOutputDir->SetGuidance("Commands for output file control");
+  
   fStorePhotonsCmd = new G4UIcmdWithABool("/photon/storeIndividual", this);
   fStorePhotonsCmd->SetGuidance("Enable/disable storage of individual photon data");
   fStorePhotonsCmd->SetGuidance("When disabled, only 2D histograms are filled");
@@ -63,6 +67,13 @@ DataManagerMessenger::DataManagerMessenger()
   fStoreEdepsCmd->SetParameterName("store", false);
   fStoreEdepsCmd->SetDefaultValue(true);
   fStoreEdepsCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+  
+  fFilenameCmd = new G4UIcmdWithAString("/output/filename", this);
+  fFilenameCmd->SetGuidance("Set output ROOT filename");
+  fFilenameCmd->SetGuidance("Must be called before /run/initialize");
+  fFilenameCmd->SetParameterName("filename", false);
+  fFilenameCmd->SetDefaultValue("optical_photons.root");
+  fFilenameCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -71,8 +82,10 @@ DataManagerMessenger::~DataManagerMessenger()
 {
   delete fPhotonDir;
   delete fEdepDir;
+  delete fOutputDir;
   delete fStorePhotonsCmd;
   delete fStoreEdepsCmd;
+  delete fFilenameCmd;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -89,6 +102,11 @@ void DataManagerMessenger::SetNewValue(G4UIcommand* command, G4String newValue)
     bool store = fStoreEdepsCmd->GetNewBoolValue(newValue);
     fDataManager->SetStoreIndividualEdeps(store);
     G4cout << "Individual energy deposit storage: " << (store ? "enabled" : "disabled") << G4endl;
+  }
+  
+  if (command == fFilenameCmd) {
+    fDataManager->SetOutputFilename(newValue);
+    G4cout << "Output filename set to: " << newValue << G4endl;
   }
 }
 

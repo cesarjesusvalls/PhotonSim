@@ -31,6 +31,7 @@
 
 #include "DetectorConstruction.hh"
 #include "PrimaryGeneratorAction.hh"
+#include "DataManager.hh"
 
 #include "G4AccumulableManager.hh"
 #include "G4LogicalVolume.hh"
@@ -72,6 +73,10 @@ void RunAction::BeginOfRunAction(const G4Run*)
 {
   // inform the runManager to save random number seed
   G4RunManager::GetRunManager()->SetRandomNumberStore(false);
+
+  // Initialize DataManager with filename set by macro command
+  DataManager* dataManager = DataManager::GetInstance();
+  dataManager->Initialize();  // Uses stored filename
 
   // reset accumulables to their initial values
   G4AccumulableManager* accumulableManager = G4AccumulableManager::Instance();

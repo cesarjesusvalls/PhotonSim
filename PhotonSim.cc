@@ -81,11 +81,7 @@ int main(int argc, char** argv)
   // User action initialization
   runManager->SetUserInitialization(new ActionInitialization());
 
-  // Initialize ROOT data manager
-  DataManager* dataManager = DataManager::GetInstance();
-  dataManager->Initialize("optical_photons.root");
-  
-  // Initialize data manager messenger for macro commands
+  // Initialize data manager messenger for macro commands (before initialization)
   auto dataManagerMessenger = new DataManagerMessenger();
 
   // Initialize visualization with the default graphics system
@@ -110,6 +106,7 @@ int main(int argc, char** argv)
 
   // Job termination
   // Finalize data output before deleting managers
+  DataManager* dataManager = DataManager::GetInstance();
   dataManager->Finalize();
   
   delete dataManagerMessenger;

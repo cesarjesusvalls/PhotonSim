@@ -50,7 +50,7 @@ class DataManager
   public:
     static DataManager* GetInstance();
     
-    void Initialize(const G4String& filename);
+    void Initialize(const G4String& filename = "");
     void Finalize();
     
     void BeginEvent(G4int eventID, G4double primaryEnergy);
@@ -79,6 +79,10 @@ class DataManager
     void SetStoreIndividualEdeps(bool store) { fStoreIndividualEdeps = store; }
     bool GetStoreIndividualPhotons() const { return fStoreIndividualPhotons; }
     bool GetStoreIndividualEdeps() const { return fStoreIndividualEdeps; }
+    
+    // Output filename control
+    void SetOutputFilename(const G4String& filename) { fOutputFilename = filename; }
+    G4String GetOutputFilename() const { return fOutputFilename; }
     
   private:
     DataManager() = default;
@@ -130,6 +134,9 @@ class DataManager
     // 2D ROOT histograms for aggregated data (500x500 bins)
     TH2D* fPhotonHist_AngleDistance = nullptr;  // Opening angle vs distance
     TH2D* fEdepHist_DistanceEnergy = nullptr;   // Distance vs energy deposit
+    
+    // Output filename
+    G4String fOutputFilename = "optical_photons.root";
     
     void ClearEventData();
 };

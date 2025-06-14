@@ -1,4 +1,8 @@
 # Macro for 1000 muon events at 500 MeV
+
+# Set output filename before initialization
+/output/filename muons_500MeV_optical_photons.root
+
 /run/initialize
 
 # Disable muon decay to focus on electromagnetic processes

@@ -1,4 +1,8 @@
 # Macro for 1000 muon events at 510 MeV - HISTOGRAM ONLY MODE
+
+# Set output filename before initialization
+/output/filename muons_510MeV_histonly.root
+
 /run/initialize
 
 # Disable individual photon/edep storage to save space

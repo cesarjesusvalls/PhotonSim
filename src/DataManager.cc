@@ -56,9 +56,12 @@ DataManager* DataManager::GetInstance()
 
 void DataManager::Initialize(const G4String& filename)
 {
-  fRootFile = std::make_unique<TFile>(filename.c_str(), "RECREATE");
+  // Use provided filename, or stored filename if none provided
+  G4String actualFilename = filename.empty() ? fOutputFilename : filename;
+  
+  fRootFile = std::make_unique<TFile>(actualFilename.c_str(), "RECREATE");
   if (!fRootFile || fRootFile->IsZombie()) {
-    G4cerr << "Error: Cannot create ROOT file " << filename << G4endl;
+    G4cerr << "Error: Cannot create ROOT file " << actualFilename << G4endl;
     return;
   }
   
@@ -107,7 +110,7 @@ void DataManager::Initialize(const G4String& filename)
                                      500, 0.0, 10000.0,        // 0 to 10 meters in mm
                                      500, 0.0, 1000.0);        // 0 to 1000 keV (adjustable)
   
-  G4cout << "ROOT file " << filename << " created for optical photon and energy deposit data" << G4endl;
+  G4cout << "ROOT file " << actualFilename << " created for optical photon and energy deposit data" << G4endl;
   G4cout << "2D histograms created: 500x500 bins for aggregated data analysis" << G4endl;
 }
 

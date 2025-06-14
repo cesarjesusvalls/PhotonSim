@@ -34,6 +34,7 @@
 
 class G4UIdirectory;
 class G4UIcmdWithABool;
+class G4UIcmdWithAString;
 class G4UIcommand;
 
 namespace PhotonSim
@@ -46,6 +47,7 @@ class DataManager;
 /// This class defines commands for controlling data storage:
 /// - /photon/storeIndividual [true/false]
 /// - /edep/storeIndividual [true/false]
+/// - /output/filename [filename.root]
 
 class DataManagerMessenger: public G4UImessenger
 {
@@ -60,8 +62,10 @@ class DataManagerMessenger: public G4UImessenger
 
     G4UIdirectory*                 fPhotonDir = nullptr;
     G4UIdirectory*                 fEdepDir = nullptr;
+    G4UIdirectory*                 fOutputDir = nullptr;
     G4UIcmdWithABool*              fStorePhotonsCmd = nullptr;
     G4UIcmdWithABool*              fStoreEdepsCmd = nullptr;
+    G4UIcmdWithAString*            fFilenameCmd = nullptr;
 };
 
 }  // namespace PhotonSim

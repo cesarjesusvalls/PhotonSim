@@ -1,4 +1,8 @@
 # Test macro to verify new commands work
+
+# Set custom output filename
+/output/filename test_output.root
+
 /run/initialize
 
 # Test the new storage control commands
