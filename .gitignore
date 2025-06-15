@@ -46,3 +46,6 @@ install_manifest.txt
 
 # Generated output files
 output/
+
+# S3DF cluster-specific user configuration (contains local paths)
+s3df_scripts/user_paths.sh

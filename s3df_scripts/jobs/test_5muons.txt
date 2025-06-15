@@ -1,0 +1,8 @@
+# Test configuration: 5 muon jobs with 10 events each
+# Energy range: 500-540 MeV in 10 MeV steps
+
+mu- 10 500 /sdf/data/neutrino/cjesus/photonsim_output
+mu- 10 510 /sdf/data/neutrino/cjesus/photonsim_output
+mu- 10 520 /sdf/data/neutrino/cjesus/photonsim_output
+mu- 10 530 /sdf/data/neutrino/cjesus/photonsim_output
+mu- 10 540 /sdf/data/neutrino/cjesus/photonsim_output
