@@ -47,5 +47,8 @@ install_manifest.txt
 # Generated output files
 output/
 
+# Local data directory (contains copied ROOT files)
+data/
+
 # S3DF cluster-specific user configuration (contains local paths)
 s3df_scripts/user_paths.sh
