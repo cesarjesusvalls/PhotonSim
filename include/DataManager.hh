@@ -49,9 +49,13 @@ class DataManager
 {
   public:
     static DataManager* GetInstance();
+    static void DeleteInstance();
     
     void Initialize(const G4String& filename = "");
     void Finalize();
+    
+    // Reset method for proper cleanup
+    void Reset();
     
     void BeginEvent(G4int eventID, G4double primaryEnergy);
     void EndEvent();
@@ -86,7 +90,11 @@ class DataManager
     
   private:
     DataManager() = default;
-    ~DataManager() = default;
+    ~DataManager();
+    
+    // Delete copy constructor and assignment operator
+    DataManager(const DataManager&) = delete;
+    DataManager& operator=(const DataManager&) = delete;
     
     static DataManager* fInstance;
     

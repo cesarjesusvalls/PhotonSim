@@ -54,6 +54,16 @@ DataManager* DataManager::GetInstance()
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
+void DataManager::DeleteInstance()
+{
+  if (fInstance) {
+    delete fInstance;
+    fInstance = nullptr;
+  }
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DataManager::Initialize(const G4String& filename)
 {
   // Use provided filename, or stored filename if none provided
@@ -131,14 +141,22 @@ void DataManager::Finalize()
       if (fPhotonHist_AngleDistance) {
         fPhotonHist_AngleDistance->Write();
         G4cout << "Photon histogram written with " << fPhotonHist_AngleDistance->GetEntries() << " entries" << G4endl;
+        // Histogram is now owned by the ROOT file, don't delete it manually
+        fPhotonHist_AngleDistance = nullptr;
       }
       if (fEdepHist_DistanceEnergy) {
         fEdepHist_DistanceEnergy->Write();
         G4cout << "Energy deposit histogram written with " << fEdepHist_DistanceEnergy->GetEntries() << " entries" << G4endl;
+        // Histogram is now owned by the ROOT file, don't delete it manually
+        fEdepHist_DistanceEnergy = nullptr;
       }
       
       G4cout << "ROOT file closed with " << fTree->GetEntries() << " events" << G4endl;
-      fTree = nullptr;  // Avoid double deletion
+      
+      // Important: Let ROOT manage the tree cleanup when the file is closed
+      fTree = nullptr;  // Tree will be deleted by ROOT file
+      
+      // Close and reset the file
       fRootFile->Close();
       fRootFile.reset(); // Explicitly reset the unique_ptr
     }
@@ -148,6 +166,33 @@ void DataManager::Finalize()
   }
   
   fFinalized = true;
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void DataManager::Reset()
+{
+  // Finalize any existing file first
+  if (!fFinalized) {
+    Finalize();
+  }
+  
+  // Reset all state
+  fFinalized = false;
+  fTree = nullptr;
+  fRootFile.reset();
+  fPhotonHist_AngleDistance = nullptr;
+  fEdepHist_DistanceEnergy = nullptr;
+  
+  // Clear output filename
+  fOutputFilename = "output.root";
+  
+  // Reset storage flags
+  fStoreIndividualPhotons = false;
+  fStoreIndividualEdeps = false;
+  
+  // Clear all data
+  ClearEventData();
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -292,6 +337,29 @@ void DataManager::ClearEventData()
   
   // Clear track registry for new event
   ClearTrackRegistry();
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+DataManager::~DataManager()
+{
+  // Make sure to finalize before destruction
+  if (!fFinalized) {
+    try {
+      Finalize();
+    } catch (...) {
+      // Suppress exceptions in destructor
+    }
+  }
+  
+  // Clean up ROOT objects - histograms are already handled by Finalize()
+  // Just make sure pointers are null
+  fPhotonHist_AngleDistance = nullptr;
+  fEdepHist_DistanceEnergy = nullptr;
+  fTree = nullptr;
+  fRootFile.reset();
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
