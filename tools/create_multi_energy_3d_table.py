@@ -97,11 +97,15 @@ class MultiEnergyPhotonTable3D:
         except Exception as e:
             print(f"  Could not load histogram: {e}")
         
-        # If histogram not available, process raw data
-        print(f"  Processing raw data for {energy} MeV...")
-        
-        with uproot.open(root_file_path) as file:
-            tree = file["OpticalPhotons"]
+        # If histogram not available, try raw data or skip
+        try:
+            with uproot.open(root_file_path) as file:
+                if "OpticalPhotons" not in file:
+                    print(f"  WARNING: Skipping {energy} MeV - no data found in file")
+                    return None, None
+                    
+                print(f"  Processing raw data for {energy} MeV...")
+                tree = file["OpticalPhotons"]
             
             # Determine how many events to process
             total_events = tree.num_entries
@@ -160,6 +164,9 @@ class MultiEnergyPhotonTable3D:
             print(f"  Processed {len(angles)} Cherenkov photons")
             
             return counts, (x_edges, y_edges)
+        except Exception as e:
+            print(f"  ERROR processing {energy} MeV: {e}")
+            return None, None
     
     def create_3d_table(self, data_dir, max_events_per_file=None):
         """Create the full 3D table from all ROOT files."""
@@ -180,6 +187,10 @@ class MultiEnergyPhotonTable3D:
         print("\nProcessing files:")
         for idx, (energy, file_path) in enumerate(tqdm(root_files)):
             counts, edges = self.process_single_file(file_path, energy, max_events_per_file)
+            
+            # Skip if file had issues
+            if counts is None:
+                continue
             
             # If we got a different shape than expected, handle it
             if counts.shape != (self.angle_bins, self.distance_bins):
