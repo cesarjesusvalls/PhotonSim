@@ -24,9 +24,9 @@ while getopts "c:sth" opt; do
            echo "  particle nevents energy output_dir [filename]"
            echo ""
            echo "Example config file:"
-           echo "  mu- 1000 500 /path/to/your/output"
-           echo "  mu- 1000 1000 /path/to/your/output"
-           echo "  mu- 1000 2000 /path/to/your/output output_2GeV.root"
+           echo "  mu- 10000 500 /path/to/your/output"
+           echo "  mu- 10000 1000 /path/to/your/output"
+           echo "  mu- 10000 2000 /path/to/your/output output_2GeV.root"
            exit 0;;
         \?) echo "Invalid option -$OPTARG" >&2; exit 1;;
     esac

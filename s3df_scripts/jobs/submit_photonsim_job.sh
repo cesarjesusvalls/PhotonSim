@@ -4,7 +4,7 @@
 
 # Default values
 PARTICLE="mu-"
-NEVENTS=1000
+NEVENTS=10000
 ENERGY=1000
 OUTPUT_DIR=""
 OUTPUT_FILE="output.root"

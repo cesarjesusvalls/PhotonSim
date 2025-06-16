@@ -38,15 +38,15 @@ function show_jobs() {
     if [ "$SHOW_ALL" = true ]; then
         squeue -u $USER
     else
-        squeue -u $USER | grep -E "(JOBID|photonsim)"
+        squeue -u $USER | grep -E "(JOBID|photonsi)"
     fi
     
     echo ""
     
     # Show job statistics
     echo -e "${YELLOW}Job Statistics:${NC}"
-    RUNNING=$(squeue -u $USER -h -t RUNNING | grep -c "photonsim" || true)
-    PENDING=$(squeue -u $USER -h -t PENDING | grep -c "photonsim" || true)
+    RUNNING=$(squeue -u $USER -h -t RUNNING | grep -c "photonsi" || true)
+    PENDING=$(squeue -u $USER -h -t PENDING | grep -c "photonsi" || true)
     RUNNING=${RUNNING:-0}
     PENDING=${PENDING:-0}
     TOTAL=$((RUNNING + PENDING))
