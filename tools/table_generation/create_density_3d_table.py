@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Create a normalized density 3D lookup table from 200-450 MeV ROOT files.
+Create a normalized density 3D lookup table from 100-1000 MeV ROOT files.
 Normalizes 2D histograms by:
 1. Number of events
 2. Bin area (solid angle × distance bin width)
@@ -18,7 +18,7 @@ from tqdm import tqdm
 class DensityPhotonTable3D:
     """3D table for normalized Cherenkov photon density distributions."""
     
-    def __init__(self, energy_min=200, energy_max=450, energy_step=10):
+    def __init__(self, energy_min=100, energy_max=1000, energy_step=10):
         """
         Initialize the density 3D table.
         
@@ -39,12 +39,11 @@ class DensityPhotonTable3D:
         self.angle_bins = 500
         self.distance_bins = 500
         
-        # Energy values
+        # Energy values - now use full range
         self.energy_values = list(range(energy_min, energy_max + 1, energy_step))
         
-        # Skip known bad files
-        self.skip_energies = [460, 480]
-        self.energy_values = [e for e in self.energy_values if e not in self.skip_energies]
+        # No need to skip energies anymore - all files are OK
+        self.skip_energies = []
         
         # Define bin ranges from histogram
         self.angle_range = (0, np.pi)  # 0 to pi radians
@@ -294,13 +293,14 @@ class DensityPhotonTable3D:
             idx = self.energy_values.index(energy)
             slice_2d = self.density_table[idx]
             
-            # Use log scale for better visualization
+            # Use log scale for better visualization with minimum threshold
             with np.errstate(divide='ignore'):
-                log_slice = np.log10(slice_2d + 1e-10)  # Add small value to avoid log(0)
+                log_slice = np.log10(np.maximum(slice_2d, 1e-4))  # Set minimum to 10^-4
             
             im = ax.imshow(log_slice.T, origin='lower', aspect='auto', cmap='viridis',
                           extent=[0, np.degrees(self.bin_edges[1][-1]), 
                                  0, self.bin_edges[2][-1]],
+                          vmin=-4, vmax=np.log10(slice_2d.max()),  # Set color range
                           interpolation='nearest')
             
             ax.set_xlabel('Opening Angle (degrees)')
@@ -377,9 +377,9 @@ def main():
     parser.add_argument('--output', '-o', 
                        default='output/3d_lookup_table_density',
                        help='Output directory for table and visualizations')
-    parser.add_argument('--energy-min', type=int, default=200,
+    parser.add_argument('--energy-min', type=int, default=100,
                        help='Minimum energy in MeV')
-    parser.add_argument('--energy-max', type=int, default=450,
+    parser.add_argument('--energy-max', type=int, default=1000,
                        help='Maximum energy in MeV')
     parser.add_argument('--energy-step', type=int, default=10,
                        help='Energy step size in MeV')
