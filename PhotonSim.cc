@@ -41,6 +41,8 @@
 #include "Randomize.hh"
 #include <chrono>
 #include <random>
+#include <cstdlib>
+#include "TROOT.h"
 
 using namespace PhotonSim;
 
@@ -48,6 +50,9 @@ using namespace PhotonSim;
 
 int main(int argc, char** argv)
 {
+  // Initialize ROOT early and properly to avoid global state conflicts
+  gROOT->Reset();
+  
   // Detect interactive mode (if no arguments) and define UI session
   G4UIExecutive* ui = nullptr;
   if (argc == 1) {
@@ -109,13 +114,21 @@ int main(int argc, char** argv)
   DataManager* dataManager = DataManager::GetInstance();
   dataManager->Finalize();
   
+  // Clean up managers first
   delete dataManagerMessenger;
   delete visManager;
   delete runManager;
   
   if (ui) delete ui;
+  
+  // Properly destroy the singleton instance to avoid memory leaks
+  // and prevent ROOT object conflicts on subsequent runs
+  DataManager::DeleteInstance();
 
-  return 0;
+  // WORKAROUND: This ROOT installation has global class registry conflicts
+  // that cause segfaults during cleanup. Since all simulation data is properly
+  // saved before this point, use quick_exit to avoid the problematic cleanup.
+  std::quick_exit(0);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

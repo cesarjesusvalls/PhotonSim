@@ -80,8 +80,9 @@ cat > "${MACRO_FILE}" << EOF
 /particle/select mu+
 /particle/process/inactivate 1 
 
-# Set up primary particle
+# Set up primary particle with fixed energy
 /gun/particle ${PARTICLE}
+/gun/randomEnergy false
 /gun/energy ${ENERGY} MeV
 /gun/position 0 0 0 m
 /gun/direction 0 0 1
