@@ -67,6 +67,8 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     // method to access particle gun
     const G4ParticleGun* GetParticleGun() const { return fParticleGun; }
     G4double GetTrueEnergy() const { return fTrueEnergy; }
+    G4double GetMinEnergy() const { return fMinEnergy; }
+    G4double GetMaxEnergy() const { return fMaxEnergy; }
 
   private:
     G4ParticleGun* fParticleGun = nullptr;
@@ -75,7 +77,7 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     // Configurable parameters
     G4double fMinEnergy = 100.0*MeV;
     G4double fMaxEnergy = 500.0*MeV;
-    G4bool fRandomEnergy = true;
+    G4bool fRandomEnergy = false;
     G4double fTrueEnergy = 0.0; // Store the actual energy used for this event
 };
 

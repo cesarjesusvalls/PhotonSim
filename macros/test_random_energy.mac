@@ -1,0 +1,28 @@
+# Test macro for random energy (200-800 MeV range)
+
+# Set output filename before initialization
+/output/filename test_random_energy.root
+
+/run/initialize
+
+# Disable individual photon/edep storage to save space
+/photon/storeIndividual false
+/edep/storeIndividual false
+
+# Disable muon decay processes via macro commands
+/particle/select mu-
+/particle/process/inactivate 1
+/particle/process/inactivate 7
+/particle/select mu+
+/particle/process/inactivate 1
+
+# Set up primary particle with random energy
+/gun/particle mu-
+/gun/randomEnergy true
+/gun/energyMin 200 MeV
+/gun/energyMax 800 MeV
+/gun/position 0 0 0 m
+/gun/direction 0 0 1
+
+# Run 10 events to see energy variation
+/run/beamOn 10

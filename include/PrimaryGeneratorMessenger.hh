@@ -38,6 +38,7 @@ class G4UIcmdWithAString;
 class G4UIcmdWithADoubleAndUnit;
 class G4UIcmdWith3VectorAndUnit;
 class G4UIcmdWith3Vector;
+class G4UIcmdWithABool;
 
 namespace PhotonSim
 {
@@ -49,9 +50,11 @@ class PrimaryGeneratorAction;
 /// This class defines commands for the particle gun:
 /// - /gun/particle [particleName]
 /// - /gun/energy [value] [unit]
-/// - /gun/energyRange [minEnergy] [maxEnergy] [unit]
 /// - /gun/position [x] [y] [z] [unit]
 /// - /gun/direction [x] [y] [z]
+/// - /gun/randomEnergy [true/false]
+/// - /gun/energyMin [value] [unit]
+/// - /gun/energyMax [value] [unit]
 
 class PrimaryGeneratorMessenger: public G4UImessenger
 {
@@ -69,6 +72,9 @@ class PrimaryGeneratorMessenger: public G4UImessenger
     G4UIcmdWithADoubleAndUnit*     fEnergyCmd = nullptr;
     G4UIcmdWith3VectorAndUnit*     fPositionCmd = nullptr;
     G4UIcmdWith3Vector*            fDirectionCmd = nullptr;
+    G4UIcmdWithABool*              fRandomEnergyCmd = nullptr;
+    G4UIcmdWithADoubleAndUnit*     fEnergyMinCmd = nullptr;
+    G4UIcmdWithADoubleAndUnit*     fEnergyMaxCmd = nullptr;
 };
 
 }  // namespace PhotonSim

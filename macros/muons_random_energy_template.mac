@@ -1,0 +1,28 @@
+# Template macro for random energy muon simulations
+
+# Set output filename before initialization
+/output/filename muons_random_energy_template.root
+
+/run/initialize
+
+# Disable individual photon/edep storage to save space (optional)
+/photon/storeIndividual false
+/edep/storeIndividual false
+
+# Disable muon decay processes via macro commands
+/particle/select mu-
+/particle/process/inactivate 1
+/particle/process/inactivate 7
+/particle/select mu+
+/particle/process/inactivate 1
+
+# Set up primary particle with random energy
+/gun/particle mu-
+/gun/randomEnergy true
+/gun/energyMin 100 MeV
+/gun/energyMax 1000 MeV
+/gun/position 0 0 0 m
+/gun/direction 0 0 1
+
+# Run events
+/run/beamOn 100

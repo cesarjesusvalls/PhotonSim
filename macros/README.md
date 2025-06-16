@@ -1,78 +1,107 @@
-# PhotonSim Macro Files
+# PhotonSim Macro Templates
 
-This directory contains GEANT4 macro files for different simulation configurations.
+This directory contains clean template macros for PhotonSim simulations.
 
 ## Available Macros
 
-### test_muon.mac
-Basic muon simulation for testing and validation.
-- **Particle**: Muon (mu-)
-- **Energy**: ~152 MeV (single energy)
-- **Events**: 1 event for quick testing
-- **Purpose**: Physics validation and debugging
+### Muon Templates
+- **muons_fixed_energy_template.mac**: Fixed energy muon simulation template
+- **muons_random_energy_template.mac**: Random energy muon simulation template
+- **test_fixed_energy.mac**: Quick test with fixed 300 MeV (5 events)
+- **test_random_energy.mac**: Quick test with random 200-800 MeV (10 events)
 
-**Usage:**
+### Electron Templates
+- **electrons_template.mac**: Fixed energy electron simulation template
+
+## PhotonSim Energy Control System
+
+PhotonSim supports flexible energy control via macro commands, allowing both fixed and random energy generation.
+
+### Energy Control Commands
+
+#### Fixed Energy (Default Mode)
+```bash
+/gun/randomEnergy false
+/gun/energy 300 MeV
+```
+
+#### Random Energy
+```bash
+/gun/randomEnergy true
+/gun/energyMin 100 MeV
+/gun/energyMax 1000 MeV
+```
+
+#### Mixed Scenarios
+```bash
+# Start with random energy
+/gun/randomEnergy true
+/gun/energyMin 100 MeV
+/gun/energyMax 500 MeV
+/run/beamOn 50
+
+# Switch to fixed energy
+/gun/randomEnergy false
+/gun/energy 750 MeV
+/run/beamOn 50
+```
+
+### Energy Units
+Supported units: `eV`, `keV`, `MeV`, `GeV`, `TeV`
+
+Examples:
+- `/gun/energy 1.5 GeV`
+- `/gun/energyMin 500 keV`
+- `/gun/energyMax 2 TeV`
+
+### Default Behavior
+- `fRandomEnergy = false` (fixed energy mode by default)
+- Default energy: 5.0 MeV (from original GEANT4 particle gun)
+- Default random range: 100-500 MeV (only used when random mode is enabled)
+
+## Muon Decay Inactivation
+
+All muon macros include these commands to disable muon decay:
+```bash
+/particle/select mu-
+/particle/process/inactivate 1
+/particle/process/inactivate 7
+/particle/select mu+
+/particle/process/inactivate 1
+```
+
+## Storage Options
+
+### Histogram Only (Recommended)
+```bash
+/photon/storeIndividual false
+/edep/storeIndividual false
+```
+- Only stores 2D histograms
+- Smaller files, faster execution
+
+### Full Storage
+- Stores every optical photon and energy deposit (default)
+- Large files, detailed analysis possible
+
+## Usage
+
 ```bash
 cd build
-./PhotonSim ../macros/test_muon.mac
+./PhotonSim ../macros/[template_name].mac
 ```
 
-### muons_300_1000MeV.mac
-Extended muon energy range simulation.
-- **Particle**: Muon (mu-)
-- **Energy**: 300-1000 MeV range
-- **Events**: Multiple events for statistics
-- **Purpose**: Energy-dependent Cherenkov studies
+## Output Files
 
-**Usage:**
-```bash
-cd build
-./PhotonSim ../macros/muons_300_1000MeV.mac
-```
+All macros generate ROOT files containing:
+- `PrimaryEnergy` branch: Actual primary particle energies used for validation
+- 2D histograms: `PhotonHist_AngleDistance`, `EdepHist_DistanceEnergy`
+- Optional: Individual particle trees when full storage enabled
 
-### electrons_100_500MeV.mac
-Electron beam simulation for comparison studies.
-- **Particle**: Electron (e-)
-- **Energy**: 100-500 MeV range
-- **Events**: Multiple events
-- **Purpose**: Electromagnetic shower studies, secondary particle analysis
+## Bug Fix Notes
 
-**Usage:**
-```bash
-cd build
-./PhotonSim ../macros/electrons_100_500MeV.mac
-```
+**Previous Issue**: PhotonSim was ignoring `/gun/energy` commands and using random energies (100-500 MeV) by default.
 
-## Macro Structure
+**Solution**: Changed default `fRandomEnergy = false` and added explicit macro commands for energy control.
 
-All macros follow this general structure:
-```
-# Physics setup
-/run/initialize
-
-# Particle gun configuration
-/gun/particle [particle_type]
-/gun/energy [energy] [unit]
-/gun/position 0 0 0 m
-/gun/direction 0 0 1
-
-# Run simulation
-/run/beamOn [number_of_events]
-```
-
-## Creating Custom Macros
-
-To create a new macro file:
-
-1. Copy an existing macro as a template
-2. Modify particle type: `/gun/particle mu-` or `/gun/particle e-`
-3. Set energy: `/gun/energy 500 MeV`
-4. Adjust number of events: `/run/beamOn 10`
-5. Save with descriptive filename (e.g., `high_energy_muons.mac`)
-
-## Expected Outputs
-
-Each macro produces:
-- ROOT file: `optical_photons.root` in the build directory
-- Console output with photon creation debugging
-- Physics validation information
+**Impact**: All previous PhotonSim data generated before this fix used random energies instead of the specified values in macro files.

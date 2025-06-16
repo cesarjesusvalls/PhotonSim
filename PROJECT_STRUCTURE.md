@@ -1,6 +1,6 @@
 # PhotonSim Project Structure
 
-Clean and organized structure for the PhotonSim Geant4 simulation and analysis tools.
+Modern GEANT4-based simulation for optical photon generation with comprehensive analysis tools and energy control system.
 
 ## Directory Structure
 
@@ -11,77 +11,174 @@ PhotonSim/
 ├── PhotonSim.cc                # Main Geant4 application
 ├── requirements.txt            # Python dependencies
 ├── setup.sh                    # Environment setup
-├── 1k_mu_optical_photons.root  # Data file (1000 muon events)
 │
 ├── include/                    # C++ header files
-├── src/                        # C++ source files  
-├── macros/                     # Geant4 macro files
-├── build/                      # Build directory
+│   ├── ActionInitialization.hh
+│   ├── DataManager.hh
+│   ├── DetectorConstruction.hh
+│   ├── PrimaryGeneratorAction.hh    # ✨ Enhanced with energy controls
+│   ├── PrimaryGeneratorMessenger.hh # ✨ New energy commands
+│   └── ...
 │
-├── tools/                      # Analysis and utility tools
-│   ├── README.md               # Tools overview
-│   ├── create_photon_table.py  # Main: Create 3D lookup table
-│   ├── query_photon_table.py   # Main: Query lookup table
+├── src/                        # C++ source files
+│   ├── PrimaryGeneratorAction.cc   # ✨ Fixed/random energy system
+│   ├── PrimaryGeneratorMessenger.cc# ✨ Macro command handlers
+│   └── ...
+│
+├── macros/                     # ✨ Clean macro templates
+│   ├── README.md               # Complete energy control guide
+│   ├── muons_fixed_energy_template.mac
+│   ├── muons_random_energy_template.mac
+│   ├── electrons_template.mac
+│   ├── test_fixed_energy.mac   # Quick test (5 events)
+│   └── test_random_energy.mac  # Quick test (10 events)
+│
+├── build/                      # Build directory (generated)
+│   ├── PhotonSim              # Compiled executable
+│   └── *.root                 # Output ROOT files
+│
+├── tools/                     # ✨ Organized analysis tools
+│   ├── create_multi_energy_3d_table.py  # Main: Build 3D table
+│   ├── visualize_3d_table.py           # Main: Visualize table
 │   │
-│   ├── analysis/               # Data analysis scripts
-│   ├── benchmarks/             # Performance benchmarking
-│   ├── simulation/             # Simulation execution scripts  
-│   ├── table_analysis/         # Table development scripts
-│   ├── validation/             # Physics validation
-│   └── visualization/          # Data visualization
+│   ├── analysis/              # Physics analysis
+│   │   ├── analyze_photon_data.py
+│   │   ├── analyze_physics_processes.py
+│   │   └── ...
+│   │
+│   ├── benchmarks/            # Performance testing
+│   │   ├── benchmark_photonsim.py
+│   │   └── visualize_benchmark.py
+│   │
+│   ├── photon_table/          # Table utilities
+│   │   ├── create_photon_table.py
+│   │   ├── query_photon_table.py
+│   │   └── ...
+│   │
+│   ├── simulation/            # Simulation runners
+│   │   ├── run_1k_muons.py
+│   │   └── analyze_all_events.py
+│   │
+│   ├── table_analysis/        # Table development
+│   │   ├── check_histogram_dims.py  # ✨ Moved from root
+│   │   ├── create_3d_photon_table.py
+│   │   └── ...
+│   │
+│   ├── validation/            # ✨ Energy & physics validation
+│   │   ├── compare_energies.py     # ✨ Moved from root
+│   │   ├── verify_energy_controls.py # ✨ New validation
+│   │   ├── check_all_energies.py   # ✨ Energy debugging
+│   │   └── physics_validation.py
+│   │
+│   └── visualization/         # ✨ Plotting & visualization
+│       ├── show_photonsim_data.py   # ✨ Moved from root
+│       ├── show_full_angular_range.py # ✨ Moved from root
+│       └── visualize_photons.py
 │
-└── output/                     # All outputs and results
-    ├── README.md               # Output overview
-    ├── photon_histogram_3d.npy # 3D lookup table
-    ├── table_metadata.npz      # Table metadata
-    ├── photon_table_analysis.png
-    ├── energy_histogram.png
-    │
-    ├── benchmarks/             # Performance results
-    │   ├── benchmark_results.json
-    │   ├── runtime_vs_events.png
-    │   └── ...
-    │
-    └── documentation/          # All documentation
-        ├── PHOTON_TABLE_README.md
-        ├── FINAL_ANALYSIS_SUMMARY.md
-        └── ...
+├── output/                    # All analysis outputs (gitignored)
+│   ├── 3d_lookup_table/     # ✨ Comprehensive 3D table
+│   │   ├── photon_table_3d.npy   # 62.5B photons, (91,500,500) bins
+│   │   ├── table_metadata.npz    # Energy ranges, bin info
+│   │   └── visualizations/       # Table analysis plots
+│   ├── benchmarks/           # Performance results
+│   ├── documentation/        # Analysis reports
+│   ├── tables/              # Discrete energy tables
+│   └── visualizations/      # Generated plots
+│
+└── s3df_scripts/            # HPC cluster utilities
+    ├── jobs/                # Batch job scripts
+    └── utils/               # Setup and build scripts
 ```
 
-## Key Features
+## ✨ New Features & Fixes
 
-### ✅ **Clean Organization**
-- **All Python scripts** organized in `tools/` subdirectories
-- **All outputs** consolidated in `output/` 
-- **All documentation** in `output/documentation/`
-- **No scattered files** in root directory
+### Energy Control System
+PhotonSim now supports flexible energy control via macro commands:
 
-### ✅ **Main Functionality**
-- **`tools/create_photon_table.py`** - Create 3D Cherenkov photon lookup table
-- **`tools/query_photon_table.py`** - Query the lookup table with interpolation
-- **`output/`** - Single location for all results and documentation
+**Fixed Energy (Default)**:
+```bash
+/gun/randomEnergy false
+/gun/energy 300 MeV
+```
 
-### ✅ **3D Lookup Table**
-- **95,000 photons** from 100 muon events
-- **15×20×15 bins** with trilinear interpolation
-- **Full energy range**: 101.7 - 498.1 MeV
-- **26.6% parameter space coverage**
+**Random Energy**:
+```bash
+/gun/randomEnergy true
+/gun/energyMin 100 MeV
+/gun/energyMax 1000 MeV
+```
+
+### Muon Decay Inactivation
+All muon macros automatically disable decay processes:
+```bash
+/particle/select mu-
+/particle/process/inactivate 1
+/particle/process/inactivate 7
+/particle/select mu+
+/particle/process/inactivate 1
+```
+
+### Bug Fix
+**Fixed Critical Issue**: PhotonSim was ignoring `/gun/energy` commands and using random energies (100-500 MeV) by default. Now respects fixed energy settings.
+
+## Key Data Products
+
+### 🔬 **3D Lookup Table** (Generated)
+- **Location**: `output/3d_lookup_table/photon_table_3d.npy`
+- **Data**: 62.5 billion photons from 91 energy points (100-1000 MeV)
+- **Dimensions**: (91, 500, 500) - [energy, angle, distance]
+- **Coverage**: Complete energy range with Cherenkov physics
+- **Note**: Generated locally in output/ directory (gitignored)
 
 ## Quick Usage
 
+### Run Simulations
 ```bash
-# Create the 3D photon lookup table
-python3 tools/create_photon_table.py
-
-# Query the table
-python3 tools/query_photon_table.py --energy 300 --angle 0.3 --distance 1000 --stats
-
-# All outputs saved to output/
+cd build
+./PhotonSim ../macros/test_fixed_energy.mac     # 5 events, 300 MeV
+./PhotonSim ../macros/test_random_energy.mac    # 10 events, 200-800 MeV
 ```
 
-## Development
+### Analyze Data
+```bash
+# Create comprehensive 3D table
+python tools/create_multi_energy_3d_table.py
 
-- **Production scripts**: `tools/create_photon_table.py`, `tools/query_photon_table.py`
-- **Development scripts**: `tools/table_analysis/` subdirectory  
-- **Documentation**: `output/documentation/` for all guides and reports
-- **Results**: `output/` for all analysis outputs and plots
+# Visualize table
+python tools/visualize_3d_table.py
+
+# Validate energy controls
+python tools/validation/verify_energy_controls.py
+```
+
+### Validate Energy System
+```bash
+# Check actual energies used
+python tools/validation/check_all_energies.py
+
+# Compare different energies
+python tools/validation/compare_energies.py
+```
+
+## Development Workflow
+
+1. **Simulation**: Use clean macro templates in `macros/`
+2. **Analysis**: Tools organized by purpose in `tools/`
+3. **Validation**: Energy and physics validation in `tools/validation/`
+4. **Visualization**: All plotting tools in `tools/visualization/`
+5. **Documentation**: Comprehensive guides in `macros/README.md`
+
+## Data Generation
+
+PhotonSim can generate comprehensive simulation data locally:
+- **Energy Range**: 100-1000 MeV in configurable steps
+- **Output**: ROOT files with optical photon and energy deposit data
+- **3D Tables**: Comprehensive lookup tables for ML training
+- **HPC Support**: Batch job scripts for large-scale generation (`s3df_scripts/`)
+
+## Integration Ready
+
+- **diffCherenkov Integration**: JAX-native pipeline in place
+- **Energy Control**: Flexible fixed/random energy generation
+- **Clean Structure**: No scattered files, proper organization
+- **Local Data Generation**: Tools for comprehensive energy coverage

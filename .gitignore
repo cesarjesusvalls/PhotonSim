@@ -10,6 +10,11 @@ lib/
 *.out
 *.log
 
+# Generated data files
+*.npy
+*.npz
+*.png
+
 # Temporary files
 *~
 *.swp
@@ -46,6 +51,9 @@ install_manifest.txt
 
 # Generated output files
 output/
+
+# Generated lookup tables
+3d_lookup_table/
 
 # Local data directory (contains copied ROOT files)
 data/

@@ -35,6 +35,7 @@
 #include "G4UIcmdWithADoubleAndUnit.hh"
 #include "G4UIcmdWith3VectorAndUnit.hh"
 #include "G4UIcmdWith3Vector.hh"
+#include "G4UIcmdWithABool.hh"
 #include "G4SystemOfUnits.hh"
 
 namespace PhotonSim
@@ -72,6 +73,29 @@ PrimaryGeneratorMessenger::PrimaryGeneratorMessenger(PrimaryGeneratorAction* pri
   fDirectionCmd->SetGuidance("Set particle gun direction");
   fDirectionCmd->SetParameterName("X", "Y", "Z", false);
   fDirectionCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
+  fRandomEnergyCmd = new G4UIcmdWithABool("/gun/randomEnergy", this);
+  fRandomEnergyCmd->SetGuidance("Enable/disable random energy generation");
+  fRandomEnergyCmd->SetGuidance("If true, energy is randomly chosen from the specified range");
+  fRandomEnergyCmd->SetGuidance("If false, uses the fixed energy set by /gun/energy");
+  fRandomEnergyCmd->SetParameterName("useRandom", false);
+  fRandomEnergyCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
+  fEnergyMinCmd = new G4UIcmdWithADoubleAndUnit("/gun/energyMin", this);
+  fEnergyMinCmd->SetGuidance("Set minimum energy for random energy generation");
+  fEnergyMinCmd->SetGuidance("Only used when /gun/randomEnergy is set to true");
+  fEnergyMinCmd->SetParameterName("minEnergy", false);
+  fEnergyMinCmd->SetDefaultUnit("MeV");
+  fEnergyMinCmd->SetUnitCandidates("eV keV MeV GeV TeV");
+  fEnergyMinCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
+  fEnergyMaxCmd = new G4UIcmdWithADoubleAndUnit("/gun/energyMax", this);
+  fEnergyMaxCmd->SetGuidance("Set maximum energy for random energy generation");
+  fEnergyMaxCmd->SetGuidance("Only used when /gun/randomEnergy is set to true");
+  fEnergyMaxCmd->SetParameterName("maxEnergy", false);
+  fEnergyMaxCmd->SetDefaultUnit("MeV");
+  fEnergyMaxCmd->SetUnitCandidates("eV keV MeV GeV TeV");
+  fEnergyMaxCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -82,6 +106,9 @@ PrimaryGeneratorMessenger::~PrimaryGeneratorMessenger()
   delete fEnergyCmd;
   delete fPositionCmd;
   delete fDirectionCmd;
+  delete fRandomEnergyCmd;
+  delete fEnergyMinCmd;
+  delete fEnergyMaxCmd;
   delete fGunDir;
 }
 
@@ -100,6 +127,19 @@ void PrimaryGeneratorMessenger::SetNewValue(G4UIcommand* command, G4String newVa
   }
   else if (command == fDirectionCmd) {
     fPrimaryGeneratorAction->SetParticleDirection(fDirectionCmd->GetNew3VectorValue(newValue));
+  }
+  else if (command == fRandomEnergyCmd) {
+    fPrimaryGeneratorAction->SetRandomEnergy(fRandomEnergyCmd->GetNewBoolValue(newValue));
+  }
+  else if (command == fEnergyMinCmd) {
+    G4double currentMax = fPrimaryGeneratorAction->GetMaxEnergy();
+    G4double newMin = fEnergyMinCmd->GetNewDoubleValue(newValue);
+    fPrimaryGeneratorAction->SetEnergyRange(newMin, currentMax);
+  }
+  else if (command == fEnergyMaxCmd) {
+    G4double currentMin = fPrimaryGeneratorAction->GetMinEnergy();
+    G4double newMax = fEnergyMaxCmd->GetNewDoubleValue(newValue);
+    fPrimaryGeneratorAction->SetEnergyRange(currentMin, newMax);
   }
 }
 
