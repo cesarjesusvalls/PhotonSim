@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import uproot
+import h5py
 from pathlib import Path
 import argparse
 from tqdm import tqdm
@@ -188,48 +189,74 @@ class DensityPhotonTable3D:
         print(f"Average photons per event: {self.photon_table.sum() / sum(self.events_per_file.values()):.1f}")
         
     def save_table(self, output_path):
-        """Save the density 3D table to files."""
+        """Save the density 3D table to HDF5 format."""
         output_path = Path(output_path)
         output_path.mkdir(exist_ok=True, parents=True)
         
-        # Save all three versions
-        np.save(output_path / "photon_table_3d_raw.npy", self.photon_table)
-        np.save(output_path / "photon_table_3d_normalized.npy", self.normalized_table)
-        np.save(output_path / "photon_table_3d_density.npy", self.density_table)
+        # Save to HDF5 file
+        h5_file = output_path / "photon_lookup_table.h5"
         
-        # Save bin areas
-        np.save(output_path / "bin_areas.npy", self.bin_areas)
+        with h5py.File(h5_file, 'w') as f:
+            # Create main data group
+            data_group = f.create_group('data')
+            
+            # Save all three table versions
+            data_group.create_dataset('photon_table_raw', data=self.photon_table, 
+                                    compression='gzip', compression_opts=9)
+            data_group.create_dataset('photon_table_normalized', data=self.normalized_table,
+                                    compression='gzip', compression_opts=9)
+            data_group.create_dataset('photon_table_density', data=self.density_table,
+                                    compression='gzip', compression_opts=9)
+            
+            # Save bin areas
+            data_group.create_dataset('bin_areas', data=self.bin_areas,
+                                    compression='gzip', compression_opts=9)
+            
+            # Create coordinate group
+            coords_group = f.create_group('coordinates')
+            
+            # Save coordinate arrays
+            coords_group.create_dataset('energy_values', data=self.energy_values)
+            coords_group.create_dataset('energy_edges', data=self.bin_edges[0])
+            coords_group.create_dataset('angle_edges', data=self.bin_edges[1])
+            coords_group.create_dataset('distance_edges', data=self.bin_edges[2])
+            coords_group.create_dataset('energy_centers', data=self.bin_centers[0])
+            coords_group.create_dataset('angle_centers', data=self.bin_centers[1])
+            coords_group.create_dataset('distance_centers', data=self.bin_centers[2])
+            
+            # Create metadata group
+            meta_group = f.create_group('metadata')
+            
+            # Save scalar metadata
+            meta_group.attrs['energy_min'] = self.energy_min
+            meta_group.attrs['energy_max'] = self.energy_max
+            meta_group.attrs['energy_step'] = self.energy_step
+            meta_group.attrs['angle_bins'] = self.angle_bins
+            meta_group.attrs['distance_bins'] = self.distance_bins
+            meta_group.attrs['angle_range_min'] = self.angle_range[0]
+            meta_group.attrs['angle_range_max'] = self.angle_range[1]
+            meta_group.attrs['distance_range_min'] = self.distance_range[0]
+            meta_group.attrs['distance_range_max'] = self.distance_range[1]
+            meta_group.attrs['table_shape'] = self.density_table.shape
+            meta_group.attrs['total_photons'] = self.photon_table.sum()
+            meta_group.attrs['normalization'] = 'density'
+            meta_group.attrs['density_units'] = 'photons/(event·sr·mm)'
+            meta_group.attrs['photonsim_version'] = '1.0'
+            meta_group.attrs['format_version'] = '1.0'
+            
+            # Save events per file as dataset (since it can be large)
+            if self.events_per_file:
+                events_data = np.array([(k, v) for k, v in self.events_per_file.items()], 
+                                     dtype=[('energy', 'i4'), ('events', 'i4')])
+                meta_group.create_dataset('events_per_file', data=events_data)
         
-        # Save metadata
-        metadata = {
-            'energy_values': self.energy_values,
-            'energy_min': self.energy_min,
-            'energy_max': self.energy_max,
-            'angle_bins': self.angle_bins,
-            'distance_bins': self.distance_bins,
-            'angle_range': self.angle_range,
-            'distance_range': self.distance_range,
-            'energy_edges': self.bin_edges[0],
-            'angle_edges': self.bin_edges[1],
-            'distance_edges': self.bin_edges[2],
-            'energy_centers': self.bin_centers[0],
-            'angle_centers': self.bin_centers[1],
-            'distance_centers': self.bin_centers[2],
-            'table_shape': self.density_table.shape,
-            'total_photons': self.photon_table.sum(),
-            'events_per_file': dict(self.events_per_file),
-            'normalization': 'density',
-            'density_units': 'photons/(event·sr·mm)'
-        }
-        
-        np.savez(output_path / "table_metadata_density.npz", **metadata)
-        
-        print(f"\n3D table saved to {output_path}")
-        print(f"  - photon_table_3d_raw.npy: Raw photon counts")
-        print(f"  - photon_table_3d_normalized.npy: Photons per event")
-        print(f"  - photon_table_3d_density.npy: Photon density (photons/event/sr/mm)")
-        print(f"  - bin_areas.npy: Bin areas in sr·mm")
-        print(f"  - table_metadata_density.npz: Metadata and bin information")
+        print(f"\n3D lookup table saved to HDF5 format: {h5_file}")
+        print(f"  - photon_table_raw: Raw photon counts")
+        print(f"  - photon_table_normalized: Photons per event")
+        print(f"  - photon_table_density: Photon density (photons/event/sr/mm)")
+        print(f"  - bin_areas: Bin areas in sr·mm")
+        print(f"  - coordinates: Energy, angle, distance grids")
+        print(f"  - metadata: Table parameters and info")
     
     def visualize_table(self, output_path=None):
         """Create visualizations of the density 3D table."""

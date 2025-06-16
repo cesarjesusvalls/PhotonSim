@@ -6,6 +6,8 @@ A GEANT4-based application for simulating optical photon generation in monolithi
 
 PhotonSim is designed to study optical photon production from particle interactions in large detector volumes. It records detailed information about optical photons generated through Cerenkov and scintillation processes.
 
+**Scope**: PhotonSim focuses on data generation and 3D lookup table creation. For machine learning applications and neural network training on PhotonSim data, see the [diffCherenkov](../diffCherenkov) repository.
+
 ## Features
 
 - **Monolithic Detector Geometry**: Configurable detector dimensions (default 100×100×100 meters)
@@ -100,6 +102,43 @@ The simulation produces a ROOT file `optical_photons.root` containing:
 - `PhotonDirX/Y/Z`: Photon direction vectors
 - `PhotonTime`: Photon creation times (ns)
 - `PhotonProcess`: Creation process name
+
+## 3D Lookup Tables (HDF5 Format)
+
+PhotonSim can generate comprehensive 3D lookup tables for machine learning applications:
+
+```bash
+# Generate density-normalized 3D lookup table from simulation data
+python tools/table_generation/create_density_3d_table.py \
+    --data-dir data/mu-/ \
+    --output output/3d_lookup_table_density
+```
+
+### HDF5 Output Structure
+
+The lookup table is saved as `photon_lookup_table.h5` with the following structure:
+
+```
+/data/
+  ├── photon_table_raw         # Raw photon counts
+  ├── photon_table_normalized  # Photons per event
+  ├── photon_table_density     # Photon density (photons/event/sr/mm)
+  └── bin_areas               # Bin areas in sr·mm
+/coordinates/
+  ├── energy_values           # Energy grid points (MeV)
+  ├── energy_centers          # Energy bin centers
+  ├── angle_centers           # Angle bin centers (radians)
+  ├── distance_centers        # Distance bin centers (mm)
+  └── *_edges                 # Bin edge arrays
+/metadata/
+  ├── energy_min/max          # Energy range
+  ├── angle/distance_range    # Spatial ranges
+  ├── table_shape             # Array dimensions
+  ├── density_units           # "photons/(event·sr·mm)"
+  └── events_per_file         # Event counts per energy
+```
+
+This HDF5 format is compatible with [diffCherenkov](../diffCherenkov) for neural network training.
 
 ## Visualization
 
