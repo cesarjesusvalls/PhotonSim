@@ -286,7 +286,7 @@ class DensityPhotonTable3D:
         ax.grid(True, alpha=0.3)
         
         # 2-4. Sample density 2D slices
-        sample_energies = [200, 300, 400]
+        sample_energies = [200, 500, 800]
         for i, energy in enumerate(sample_energies):
             ax = axes[0, i+1] if i < 2 else axes[1, 0]
             
@@ -317,7 +317,7 @@ class DensityPhotonTable3D:
         
         # 5. Integrated angular density (accounting for solid angle)
         ax = axes[1, 1]
-        for energy in [200, 300, 400]:
+        for energy in [200, 500, 800]:
             idx = self.energy_values.index(energy)
             # Integrate over distance, density already includes solid angle normalization
             angular_density = self.density_table[idx].sum(axis=1) * np.diff(self.bin_edges[2]).mean()

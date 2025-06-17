@@ -7,9 +7,9 @@ import uproot
 from pathlib import Path
 import os
 
-def check_root_files():
+def check_root_files(path="data/mu-"):
     """Check all ROOT files and report their status."""
-    data_dir = Path("data/mu-")
+    data_dir = Path(path)
     
     # Track file status
     good_files = []
