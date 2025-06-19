@@ -41,6 +41,9 @@ __pycache__/
 *.pyd
 .Python
 
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
 # CMake generated files
 CMakeCache.txt
 CMakeFiles/
