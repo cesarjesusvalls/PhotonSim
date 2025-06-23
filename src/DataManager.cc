@@ -120,6 +120,12 @@ void DataManager::Initialize(const G4String& filename)
                                      500, 0.0, 10000.0,        // 0 to 10 meters in mm
                                      500, 0.0, 1000.0);        // 0 to 1000 keV (adjustable)
   
+  // Photon time vs distance histogram: Distance (0-10 m) vs Time (0-50 ns)
+  fPhotonHist_TimeDistance = new TH2D("PhotonHist_TimeDistance",
+                                     "Photon Time vs Distance from Origin;Distance (mm);Time (ns)",
+                                     500, 0.0, 10000.0,        // 0 to 10 meters in mm
+                                     500, 0.0, 50.0);          // 0 to 50 ns
+  
   G4cout << "ROOT file " << actualFilename << " created for optical photon and energy deposit data" << G4endl;
   G4cout << "2D histograms created: 500x500 bins for aggregated data analysis" << G4endl;
 }
@@ -149,6 +155,12 @@ void DataManager::Finalize()
         G4cout << "Energy deposit histogram written with " << fEdepHist_DistanceEnergy->GetEntries() << " entries" << G4endl;
         // Histogram is now owned by the ROOT file, don't delete it manually
         fEdepHist_DistanceEnergy = nullptr;
+      }
+      if (fPhotonHist_TimeDistance) {
+        fPhotonHist_TimeDistance->Write();
+        G4cout << "Photon time histogram written with " << fPhotonHist_TimeDistance->GetEntries() << " entries" << G4endl;
+        // Histogram is now owned by the ROOT file, don't delete it manually
+        fPhotonHist_TimeDistance = nullptr;
       }
       
       G4cout << "ROOT file closed with " << fTree->GetEntries() << " events" << G4endl;
@@ -235,6 +247,10 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
     G4double opening_angle = std::acos(std::max(-1.0, std::min(1.0, dot_product)));
     
     fPhotonHist_AngleDistance->Fill(opening_angle, distance);
+    
+    // Fill time vs distance histogram
+    G4double time_ns = time / ns;  // Convert to ns
+    fPhotonHist_TimeDistance->Fill(distance, time_ns);
   }
   
   // Conditionally store individual photon data

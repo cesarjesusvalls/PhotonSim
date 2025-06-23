@@ -54,6 +54,7 @@ install_manifest.txt
 
 # Generated output files
 output/
+energy_scan_macros/
 
 # Generated lookup tables
 3d_lookup_table/

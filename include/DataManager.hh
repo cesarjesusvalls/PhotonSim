@@ -142,6 +142,7 @@ class DataManager
     // 2D ROOT histograms for aggregated data (500x500 bins)
     TH2D* fPhotonHist_AngleDistance = nullptr;  // Opening angle vs distance
     TH2D* fEdepHist_DistanceEnergy = nullptr;   // Distance vs energy deposit
+    TH2D* fPhotonHist_TimeDistance = nullptr;   // Photon time vs distance
     
     // Output filename
     G4String fOutputFilename = "optical_photons.root";

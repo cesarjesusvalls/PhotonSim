@@ -111,7 +111,8 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
       // Use vertex position (where photon was actually created) instead of current position
       G4ThreeVector position = track->GetVertexPosition();
       G4ThreeVector direction = track->GetVertexMomentumDirection();
-      G4double time = track->GetGlobalTime();
+      // Get creation time - for first step, we need to subtract the time spent in this step
+      G4double time = track->GetGlobalTime() - step->GetDeltaTime();
       
       // Record this optical photon using DataManager
       G4int trackID = track->GetTrackID();
