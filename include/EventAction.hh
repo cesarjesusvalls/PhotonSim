@@ -32,6 +32,7 @@
 
 #include "G4UserEventAction.hh"
 #include "globals.hh"
+#include <chrono>
 
 class G4Event;
 
@@ -56,6 +57,7 @@ class EventAction : public G4UserEventAction
   private:
     RunAction* fRunAction = nullptr;
     G4double fEdep = 0.;
+    std::chrono::steady_clock::time_point fStartTime;
 };
 
 }  // namespace PhotonSim

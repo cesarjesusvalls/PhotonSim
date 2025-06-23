@@ -69,11 +69,14 @@ RunAction::RunAction()
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-void RunAction::BeginOfRunAction(const G4Run*)
+void RunAction::BeginOfRunAction(const G4Run* run)
 {
   // inform the runManager to save random number seed
   G4RunManager::GetRunManager()->SetRandomNumberStore(false);
 
+  // Store the total number of events for this run
+  fNumberOfEvents = run->GetNumberOfEventToBeProcessed();
+  
   // Initialize DataManager with filename set by macro command
   DataManager* dataManager = DataManager::GetInstance();
   dataManager->Initialize();  // Uses stored filename
@@ -81,6 +84,9 @@ void RunAction::BeginOfRunAction(const G4Run*)
   // reset accumulables to their initial values
   G4AccumulableManager* accumulableManager = G4AccumulableManager::Instance();
   accumulableManager->Reset();
+  
+  // Print initial message
+  G4cout << G4endl << "### Starting run with " << fNumberOfEvents << " events ###" << G4endl;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -94,22 +100,8 @@ void RunAction::EndOfRunAction(const G4Run* run)
   G4AccumulableManager* accumulableManager = G4AccumulableManager::Instance();
   accumulableManager->Merge();
 
-  // Compute dose = total energy deposit in a run and its variance
-  //
+  // Get total energy deposit (still tracked but not printed)
   G4double edep = fEdep.GetValue();
-  G4double edep2 = fEdep2.GetValue();
-
-  G4double rms = edep2 - edep * edep / nofEvents;
-  if (rms > 0.)
-    rms = std::sqrt(rms);
-  else
-    rms = 0.;
-
-  const auto detConstruction = static_cast<const DetectorConstruction*>(
-    G4RunManager::GetRunManager()->GetUserDetectorConstruction());
-  G4double mass = detConstruction->GetDetectorVolume()->GetMass();
-  G4double dose = edep / mass;
-  G4double rmsDose = rms / mass;
 
   // Run conditions
   //  note: There is no primary generator action object for "master"
@@ -119,10 +111,21 @@ void RunAction::EndOfRunAction(const G4Run* run)
   G4String runCondition;
   if (generatorAction) {
     const G4ParticleGun* particleGun = generatorAction->GetParticleGun();
-    runCondition += particleGun->GetParticleDefinition()->GetParticleName();
-    runCondition += " of ";
-    G4double particleEnergy = particleGun->GetParticleEnergy();
-    runCondition += G4BestUnit(particleEnergy, "Energy");
+    G4String particleName = particleGun->GetParticleDefinition()->GetParticleName();
+    runCondition = particleName;
+    
+    // Check if using random energy or fixed energy
+    if (generatorAction->GetRandomEnergy()) {
+      runCondition += " with uniform random energy [";
+      runCondition += G4BestUnit(generatorAction->GetMinEnergy(), "Energy");
+      runCondition += " - ";
+      runCondition += G4BestUnit(generatorAction->GetMaxEnergy(), "Energy");
+      runCondition += "]";
+    } else {
+      runCondition += " of ";
+      G4double particleEnergy = particleGun->GetParticleEnergy();
+      runCondition += G4BestUnit(particleEnergy, "Energy");
+    }
   }
 
   // Print
@@ -134,9 +137,8 @@ void RunAction::EndOfRunAction(const G4Run* run)
     G4cout << G4endl << "--------------------End of Local Run------------------------";
   }
 
-  G4cout << G4endl << " The run consists of " << nofEvents << " " << runCondition << G4endl
-         << " Cumulated dose per run, in scoring volume : " << G4BestUnit(dose, "Dose")
-         << " rms = " << G4BestUnit(rmsDose, "Dose") << G4endl
+  G4cout << G4endl 
+         << " The run consists of " << nofEvents << " " << runCondition << G4endl
          << "------------------------------------------------------------" << G4endl << G4endl;
 }
 

@@ -56,10 +56,13 @@ class RunAction : public G4UserRunAction
     void EndOfRunAction(const G4Run*) override;
 
     void AddEdep(G4double edep);
+    void SetNumberOfEvents(G4int n) { fNumberOfEvents = n; }
+    G4int GetNumberOfEvents() const { return fNumberOfEvents; }
 
   private:
     G4Accumulable<G4double> fEdep = 0.;
     G4Accumulable<G4double> fEdep2 = 0.;
+    G4int fNumberOfEvents = 0;
 };
 
 }  // namespace PhotonSim

@@ -34,6 +34,7 @@
 
 #include "G4Event.hh"
 #include "G4RunManager.hh"
+#include <iomanip>
 
 namespace PhotonSim
 {
@@ -48,6 +49,11 @@ void EventAction::BeginOfEventAction(const G4Event* event)
 {
   fEdep = 0.;
   
+  // Initialize start time on first event
+  if (event->GetEventID() == 0) {
+    fStartTime = std::chrono::steady_clock::now();
+  }
+  
   // Get primary particle energy from the generator
   const auto primaryGenerator = static_cast<const PrimaryGeneratorAction*>(
     G4RunManager::GetRunManager()->GetUserPrimaryGeneratorAction());
@@ -60,7 +66,7 @@ void EventAction::BeginOfEventAction(const G4Event* event)
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-void EventAction::EndOfEventAction(const G4Event*)
+void EventAction::EndOfEventAction(const G4Event* event)
 {
   // accumulate statistics in run action
   fRunAction->AddEdep(fEdep);
@@ -68,6 +74,79 @@ void EventAction::EndOfEventAction(const G4Event*)
   // Notify DataManager about the end of the event
   DataManager* dataManager = DataManager::GetInstance();
   dataManager->EndEvent();
+  
+  // Progress reporting
+  G4int eventID = event->GetEventID();
+  G4int totalEvents = fRunAction->GetNumberOfEvents();
+  
+  // Print progress at regular intervals
+  if (totalEvents > 0) {
+    G4int progressInterval = 1; 
+    if (progressInterval == 0) progressInterval = 1;
+    
+    if (eventID % progressInterval == 0 || eventID == totalEvents - 1) {
+      G4double progress = 100.0 * (eventID) / totalEvents;
+      G4cout << "\rProgress: [";
+      
+      // Draw progress bar
+      G4int barWidth = 40;
+      G4int pos = barWidth * progress / 100.0;
+      for (G4int i = 0; i < barWidth; ++i) {
+        if (i < pos) G4cout << "=";
+        else if (i == pos) G4cout << ">";
+        else G4cout << " ";
+      }
+      
+      // Calculate elapsed time and ETA
+      auto currentTime = std::chrono::steady_clock::now();
+      auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(currentTime - fStartTime).count();
+      
+      // Format elapsed time
+      G4int elapsedHours = elapsedSeconds / 3600;
+      G4int elapsedMinutes = (elapsedSeconds % 3600) / 60;
+      G4int elapsedSecs = elapsedSeconds % 60;
+      
+      G4cout << "] " << std::fixed << std::setprecision(1) 
+             << progress << "% (" << eventID << "/" << totalEvents << ")";
+      
+      // Show elapsed time
+      G4cout << " Elapsed: ";
+      if (elapsedHours > 0) {
+        G4cout << elapsedHours << "h " << elapsedMinutes << "m " << elapsedSecs << "s";
+      } else if (elapsedMinutes > 0) {
+        G4cout << elapsedMinutes << "m " << elapsedSecs << "s";
+      } else {
+        G4cout << elapsedSecs << "s";
+      }
+      
+      // Calculate and show ETA (only if we've processed at least one event)
+      if (eventID > 0) {
+        G4double secondsPerEvent = static_cast<G4double>(elapsedSeconds) / eventID;
+        G4int remainingEvents = totalEvents - eventID;
+        G4int remainingSeconds = static_cast<G4int>(secondsPerEvent * remainingEvents);
+        
+        G4int etaHours = remainingSeconds / 3600;
+        G4int etaMinutes = (remainingSeconds % 3600) / 60;
+        G4int etaSecs = remainingSeconds % 60;
+        
+        G4cout << " ETA: ";
+        if (etaHours > 0) {
+          G4cout << etaHours << "h " << etaMinutes << "m " << etaSecs << "s";
+        } else if (etaMinutes > 0) {
+          G4cout << etaMinutes << "m " << etaSecs << "s";
+        } else {
+          G4cout << etaSecs << "s";
+        }
+      }
+      
+      G4cout << "     " << std::flush;
+      
+      // Print newline when complete
+      if (eventID == totalEvents - 1) {
+        G4cout << G4endl;
+      }
+    }
+  }
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

@@ -69,6 +69,7 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     G4double GetTrueEnergy() const { return fTrueEnergy; }
     G4double GetMinEnergy() const { return fMinEnergy; }
     G4double GetMaxEnergy() const { return fMaxEnergy; }
+    G4bool GetRandomEnergy() const { return fRandomEnergy; }
 
   private:
     G4ParticleGun* fParticleGun = nullptr;

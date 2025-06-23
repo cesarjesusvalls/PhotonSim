@@ -74,16 +74,7 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
         processName = creationProcess->GetProcessName();
       }
       
-      static G4int electronCount = 0;
-      if (electronCount < 10) { // Show first 10 electron creations
-        G4cout << "=== ELECTRON CREATION " << electronCount << " ===" << G4endl;
-        G4cout << "Particle: " << particleName << " (ID=" << trackID << ")" << G4endl;
-        G4cout << "Parent ID: " << parentID << G4endl;
-        G4cout << "Creation Process: " << processName << G4endl;
-        G4cout << "Energy: " << track->GetKineticEnergy()/MeV << " MeV" << G4endl;
-        G4cout << "=================================" << G4endl;
-        electronCount++;
-      }
+      // Debug prints removed
     }
   }
   
@@ -129,32 +120,12 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
                                    time, processName, parentParticle,
                                    parentID, trackID);
       
-      // Add some debug output (only for first few photons)
-      static G4int photonCount = 0;
-      if (photonCount < 10) {
-        G4cout << "Optical Photon " << photonCount << " Created by " << processName 
-               << " (parent: " << parentParticle << ") at (" 
-               << position.x()/mm << ", " << position.y()/mm << ", " << position.z()/mm 
-               << ") mm" << G4endl;
-        photonCount++;
-      }
+      // Debug prints removed
     }
     return; // Don't process further for optical photons
   }
   
-  // Debug: Track charged particles to see what's creating Cherenkov light
-  if (particle->GetPDGCharge() != 0) {
-    static G4int particleStepCount = 0;
-    if (particleStepCount < 20) {
-      G4ThreeVector pos = track->GetPosition();
-      G4double distance = sqrt(pos.x()*pos.x() + pos.y()*pos.y() + pos.z()*pos.z());
-      G4cout << "Charged particle: " << particle->GetParticleName() 
-             << " at (" << pos.x()/mm << ", " << pos.y()/mm << ", " << pos.z()/mm 
-             << ") mm, distance=" << distance/mm << "mm, energy=" 
-             << track->GetKineticEnergy()/MeV << " MeV" << G4endl;
-      particleStepCount++;
-    }
-  }
+  // Debug prints removed
   
   // Also collect energy deposition in the detector volume for general tracking
   if (!fDetectorVolume) {
@@ -184,15 +155,7 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
                                    edepStep, stepTime, particleName,
                                    trackID, parentID);
       
-      // Debug output for first few energy deposits
-      static G4int edepCount = 0;
-      if (edepCount < 10) {
-        G4cout << "Energy Deposit " << edepCount << ": " << edepStep/keV 
-               << " keV by " << particleName << " at (" 
-               << stepPos.x()/mm << ", " << stepPos.y()/mm << ", " << stepPos.z()/mm 
-               << ") mm, t=" << stepTime/ns << " ns" << G4endl;
-        edepCount++;
-      }
+      // Debug prints removed
     }
   }
 }
