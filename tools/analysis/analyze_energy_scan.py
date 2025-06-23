@@ -43,8 +43,11 @@ def analyze_energy_scan(scan_directory):
     print(f"Found {len(root_files)} energy scan files")
     print(f"Energy range: {extract_energy(root_files[0])} - {extract_energy(root_files[-1])} MeV")
     
-    # Create figure with four subplots
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 8))
+    # Create main figure with two subplots for timing analysis
+    fig_main, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+    
+    # Create separate figure for range analysis
+    fig_range, (ax3, ax4) = plt.subplots(1, 2, figsize=(16, 6))
     
     energies = []
     ranges = []  # Store calculated ranges for each energy
@@ -72,6 +75,17 @@ def analyze_energy_scan(scan_directory):
             print(f"  Error: PhotonHist_TimeDistance not found in {root_file}")
             f.Close()
             continue
+        
+        # Get the tree to determine actual number of events
+        tree = f.Get("OpticalPhotons")
+        if not tree:
+            print(f"  Error: OpticalPhotons tree not found in {root_file}")
+            f.Close()
+            continue
+        
+        # Get actual number of events
+        n_events = tree.GetEntries()
+        print(f"  Events: {n_events}")
         
         # Calculate mean time vs distance (profile)
         n_bins_x = hist.GetNbinsX()
@@ -101,8 +115,9 @@ def analyze_energy_scan(scan_directory):
                     total_time_weighted += content * time
                     total_weight += content
             
-            # Store time data
-            if total_weight > 0:
+            # Store time data (only if we have at least 10 photons on average)
+            avg_photons_in_bin = total_weight / n_events
+            if avg_photons_in_bin >= 10.0:
                 mean_time = total_time_weighted / total_weight
                 distances_time.append(distance)
                 mean_times.append(mean_time)
@@ -127,19 +142,18 @@ def analyze_energy_scan(scan_directory):
         
         # Calculate average photon count per event for this energy
         if len(distances_count) > 0:
-            # Get number of events for this energy (assuming 10 events as specified in macro generation)
-            n_events = 10  # From the macro generation script
+            # Use actual number of events read from the file
             avg_photon_counts = [count / n_events for count in photon_counts]
             
-            # Plot 2: average photon count vs distance
-            ax2.plot(distances_count, avg_photon_counts, color=colors[i], alpha=0.8, 
+            # Plot 3: average photon count vs distance (moved to range figure)
+            ax3.plot(distances_count, avg_photon_counts, color=colors[i], alpha=0.8, 
                     label=f'{energy} MeV', linewidth=2, marker='o', markersize=2)
             
-            # Calculate range using filtered data (100-5000 average photons per event)
+            # Calculate range using filtered data (10-500 average photons per event)
             if len(distances_count) > 2:
-                # Filter data: use only points with 100-5000 average photons per event
+                # Filter data: use only points with 10-500 average photons per event
                 filtered_data = [(d, c) for d, c in zip(distances_count, avg_photon_counts) 
-                               if 100 <= c <= 5000]
+                               if 10 <= c <= 500]
                 
                 if len(filtered_data) >= 3:  # Need at least 3 points for fitting
                     filtered_distances, filtered_counts = zip(*filtered_data)
@@ -166,15 +180,15 @@ def analyze_energy_scan(scan_directory):
                             fit_line_y = a * fit_line_x + b
                             # Only plot positive part
                             positive_mask = fit_line_y >= 0
-                            ax2.plot(fit_line_x[positive_mask], fit_line_y[positive_mask], 
+                            ax3.plot(fit_line_x[positive_mask], fit_line_y[positive_mask], 
                                     '--', color=colors[i], alpha=0.5, linewidth=1)
                             
                             # Mark the calculated range
-                            ax2.axvline(x=calculated_range, color=colors[i], 
+                            ax3.axvline(x=calculated_range, color=colors[i], 
                                        linestyle=':', alpha=0.7, linewidth=1)
                             
                             # Highlight the data points used for fitting
-                            ax2.scatter(filtered_distances, filtered_counts, 
+                            ax3.scatter(filtered_distances, filtered_counts, 
                                       color=colors[i], alpha=0.3, s=20, marker='s')
                             
                             print(f"  Calculated range: {calculated_range:.1f} mm (using {len(filtered_data)} points)")
@@ -193,8 +207,8 @@ def analyze_energy_scan(scan_directory):
         
         f.Close()
     
-    # Format the plots
-    # Plot 1: Time vs Distance
+    # Format the main timing analysis plots
+    # Plot 1: Time vs Distance (unchanged)
     ax1.set_xlabel('Distance from Origin (mm)', fontsize=12)
     ax1.set_ylabel('Average Photon Creation Time (ns)', fontsize=12)
     ax1.set_title('Average Photon Creation Time vs Distance', fontsize=14)
@@ -203,35 +217,40 @@ def analyze_energy_scan(scan_directory):
     ax1.set_xlim(0, None)
     ax1.set_ylim(0, None)
     
-    # Plot 2: Average Photon Count vs Distance (for range calculation)
+    # Plot 2: Will be updated for timing delta power law fits
     ax2.set_xlabel('Distance from Origin (mm)', fontsize=12)
-    ax2.set_ylabel('Average Photons per Event', fontsize=12)
-    ax2.set_title('Average Photon Count vs Distance and Calculated Ranges', fontsize=14)
+    ax2.set_ylabel('Timing Delta (ns)', fontsize=12)
+    ax2.set_title('Timing Delta vs Distance with Power Law Fits', fontsize=14)
     ax2.legend(fontsize=9)
     ax2.grid(True, alpha=0.3)
-    ax2.set_xlim(0, None)
-    ax2.set_ylim(0, None)
     
-    # Plot 3: Range vs Energy
-    ax3.set_xlabel('Energy (MeV)', fontsize=12)
-    ax3.set_ylabel('Range (cm)', fontsize=12)
-    ax3.set_title('Muon Range vs Energy', fontsize=14)
-    ax3.legend(fontsize=10)
+    # Format the range analysis plots
+    # Plot 3: Average Photon Count vs Distance (moved from ax2)
+    ax3.set_xlabel('Distance from Origin (mm)', fontsize=12)
+    ax3.set_ylabel('Average Photons per Event', fontsize=12)
+    ax3.set_title('Average Photon Count vs Distance and Calculated Ranges', fontsize=14)
+    ax3.legend(fontsize=9)
     ax3.grid(True, alpha=0.3)
+    ax3.set_xlim(0, None)
+    ax3.set_ylim(0, None)
     
-    # Plot 4: Timing vs Negative Remaining Range
-    ax4.set_xlabel('Negative Remaining Range (cm)', fontsize=12)
-    ax4.set_ylabel('Average Photon Creation Time (ns)', fontsize=12)
-    ax4.set_title('Photon Timing vs Negative Remaining Range', fontsize=14)
-    ax4.legend(fontsize=9)
+    # Plot 4: Range vs Energy (moved from ax3)
+    ax4.set_xlabel('Energy (MeV)', fontsize=12)
+    ax4.set_ylabel('Range (mm)', fontsize=12)
+    ax4.set_title('Muon Range vs Energy', fontsize=14)
     ax4.grid(True, alpha=0.3)
     
-    plt.tight_layout()
+    fig_main.tight_layout()
+    fig_range.tight_layout()
     
     # Save plots
-    output_plot = scan_dir / "energy_scan_analysis.png"
-    plt.savefig(output_plot, dpi=150, bbox_inches='tight')
-    print(f"\\nPlot saved to: {output_plot}")
+    output_plot_main = scan_dir / "timing_analysis.png"
+    fig_main.savefig(output_plot_main, dpi=150, bbox_inches='tight')
+    print(f"\\nTiming analysis plot saved to: {output_plot_main}")
+    
+    output_plot_range = scan_dir / "range_analysis.png"
+    fig_range.savefig(output_plot_range, dpi=150, bbox_inches='tight')
+    print(f"Range analysis plot saved to: {output_plot_range}")
     
     # Save summary data with ranges
     summary_file = scan_dir / "energy_scan_summary.txt"
@@ -246,10 +265,12 @@ def analyze_energy_scan(scan_directory):
             else:
                 range_str = "N/A"
             f.write(f"{energy:8d}  {range_str:>15s}\\n")
-        f.write("\\nTop-left plot: Average photon creation time vs distance\\n")
-        f.write("Top-right plot: Average photon count per event vs distance with range calculations\\n")
-        f.write("Bottom-left plot: Muon range vs energy with linear fit\\n")
-        f.write("Bottom-right plot: Photon timing vs negative remaining range\\n")
+        f.write("\\nTiming analysis figure:\\n")
+        f.write("- Left plot: Average photon creation time vs distance\\n")
+        f.write("- Right plot: Timing delta vs distance with power law fits\\n")
+        f.write("\\nRange analysis figure:\\n")
+        f.write("- Left plot: Average photon count per event vs distance with range calculations\\n")
+        f.write("- Right plot: Muon range vs energy with linear fit\\n")
         f.write("\\nRange calculation method:\\n")
         f.write("- Use only data points with 100-5000 average photons per event\\n")
         f.write("- Fit linear line to filtered data: avg_count = a*distance + b\\n")
@@ -269,54 +290,223 @@ def analyze_energy_scan(scan_directory):
         for energy, range_val in valid_ranges:
             print(f"  {energy:4d} MeV: {range_val:6.1f} mm")
         
-        # Plot 3: Range vs Energy (convert mm to cm for better readability)
-        valid_range_values_cm = [r/10.0 for r in valid_range_values]  # Convert mm to cm
-        print(valid_range_values_cm)
-        ax3.scatter(valid_energies, valid_range_values_cm, color='red', s=50, alpha=0.7, zorder=3)
+        # Plot 4: Range vs Energy (moved to ax4)
+        ax4.scatter(valid_energies, valid_range_values, color='red', s=50, alpha=0.7, zorder=3)
         
         # Linear fit only (as requested)
         try:
-            # Linear fit (convert to cm for fitting and display)
-            linear_coeffs = np.polyfit(valid_energies, valid_range_values_cm, 1)
+            # Linear fit (keep in mm)
+            linear_coeffs = np.polyfit(valid_energies, valid_range_values, 1)
             a_lin, b_lin = linear_coeffs
             
             # Calculate R-squared for linear fit
             linear_pred = a_lin * np.array(valid_energies) + b_lin
-            ss_res_lin = np.sum((valid_range_values_cm - linear_pred) ** 2)
-            ss_tot = np.sum((valid_range_values_cm - np.mean(valid_range_values_cm)) ** 2)
+            ss_res_lin = np.sum((valid_range_values - linear_pred) ** 2)
+            ss_tot = np.sum((valid_range_values - np.mean(valid_range_values)) ** 2)
             r2_linear = 1 - (ss_res_lin / ss_tot)
             
             # Plot linear fit
             energy_fit = np.linspace(min(valid_energies), max(valid_energies), 100)
             linear_fit = a_lin * energy_fit + b_lin
-            ax3.plot(energy_fit, linear_fit, '--', color='blue', linewidth=2, 
+            ax4.plot(energy_fit, linear_fit, '--', color='blue', linewidth=2, 
                     label=f'R = {a_lin:.3f}E + {b_lin:.1f} (R² = {r2_linear:.3f})', alpha=0.8)
             
-            print(f"\\nLinear fit: R = {a_lin:.3f}*E + {b_lin:.1f} cm (R² = {r2_linear:.3f})")
+            # Add legend to ax4
+            ax4.legend(fontsize=10)
             
-            # Plot 4: Timing vs Negative Remaining Range
-            print(f"\\n=== Remaining Range Analysis ===")
+            print(f"\\nLinear fit: R = {a_lin:.3f}*E + {b_lin:.1f} mm (R² = {r2_linear:.3f})")
             
-            # For each energy, calculate remaining range and plot timing
+            # New timing delta analysis with power law fits
+            print(f"\\n=== Power Law Timing Delta Analysis ===")
+            
+            # Find 1000 MeV data for reference timing fit
+            timing_1000_data = None
             for timing_data in all_timing_data:
-                energy = timing_data['energy']
-                distances = np.array(timing_data['distances'])
-                times = np.array(timing_data['times'])
-                color = timing_data['color']
+                if timing_data['energy'] == 1000:
+                    timing_1000_data = timing_data
+                    break
+            
+            if timing_1000_data is not None:
+                # Fit timing vs distance for 1000 MeV using only first 1000mm
+                distances_1000 = np.array(timing_1000_data['distances'])
+                times_1000 = np.array(timing_1000_data['times'])
                 
-                # Calculate expected total range for this energy using linear fit (in cm)
-                expected_range_cm = a_lin * energy + b_lin
-                
-                # Convert distances from mm to cm for consistency
-                distances_cm = distances / 10.0
-                
-                # Calculate remaining range (negative so it reads left to right)
-                remaining_range = -(expected_range_cm - distances_cm)
-                
-                # Plot timing vs negative remaining range
-                # This will show timing as function of how close to the end of the track
-                ax4.plot(remaining_range, times, color=color, alpha=0.6, 
-                        linewidth=1, marker='o', markersize=2, label=f'{energy} MeV')
+                # Filter to first 1000mm
+                mask_1000mm = distances_1000 <= 1000.0
+                if np.any(mask_1000mm):
+                    dist_fit = distances_1000[mask_1000mm]
+                    time_fit = times_1000[mask_1000mm]
+                    
+                    # Linear fit: time = c * distance + d
+                    timing_coeffs = np.polyfit(dist_fit, time_fit, 1)
+                    c_timing, d_timing = timing_coeffs
+                    
+                    print(f"  1000 MeV timing fit (first 1000mm): t = {c_timing:.6f}*d + {d_timing:.3f}")
+                    
+                    # Store power law fit parameters for each energy
+                    power_law_params = []
+                    
+                    # Calculate deltas and fit power laws for all energies
+                    for timing_data in all_timing_data:
+                        energy = timing_data['energy']
+                        distances = np.array(timing_data['distances'])
+                        times = np.array(timing_data['times'])
+                        color = timing_data['color']
+                        
+                        # Calculate expected timing using 1000 MeV fit
+                        expected_timing = c_timing * distances + d_timing
+                        
+                        # Calculate timing delta (actual - expected)
+                        timing_delta = times - expected_timing
+                        
+                        # Plot timing delta vs distance (not remaining range)
+                        ax2.plot(distances, timing_delta, color=color, alpha=0.6, 
+                                linewidth=0, marker='o', markersize=2, label=f'{energy} MeV data')
+                        
+                        # Fit power law with offset: δt = A * d^B + C
+                        valid_mask = (distances > 0) & (np.abs(timing_delta) > 0.001)
+                        if np.sum(valid_mask) >= 4:  # Need at least 4 points for 3 parameters
+                            distances_fit = distances[valid_mask]
+                            delta_fit = timing_delta[valid_mask]
+                            
+                            try:
+                                # Use scipy's curve_fit for the general power law form
+                                from scipy.optimize import curve_fit
+                                
+                                def power_law_offset(x, A, B):
+                                    return 10**A * np.power(x, B) + 0.001
+                                
+                                # Initial guess: A=log10(1e-3)=-3, B=1.5
+                                p0 = [-3, 1.5]
+                                
+                                # Fit the power law with fixed offset
+                                popt, pcov = curve_fit(power_law_offset, distances_fit, delta_fit, 
+                                                     p0=p0, maxfev=5000)
+                                A, B = popt
+                                
+                                # Calculate R²
+                                y_pred = power_law_offset(distances_fit, A, B)
+                                ss_res = np.sum((delta_fit - y_pred) ** 2)
+                                ss_tot = np.sum((delta_fit - np.mean(delta_fit)) ** 2)
+                                r2 = 1 - (ss_res / ss_tot)
+                                
+                                # Plot the fit
+                                x_fit = np.linspace(distances_fit.min(), distances_fit.max(), 100)
+                                y_fit = power_law_offset(x_fit, A, B)
+                                
+                                # Format the equation
+                                formula = f'δt = 10^{A:.3f}×d^{B:.3f} + 0.001'
+                                
+                                ax2.plot(x_fit, y_fit, '--', color=color, alpha=0.8, linewidth=2,
+                                        label=f'{energy} MeV: {formula} (R²={r2:.3f})')
+                                
+                                power_law_params.append({'energy': energy, 'A': A, 'B': B, 'r2': r2})
+                                
+                                print(f"  {energy:4d} MeV: {formula}, R² = {r2:.3f}")
+                                
+                            except Exception as e:
+                                print(f"  {energy:4d} MeV: Power law fit failed - {e}")
+                        else:
+                            print(f"  {energy:4d} MeV: Not enough valid points for fitting")
+                            
+                    # Show summary of power law parameters
+                    if power_law_params:
+                        print(f"\\n=== Power Law Parameter Summary ===")
+                        print("Energy (MeV)   log10(A)      B        R²")
+                        print("-" * 45)
+                        for params in power_law_params:
+                            print(f"{params['energy']:8d}  {params['A']:10.3f}  {params['B']:7.3f}  {params['r2']:6.3f}")
+                        
+                        # Analyze trends in parameters
+                        energies = [p['energy'] for p in power_law_params]
+                        A_values = [p['A'] for p in power_law_params]
+                        B_values = [p['B'] for p in power_law_params]
+                        
+                        print(f"\\n=== Parameter Trends ===")
+                        print(f"log₁₀(A) range: {min(A_values):.3f} to {max(A_values):.3f}")
+                        print(f"B range: {min(B_values):.3f} to {max(B_values):.3f}")
+                        print(f"Fixed offset C = 0.001")
+                        
+                        # Fit parameter trends as functions of energy
+                        try:
+                            # For log10(A): try linear fit log10(A) = m * E + c
+                            m_A, c_A = np.polyfit(energies, A_values, 1)
+                            
+                            # Verify the fit
+                            A_pred = m_A * np.array(energies) + c_A
+                            ss_res_A = np.sum((A_values - A_pred) ** 2)
+                            ss_tot_A = np.sum((A_values - np.mean(A_values)) ** 2)
+                            r2_A = 1 - (ss_res_A / ss_tot_A)
+                            
+                            print(f"\\n=== log10(A) Parameter Fit ===")
+                            print(f"log10(A) = {m_A:.6f} × E + {c_A:.3f}")
+                            print(f"R² = {r2_A:.4f}")
+                            
+                            # For B: try linear fit B = m * E + c
+                            m_B, c_B = np.polyfit(energies, B_values, 1)
+                            
+                            # Verify the fit
+                            B_pred = m_B * np.array(energies) + c_B
+                            ss_res_B = np.sum((B_values - B_pred) ** 2)
+                            ss_tot_B = np.sum((B_values - np.mean(B_values)) ** 2)
+                            r2_B = 1 - (ss_res_B / ss_tot_B)
+                            
+                            print(f"\\n=== B Parameter Fit ===")
+                            print(f"B(E) = {m_B:.6f} × E + {c_B:.3f}")
+                            print(f"R² = {r2_B:.4f}")
+                            
+                            # Create a third figure for parameter trends
+                            fig_params = plt.figure(figsize=(12, 5))
+                            ax_A = fig_params.add_subplot(121)
+                            ax_B = fig_params.add_subplot(122)
+                            
+                            # Plot log10(A) parameter trend
+                            ax_A.scatter(energies, A_values, color='red', s=50, label='Data')
+                            E_fit = np.linspace(min(energies), max(energies), 100)
+                            A_fit = m_A * E_fit + c_A
+                            ax_A.plot(E_fit, A_fit, 'b--', linewidth=2, 
+                                     label=f'log₁₀(A) = {m_A:.4f}×E + {c_A:.2f}')
+                            ax_A.set_xlabel('Energy (MeV)', fontsize=12)
+                            ax_A.set_ylabel('log₁₀(A)', fontsize=12)
+                            ax_A.set_title('Power Law log₁₀(Amplitude) vs Energy', fontsize=14)
+                            #ax_A.set_xscale('log')
+                            ax_A.grid(True, alpha=0.3)
+                            ax_A.legend()
+                            
+                            # Plot B parameter trend
+                            ax_B.scatter(energies, B_values, color='red', s=50, label='Data')
+                            B_fit = m_B * E_fit + c_B
+                            ax_B.plot(E_fit, B_fit, 'b--', linewidth=2, 
+                                     label=f'B = {m_B:.4f}×E + {c_B:.3f}')
+                            ax_B.set_xlabel('Energy (MeV)', fontsize=12)
+                            ax_B.set_ylabel('B Parameter', fontsize=12)
+                            ax_B.set_title('Power Law Exponent vs Energy', fontsize=14)
+                            ax_B.grid(True, alpha=0.3)
+                            ax_B.legend()
+                            
+                            fig_params.tight_layout()
+                            
+                            # Save parameter trends plot
+                            output_plot_params = scan_dir / "parameter_trends.png"
+                            fig_params.savefig(output_plot_params, dpi=150, bbox_inches='tight')
+                            print(f"\\nParameter trends plot saved to: {output_plot_params}")
+                            
+                            # Final parameterization
+                            print(f"\\n=== Complete Timing Delta Parameterization ===")
+                            print(f"δt(d, E) = 10^A(E) × d^B(E) + 0.001")
+                            print(f"where:")
+                            print(f"  log₁₀(A) = {m_A:.6f} × E + {c_A:.3f}")
+                            print(f"  B(E) = {m_B:.6f} × E + {c_B:.3f}")
+                            print(f"\\nThis gives:")
+                            print(f"δt(d, E) = 10^({m_A:.6f}×E + {c_A:.3f}) × d^({m_B:.6f}×E + {c_B:.3f}) + 0.001")
+                            
+                        except Exception as e:
+                            print(f"\\nParameter trend fitting failed: {e}")
+                            
+                else:
+                    print("  Warning: No 1000 MeV data found within first 1000mm")
+            else:
+                print("  Warning: No 1000 MeV data found for timing reference")
             
         except Exception as e:
             print(f"  Could not fit range vs energy relationship: {e}")
@@ -325,15 +515,16 @@ def analyze_energy_scan(scan_directory):
     
     # Physics insights
     print(f"\\n=== Physics Insights ===")
-    print("Top-left plot: Timing shows how photon creation time varies with distance.")
-    print("Top-right plot: Range analysis shows where muon stops producing photons.")
-    if len(valid_ranges) > 2:
-        print("Bottom-left plot: Shows how muon range scales with energy.")
-        print("Bottom-right plot: Shows timing dependence on remaining track length.")
+    print("Timing analysis figure:")
+    print("- Left: Average photon creation time shows basic t vs distance relationship")
+    print("- Right: Timing delta with power law fits δt = A×d^B reveals energy-dependent effects")
+    print("Range analysis figure:")
+    print("- Left: Photon count vs distance shows muon stopping behavior")
+    print("- Right: Range vs energy shows muon penetration scaling")
     print("Expected behavior:")
     print("- Timing: Linear t ≈ distance / (c/n) where c/n is speed of light in medium")
     print("- Range: Should increase with energy, approximately R ∝ E^1.8 for muons")
-    print("- Remaining range: Timing may vary with distance from track end")
+    print("- Power law: δt = A×d^B may reveal energy-dependent velocity or threshold effects")
     print("- Cerenkov threshold effects may be visible at lower energies")
     
     plt.show()
