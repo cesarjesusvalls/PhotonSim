@@ -13,6 +13,138 @@ from pathlib import Path
 import sys
 import argparse
 
+def predict_timing(distance, energy, params, debug=False):
+    """
+    Predict average photon creation time using the parameterization.
+    
+    Returns both total time and delta component.
+    
+    For 1000 MeV: t(d, 1000) = baseline(d), delta = 0 (reference energy)
+    For other energies: t(d, E) = baseline(d) + δt(d, E)
+    where:
+    - baseline(d) = slope * d + intercept (from 1000 MeV fit)
+    - δt(d, E) = 10^(A_slope*E + A_intercept) * d^(B_slope*E + B_intercept) + offset
+    
+    Returns:
+        tuple: (total_time, delta_time)
+    """
+    # Baseline from 1000 MeV linear fit
+    baseline = params['baseline_1000MeV']['slope'] * distance + params['baseline_1000MeV']['intercept']
+    
+    # For other energies, calculate delta timing
+    delta_params = params['delta_parameterization']
+    log10_A = delta_params['A_slope'] * energy + delta_params['A_intercept']
+    B = delta_params['B_slope'] * energy + delta_params['B_intercept']
+    delta = 10**log10_A * np.power(distance, B) + delta_params['offset']
+    
+    if debug and isinstance(distance, (int, float)) and distance == 1000:
+        print(f"\\nDebug for E={energy} MeV, d={distance} mm:")
+        print(f"  Baseline: {params['baseline_1000MeV']['slope']:.6f} * {distance} + {params['baseline_1000MeV']['intercept']:.3f} = {baseline:.3f}")
+        print(f"  log10(A): {delta_params['A_slope']:.6f} * {energy} + {delta_params['A_intercept']:.3f} = {log10_A:.3f}")
+        print(f"  B: {delta_params['B_slope']:.6f} * {energy} + {delta_params['B_intercept']:.3f} = {B:.3f}")
+        print(f"  Delta: 10^{log10_A:.3f} * {distance}^{B:.3f} + {delta_params['offset']} = {delta:.6f}")
+        print(f"  Total: {baseline:.3f} + {delta:.6f} = {baseline + delta:.3f}")
+    
+    # Return both total timing and delta
+    return baseline + delta, delta
+
+def create_prediction_plot(params, output_dir, all_timing_data, valid_range_values, valid_energies):
+    """Create plot of timing predictions for all energies with data overlay."""
+    
+    # Create figure
+    fig_pred, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+    
+    # Colors for different energies
+    energies = params['energy_range']['values']
+    colors = plt.cm.viridis(np.linspace(0, 1, len(energies)))
+    
+    # Create energy to range mapping
+    range_dict = {}
+    for i, energy in enumerate(valid_energies):
+        range_dict[energy] = valid_range_values[i]
+    
+    # Plot 1: Full predicted timing curves with data overlay
+    for i, energy in enumerate(energies):
+        color = colors[i]
+        
+        # Get the range for this energy (limit prediction to expected range)
+        if energy in range_dict:
+            max_distance = min(range_dict[energy], 5000)  # Cap at 5000mm for plotting
+        else:
+            max_distance = 5000  # Use full range for energies not in range_dict (like 1000 MeV)
+        
+        # Create prediction curve only up to the expected range
+        distances = np.linspace(0, max_distance, 100)
+        try:
+            times, deltas = predict_timing(distances, energy, params)
+        except Exception as e:
+            print(f"Error in predict_timing for energy {energy}: {e}")
+            continue
+        
+        # Plot prediction curve for total timing
+        ax1.plot(distances, times, '-', color=color, linewidth=4, 
+                label=f'{energy} MeV prediction', alpha=0.4)
+        
+        # Plot prediction curve for delta timing
+        ax2.plot(distances, deltas, '-', color=color, linewidth=4, 
+                label=f'{energy} MeV prediction', alpha=0.4)
+        
+        # Overlay original data points
+        timing_data = None
+        for td in all_timing_data:
+            if td['energy'] == energy:
+                timing_data = td
+                break
+        
+        if timing_data is not None:
+            # Plot original timing data
+            ax1.scatter(timing_data['distances'], timing_data['times'], 
+                       color=color, s=5, alpha=1, marker='x',
+                       label=f'{energy} MeV data')
+            
+            # Plot delta data
+            # Calculate delta from original data (actual - baseline)
+            baseline_times = (params['baseline_1000MeV']['slope'] * np.array(timing_data['distances']) + 
+                            params['baseline_1000MeV']['intercept'])
+            delta_data = np.array(timing_data['times']) - baseline_times
+            
+            ax2.scatter(timing_data['distances'], delta_data, 
+                       color=color, s=1, alpha=0.7, zorder=5,
+                       label=f'{energy} MeV data')
+    
+    ax1.set_xlabel('Distance from Origin (mm)', fontsize=12)
+    ax1.set_ylabel('Average Photon Creation Time (ns)', fontsize=12)
+    # ax1.grid(True, alpha=0.3)
+    ax1.set_xlim(0, None)
+    ax1.set_ylim(0, None)
+    
+    ax2.set_xlabel('Distance from Origin (mm)', fontsize=12)
+    ax2.set_ylabel('Timing Delta (ns)', fontsize=12)
+    # ax2.grid(True, alpha=0.3)
+    ax2.set_xlim(0, None)
+    
+    # Create shared legend on top of the figure
+    handles, labels = ax1.get_legend_handles_labels()
+    fig_pred.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 1.2), 
+                   ncol=5, fontsize=10)
+    
+    fig_pred.tight_layout()
+    
+    # Save plot
+    output_file = output_dir / "timing_predictions.png"
+    plt.figure(fig_pred.number)
+    fig_pred.savefig(output_file, dpi=150, bbox_inches='tight')
+    print(f"\\nPrediction plot saved to: {output_file}")
+    
+    # Print parameterization info
+    print("\\n=== Timing Prediction Summary ===")
+    print(f"Generated predictions for {len(energies)} energies from {min(energies)} to {max(energies)} MeV")
+    print(f"Each energy limited to its expected muon range")
+    print(f"Left plot: Complete timing (baseline + delta) vs original data")
+    print(f"Right plot: Delta timing only (excluding 1000 MeV reference) vs delta data")
+    
+    return fig_pred
+
 def analyze_energy_scan(scan_directory):
     """Analyze the energy scan results."""
     
@@ -44,10 +176,10 @@ def analyze_energy_scan(scan_directory):
     print(f"Energy range: {extract_energy(root_files[0])} - {extract_energy(root_files[-1])} MeV")
     
     # Create main figure with two subplots for timing analysis
-    fig_main, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+    fig_main, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
     
     # Create separate figure for range analysis
-    fig_range, (ax3, ax4) = plt.subplots(1, 2, figsize=(16, 6))
+    fig_range, (ax3, ax4) = plt.subplots(1, 2, figsize=(12, 4))
     
     energies = []
     ranges = []  # Store calculated ranges for each energy
@@ -55,7 +187,7 @@ def analyze_energy_scan(scan_directory):
     
     # Colors for different energies
     colors = plt.cm.viridis(np.linspace(0, 1, len(root_files)))
-    
+
     # Process each energy
     for i, root_file in enumerate(root_files):
         energy = extract_energy(root_file)
@@ -206,51 +338,8 @@ def analyze_energy_scan(scan_directory):
                 print(f"  Could not calculate range (too few data points)")
         
         f.Close()
-    
-    # Format the main timing analysis plots
-    # Plot 1: Time vs Distance (unchanged)
-    ax1.set_xlabel('Distance from Origin (mm)', fontsize=12)
-    ax1.set_ylabel('Average Photon Creation Time (ns)', fontsize=12)
-    ax1.set_title('Average Photon Creation Time vs Distance', fontsize=14)
-    ax1.legend(fontsize=9)
-    ax1.grid(True, alpha=0.3)
-    ax1.set_xlim(0, None)
-    ax1.set_ylim(0, None)
-    
-    # Plot 2: Will be updated for timing delta power law fits
-    ax2.set_xlabel('Distance from Origin (mm)', fontsize=12)
-    ax2.set_ylabel('Timing Delta (ns)', fontsize=12)
-    ax2.set_title('Timing Delta vs Distance with Power Law Fits', fontsize=14)
-    ax2.legend(fontsize=9)
-    ax2.grid(True, alpha=0.3)
-    
-    # Format the range analysis plots
-    # Plot 3: Average Photon Count vs Distance (moved from ax2)
-    ax3.set_xlabel('Distance from Origin (mm)', fontsize=12)
-    ax3.set_ylabel('Average Photons per Event', fontsize=12)
-    ax3.set_title('Average Photon Count vs Distance and Calculated Ranges', fontsize=14)
-    ax3.legend(fontsize=9)
-    ax3.grid(True, alpha=0.3)
-    ax3.set_xlim(0, None)
-    ax3.set_ylim(0, None)
-    
-    # Plot 4: Range vs Energy (moved from ax3)
-    ax4.set_xlabel('Energy (MeV)', fontsize=12)
-    ax4.set_ylabel('Range (mm)', fontsize=12)
-    ax4.set_title('Muon Range vs Energy', fontsize=14)
-    ax4.grid(True, alpha=0.3)
-    
-    fig_main.tight_layout()
-    fig_range.tight_layout()
-    
-    # Save plots
-    output_plot_main = scan_dir / "timing_analysis.png"
-    fig_main.savefig(output_plot_main, dpi=150, bbox_inches='tight')
-    print(f"\\nTiming analysis plot saved to: {output_plot_main}")
-    
-    output_plot_range = scan_dir / "range_analysis.png"
-    fig_range.savefig(output_plot_range, dpi=150, bbox_inches='tight')
-    print(f"Range analysis plot saved to: {output_plot_range}")
+
+    print('Energies: ', energies)
     
     # Save summary data with ranges
     summary_file = scan_dir / "energy_scan_summary.txt"
@@ -456,7 +545,7 @@ def analyze_energy_scan(scan_directory):
                             print(f"R² = {r2_B:.4f}")
                             
                             # Create a third figure for parameter trends
-                            fig_params = plt.figure(figsize=(12, 5))
+                            fig_params = plt.figure(figsize=(12, 4))
                             ax_A = fig_params.add_subplot(121)
                             ax_B = fig_params.add_subplot(122)
                             
@@ -470,7 +559,7 @@ def analyze_energy_scan(scan_directory):
                             ax_A.set_ylabel('log₁₀(A)', fontsize=12)
                             ax_A.set_title('Power Law log₁₀(Amplitude) vs Energy', fontsize=14)
                             #ax_A.set_xscale('log')
-                            ax_A.grid(True, alpha=0.3)
+                            #ax_A.grid(True, alpha=0.3)
                             ax_A.legend()
                             
                             # Plot B parameter trend
@@ -481,13 +570,14 @@ def analyze_energy_scan(scan_directory):
                             ax_B.set_xlabel('Energy (MeV)', fontsize=12)
                             ax_B.set_ylabel('B Parameter', fontsize=12)
                             ax_B.set_title('Power Law Exponent vs Energy', fontsize=14)
-                            ax_B.grid(True, alpha=0.3)
+                            #ax_B.grid(True, alpha=0.3)
                             ax_B.legend()
                             
                             fig_params.tight_layout()
                             
                             # Save parameter trends plot
                             output_plot_params = scan_dir / "parameter_trends.png"
+                            plt.figure(fig_params.number)
                             fig_params.savefig(output_plot_params, dpi=150, bbox_inches='tight')
                             print(f"\\nParameter trends plot saved to: {output_plot_params}")
                             
@@ -499,6 +589,45 @@ def analyze_energy_scan(scan_directory):
                             print(f"  B(E) = {m_B:.6f} × E + {c_B:.3f}")
                             print(f"\\nThis gives:")
                             print(f"δt(d, E) = 10^({m_A:.6f}×E + {c_A:.3f}) × d^({m_B:.6f}×E + {c_B:.3f}) + 0.001")
+                            
+                            # Save all parameters to JSON file
+                            import json
+                            param_dict = {
+                                "baseline_1000MeV": {
+                                    "slope": c_timing,
+                                    "intercept": d_timing,
+                                    "description": "Linear fit for 1000 MeV: t = slope * d + intercept"
+                                },
+                                "delta_parameterization": {
+                                    "A_slope": m_A,
+                                    "A_intercept": c_A,
+                                    "B_slope": m_B,
+                                    "B_intercept": c_B,
+                                    "offset": 0.001,
+                                    "description": "δt(d, E) = 10^(A_slope*E + A_intercept) * d^(B_slope*E + B_intercept) + offset"
+                                },
+                                "energy_range": {
+                                    "min": min(energies),
+                                    "max": max(energies),
+                                    "values": energies
+                                },
+                                "individual_fits": [
+                                    {
+                                        "energy": p['energy'],
+                                        "log10_A": p['A'],
+                                        "B": p['B'],
+                                        "r2": p['r2']
+                                    } for p in power_law_params
+                                ]
+                            }
+                            
+                            json_file = scan_dir / "timing_parameters.json"
+                            with open(json_file, 'w') as f:
+                                json.dump(param_dict, f, indent=4)
+                            print(f"\\nParameters saved to: {json_file}")
+                            
+                            # Generate prediction plot using the parameters
+                            create_prediction_plot(param_dict, scan_dir, all_timing_data, valid_range_values, valid_energies)
                             
                         except Exception as e:
                             print(f"\\nParameter trend fitting failed: {e}")
@@ -513,20 +642,52 @@ def analyze_energy_scan(scan_directory):
     else:
         print(f"\\nNot enough valid ranges ({len(valid_ranges)}) to create range analysis")
     
-    # Physics insights
-    print(f"\\n=== Physics Insights ===")
-    print("Timing analysis figure:")
-    print("- Left: Average photon creation time shows basic t vs distance relationship")
-    print("- Right: Timing delta with power law fits δt = A×d^B reveals energy-dependent effects")
-    print("Range analysis figure:")
-    print("- Left: Photon count vs distance shows muon stopping behavior")
-    print("- Right: Range vs energy shows muon penetration scaling")
-    print("Expected behavior:")
-    print("- Timing: Linear t ≈ distance / (c/n) where c/n is speed of light in medium")
-    print("- Range: Should increase with energy, approximately R ∝ E^1.8 for muons")
-    print("- Power law: δt = A×d^B may reveal energy-dependent velocity or threshold effects")
-    print("- Cerenkov threshold effects may be visible at lower energies")
+    # Format and save figures after all data is plotted
+    # Format the main timing analysis plots
+    ax1.set_xlabel('Distance from Origin (mm)', fontsize=12)
+    ax1.set_ylabel('Average Photon Creation Time (ns)', fontsize=12)
+    ax1.set_title('Average Photon Creation Time vs Distance', fontsize=14)
+    ax1.legend(fontsize=9)
+    ax1.set_xlim(0, None)
+    ax1.set_ylim(0, None)
     
+    # Format timing delta plot
+    ax2.set_xlabel('Distance from Origin (mm)', fontsize=12)
+    ax2.set_ylabel('Timing Delta (ns)', fontsize=12)
+    ax2.set_title('Timing Delta vs Distance with Power Law Fits', fontsize=14)
+    ax2.set_xlim(0, None)
+    
+    # Format the range analysis plots
+    ax3.set_xlabel('Distance from Origin (mm)', fontsize=12)
+    ax3.set_ylabel('Average Photons per Event', fontsize=12)
+    ax3.set_title('Average Photon Count vs Distance and Calculated Ranges', fontsize=14)
+    ax3.legend(fontsize=9)
+    ax3.set_xlim(0, None)
+    ax3.set_ylim(0, None)
+    
+    # Format range vs energy plot
+    ax4.set_xlabel('Energy (MeV)', fontsize=12)
+    ax4.set_ylabel('Range (mm)', fontsize=12)
+    ax4.set_title('Muon Range vs Energy', fontsize=14)
+    ax4.grid(True, alpha=0.3)
+    ax4.set_xlim(0, None)
+    ax4.set_ylim(0, None)
+    
+    fig_main.tight_layout()
+    fig_range.tight_layout()
+    
+    # Save plots after all data is plotted and formatted
+    output_plot_main = scan_dir / "timing_analysis.png"
+    plt.figure(fig_main.number)
+    fig_main.savefig(output_plot_main, dpi=150, bbox_inches='tight')
+    print(f"\\nTiming analysis plot saved to: {output_plot_main}")
+    
+    output_plot_range = scan_dir / "range_analysis.png"
+    plt.figure(fig_range.number)
+    fig_range.savefig(output_plot_range, dpi=150, bbox_inches='tight')
+    print(f"Range analysis plot saved to: {output_plot_range}")
+    
+    # Show all plots after everything is saved
     plt.show()
 
 def main():
