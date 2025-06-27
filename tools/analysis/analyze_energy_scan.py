@@ -29,7 +29,7 @@ def predict_timing(distance, energy, params, debug=False):
         tuple: (total_time, delta_time)
     """
     # Baseline from 1000 MeV linear fit
-    baseline = params['baseline_1000MeV']['slope'] * distance + params['baseline_1000MeV']['intercept']
+    baseline = params['baseline']['slope'] * distance + params['baseline']['intercept']
     
     # For other energies, calculate delta timing
     delta_params = params['delta_parameterization']
@@ -39,7 +39,7 @@ def predict_timing(distance, energy, params, debug=False):
     
     if debug and isinstance(distance, (int, float)) and distance == 1000:
         print(f"\\nDebug for E={energy} MeV, d={distance} mm:")
-        print(f"  Baseline: {params['baseline_1000MeV']['slope']:.6f} * {distance} + {params['baseline_1000MeV']['intercept']:.3f} = {baseline:.3f}")
+        print(f"  Baseline: {params['baseline']['slope']:.6f} * {distance} + {params['baseline']['intercept']:.3f} = {baseline:.3f}")
         print(f"  log10(A): {delta_params['A_slope']:.6f} * {energy} + {delta_params['A_intercept']:.3f} = {log10_A:.3f}")
         print(f"  B: {delta_params['B_slope']:.6f} * {energy} + {delta_params['B_intercept']:.3f} = {B:.3f}")
         print(f"  Delta: 10^{log10_A:.3f} * {distance}^{B:.3f} + {delta_params['offset']} = {delta:.6f}")
@@ -104,8 +104,8 @@ def create_prediction_plot(params, output_dir, all_timing_data, valid_range_valu
             
             # Plot delta data
             # Calculate delta from original data (actual - baseline)
-            baseline_times = (params['baseline_1000MeV']['slope'] * np.array(timing_data['distances']) + 
-                            params['baseline_1000MeV']['intercept'])
+            baseline_times = (params['baseline']['slope'] * np.array(timing_data['distances']) + 
+                            params['baseline']['intercept'])
             delta_data = np.array(timing_data['times']) - baseline_times
             
             ax2.scatter(timing_data['distances'], delta_data, 
@@ -593,7 +593,7 @@ def analyze_energy_scan(scan_directory):
                             # Save all parameters to JSON file
                             import json
                             param_dict = {
-                                "baseline_1000MeV": {
+                                "baseline": {
                                     "slope": c_timing,
                                     "intercept": d_timing,
                                     "description": "Linear fit for 1000 MeV: t = slope * d + intercept"
