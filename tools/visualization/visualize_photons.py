@@ -125,12 +125,12 @@ class PhotonSimVisualizer:
         self.ax = self.fig.add_subplot(111, projection='3d')
         
         # Set up the plot aesthetics
-        self.ax.set_facecolor('black')
-        self.fig.patch.set_facecolor('black')
+        self.ax.set_facecolor('white')
+        self.fig.patch.set_facecolor('white')
         
         # Add text for instructions
         self.fig.text(0.02, 0.02, "Controls: ←/→ or P/N = Navigate events, R = Refresh, Mouse = Rotate/Zoom", 
-                     color='white', fontsize=10)
+                     color='black', fontsize=10)
     
     def calculate_plot_bounds(self, event_data, padding_factor=1.2):
         """
@@ -257,7 +257,7 @@ class PhotonSimVisualizer:
         # Clear the plot completely and recreate axes to avoid colorbar layout issues
         self.fig.clear()
         self.ax = self.fig.add_subplot(111, projection='3d')
-        self.ax.set_facecolor('black')
+        self.ax.set_facecolor('white')
         self.colorbar = None
         
         # Recreate navigation buttons if we're in matplotlib interface mode
@@ -299,37 +299,37 @@ class PhotonSimVisualizer:
             if np.max(times_display) > 0:
                 # Use actual times for color mapping (not normalized)
                 scatter = self.ax.scatter(pos_x_display, pos_y_display, pos_z_display,
-                                        c=times_display, s=1, alpha=0.6, cmap='plasma')
+                                        c=times_display, s=1, alpha=1.0, cmap='plasma')
             else:
                 # All times are zero, use uniform color
                 scatter = self.ax.scatter(pos_x_display, pos_y_display, pos_z_display,
-                                        c='yellow', s=1, alpha=0.6)
+                                        c='yellow', s=1, alpha=1.0)
             
             # Add some photon direction vectors (sample to avoid overcrowding)
-            n_arrows = min(200, len(pos_x_display))  # Limit number of arrows
+            n_arrows = min(1000, len(pos_x_display))  # Limit number of arrows
             if n_arrows > 0:
                 arrow_indices = np.random.choice(len(pos_x_display), n_arrows, replace=False)
                 
                 # Scale arrows based on plot bounds
                 x_range, y_range, z_range = plot_bounds
                 plot_scale = min(x_range[1] - x_range[0], y_range[1] - y_range[0], z_range[1] - z_range[0])
-                arrow_scale = plot_scale * 0.05  # Arrow length as 5% of plot scale
+                arrow_scale = plot_scale * 0.15  # Arrow length as 5% of plot scale
                 
                 for i in arrow_indices:
                     self.ax.quiver(pos_x_display[i], pos_y_display[i], pos_z_display[i],
                                   event_data['dir_x'][i] * arrow_scale,
                                   event_data['dir_y'][i] * arrow_scale,
                                   event_data['dir_z'][i] * arrow_scale,
-                                  color='white', alpha=0.4, arrow_length_ratio=0.1)
+                                  color='black', alpha=0.4, arrow_length_ratio=0.1)
         
         # Plot primary particle origin
         self.ax.scatter([0], [0], [0], color='red', s=100, marker='*', 
                        label='Primary particle origin')
         
         # Set labels and title
-        self.ax.set_xlabel('X [m]', color='white', fontsize=12)
-        self.ax.set_ylabel('Y [m]', color='white', fontsize=12)
-        self.ax.set_zlabel('Z [m]', color='white', fontsize=12)
+        self.ax.set_xlabel('X', color='white', fontsize=12)
+        self.ax.set_ylabel('Y', color='white', fontsize=12)
+        self.ax.set_zlabel('Z', color='white', fontsize=12)
         
         # Set proportional aspect ratio using smart bounds
         x_range, y_range, z_range = plot_bounds
@@ -347,14 +347,16 @@ class PhotonSimVisualizer:
         # Title with event information
         title = f"Event {event_data['event_id']}: {event_data['primary_energy']:.1f} MeV primary particle\n"
         title += f"{event_data['n_photons']:,} Cherenkov photons"
-        self.ax.set_title(title, color='white', fontsize=12)
+        self.ax.set_title(title, color='black', fontsize=12)
         
         # Add colorbar for time
         if n_photons > 0 and np.max(times_display) > 0:
-            self.colorbar = plt.colorbar(scatter, ax=self.ax, shrink=0.6, aspect=20)
-            self.colorbar.set_label('Creation Time [ns]', color='white')
-            self.colorbar.ax.yaxis.set_tick_params(color='white')
-            self.colorbar.ax.yaxis.label.set_color('white')
+            self.colorbar = plt.colorbar(scatter, ax=self.ax, shrink=0.2, aspect=10)
+            self.colorbar.set_label('Creation Time [ns]', color='black')
+            self.colorbar.ax.yaxis.set_tick_params(color='black', labelcolor='black')
+            self.colorbar.ax.yaxis.label.set_color('black')
+            # Explicitly set tick label colors
+            plt.setp(self.colorbar.ax.yaxis.get_ticklabels(), color='black')
         
         # Constrain view to keep Y-axis vertical
         self.ax.view_init(elev=15, azim=45)  # Set initial view
@@ -411,7 +413,7 @@ class PhotonSimVisualizer:
         
         # Main 3D plot takes most of the space
         self.ax = self.fig.add_subplot(111, projection='3d')
-        self.ax.set_facecolor('black')
+        self.ax.set_facecolor('white')
         
         # Adjust layout to make room for buttons
         plt.subplots_adjust(bottom=0.15)
