@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Create a normalized average 3D lookup table from 100-1000 MeV ROOT files.
+Create a normalized average 3D lookup table from 100-2000 MeV ROOT files.
 Normalizes 2D histograms by number of events only.
 The table stores the average number of photons per event in each bin.
 """
@@ -17,7 +17,7 @@ from tqdm import tqdm
 class AveragePhotonTable3D:
     """3D table for normalized Cherenkov photon average distributions."""
     
-    def __init__(self, energy_min=100, energy_max=1000, energy_step=10):
+    def __init__(self, energy_min=100, energy_max=2000, energy_step=10):
         """
         Initialize the average 3D table.
         
@@ -232,7 +232,7 @@ class AveragePhotonTable3D:
         ax.grid(True, alpha=0.3)
         
         # 2-4. Sample average 2D slices
-        sample_energies = [200, 500, 800]
+        sample_energies = [300, 1000, 1700]
         for i, energy in enumerate(sample_energies):
             ax = axes[0, i+1] if i < 2 else axes[1, 0]
             
@@ -253,17 +253,17 @@ class AveragePhotonTable3D:
             ax.set_ylabel('Distance (mm)')
             ax.set_title(f'{energy} MeV (log₁₀ average)')
             ax.set_xlim(0, 90)
-            ax.set_ylim(0, 3000)
+            ax.set_ylim(0, 4000)
             
             cbar = plt.colorbar(im, ax=ax)
             cbar.set_label('log₁₀(photons/event)', rotation=270, labelpad=20)
             
             # Mark Cherenkov angle
-            ax.axvline(43, color='red', linestyle='--', alpha=0.7, linewidth=1)
+            #ax.axvline(43, color='red', linestyle='--', alpha=0.7, linewidth=1)
         
         # 5. Integrated angular average
         ax = axes[1, 1]
-        for energy in [200, 500, 800]:
+        for energy in [200, 1000, 1800]:
             idx = self.energy_values.index(energy)
             # Sum over distance to get total photons per event at each angle
             angular_average = self.average_table[idx].sum(axis=1)
@@ -311,6 +311,104 @@ Units: photons/event"""
             print(f"Visualizations saved to {output_path}")
         
         plt.show()
+    
+    def visualize_single_energy(self, energy_mev=500, output_path=None, comparison_energies=[300, 1000, 1700]):
+        """Create focused visualization for a single energy value.
+        
+        Parameters:
+        -----------
+        energy_mev : int
+            Energy in MeV to visualize for 2D slice (default: 500)
+        output_path : str or Path
+            Output directory for saving plots
+        comparison_energies : list
+            List of energies to compare in angular distribution plot
+        """
+        if self.average_table is None:
+            print("No data to visualize. Run create_3d_table first.")
+            return
+        
+        # Find closest energy index for 2D slice
+        if energy_mev not in self.energy_values:
+            # Find nearest energy
+            idx = np.argmin(np.abs(np.array(self.energy_values) - energy_mev))
+            actual_energy = self.energy_values[idx]
+            print(f"Energy {energy_mev} MeV not found, using nearest: {actual_energy} MeV")
+        else:
+            idx = self.energy_values.index(energy_mev)
+            actual_energy = energy_mev
+        
+        # 1. 2D slice at specified energy
+        fig1 = plt.figure(figsize=(4,3))
+        ax1 = fig1.add_subplot(111)
+        
+        slice_2d = self.average_table[idx]
+        
+        # Use log scale with minimum threshold
+        with np.errstate(divide='ignore'):
+            log_slice = np.log10(np.maximum(slice_2d, 1e-4))
+        
+        im = ax1.imshow(log_slice.T, origin='lower', aspect='auto', cmap='viridis',
+                       extent=[0, np.degrees(self.bin_edges[1][-1]), 
+                              0, self.bin_edges[2][-1]],
+                       vmin=-4, vmax=np.log10(slice_2d.max()),
+                       interpolation='nearest')
+        
+        ax1.set_xlabel('Opening Angle (degrees)')
+        ax1.set_ylabel('Distance (mm)')
+        ax1.set_xlim(0, 90)
+        ax1.set_ylim(0, 4000)
+        
+        cbar = plt.colorbar(im, ax=ax1)
+        cbar.set_label('log₁₀(photons/event)', rotation=270, labelpad=20)
+        
+        plt.tight_layout()
+        
+        if output_path:
+            output_path = Path(output_path)
+            output_path.mkdir(exist_ok=True, parents=True)
+            fig1.savefig(output_path / f"photon_2d_slice_{actual_energy}MeV.png", 
+                        dpi=150, bbox_inches='tight')
+            print(f"2D slice saved to {output_path}/photon_2d_slice_{actual_energy}MeV.png")
+        
+        # 2. Angular distribution summed over distance for multiple energies
+        fig2 = plt.figure(figsize=(4,3))
+        ax2 = fig2.add_subplot(111)
+        
+        # Plot angular distributions for comparison energies
+        for energy in comparison_energies:
+            if energy not in self.energy_values:
+                # Find nearest energy
+                energy_idx = np.argmin(np.abs(np.array(self.energy_values) - energy))
+                actual_comp_energy = self.energy_values[energy_idx]
+                print(f"Comparison energy {energy} MeV not found, using nearest: {actual_comp_energy} MeV")
+            else:
+                energy_idx = self.energy_values.index(energy)
+                actual_comp_energy = energy
+            
+            # Sum over distance to get total photons per event at each angle
+            angular_distribution = self.average_table[energy_idx].sum(axis=1)
+            angle_degrees = np.degrees(self.bin_centers[1])
+            
+            ax2.plot(angle_degrees, angular_distribution, linewidth=2, 
+                    label=f'{actual_comp_energy} MeV')
+        
+        ax2.set_xlabel('Opening Angle (degrees)')
+        ax2.set_ylabel('Total Photons per Event')
+        ax2.set_xlim(0, 90)
+        ax2.set_ylim(0.1, 5e4)
+        ax2.grid(True, alpha=0.3)
+        ax2.set_yscale('log')
+        ax2.legend(fontsize=10)
+        
+        plt.tight_layout()
+        
+        if output_path:
+            fig2.savefig(output_path / f"angular_distribution_comparison.png", 
+                        dpi=150, bbox_inches='tight')
+            print(f"Angular distribution comparison saved to {output_path}/angular_distribution_comparison.png")
+        
+        plt.show()
 
 
 def main():
@@ -324,12 +422,14 @@ def main():
                        help='Output directory for table and visualizations')
     parser.add_argument('--energy-min', type=int, default=100,
                        help='Minimum energy in MeV')
-    parser.add_argument('--energy-max', type=int, default=1000,
+    parser.add_argument('--energy-max', type=int, default=2000,
                        help='Maximum energy in MeV')
     parser.add_argument('--energy-step', type=int, default=10,
                        help='Energy step size in MeV')
     parser.add_argument('--visualize', action='store_true',
                        help='Create visualizations after building table')
+    parser.add_argument('--visualize-energy', type=int, default=None,
+                       help='Create focused visualization for specific energy (MeV)')
     
     args = parser.parse_args()
     
@@ -349,6 +449,10 @@ def main():
     # Create visualizations if requested
     if args.visualize:
         table_builder.visualize_table(args.output)
+    
+    # Create single energy visualization if requested
+    if args.visualize_energy is not None:
+        table_builder.visualize_single_energy(args.visualize_energy, args.output)
     
     print("\nDone! Average-normalized 3D lookup table created successfully.")
 
