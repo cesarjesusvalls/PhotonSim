@@ -52,6 +52,10 @@ cmake_install.cmake
 CPackConfig.cmake
 CPackSourceConfig.cmake
 install_manifest.txt
+Makefile
+
+# Generated executables
+PhotonSim
 
 # Generated output files
 output/

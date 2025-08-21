@@ -19,16 +19,16 @@ def predict_timing(distance, energy, params, debug=False):
     
     Returns both total time and delta component.
     
-    For 1000 MeV: t(d, 1000) = baseline(d), delta = 0 (reference energy)
+    For reference energy: t(d, E_ref) = baseline(d), delta = 0 (reference energy)
     For other energies: t(d, E) = baseline(d) + δt(d, E)
     where:
-    - baseline(d) = slope * d + intercept (from 1000 MeV fit)
+    - baseline(d) = slope * d + intercept (from reference energy fit)
     - δt(d, E) = 10^(A_slope*E + A_intercept) * d^(B_slope*E + B_intercept) + offset
     
     Returns:
         tuple: (total_time, delta_time)
     """
-    # Baseline from 1000 MeV linear fit
+    # Baseline from reference energy linear fit
     baseline = params['baseline']['slope'] * distance + params['baseline']['intercept']
     
     # For other energies, calculate delta timing
@@ -71,7 +71,7 @@ def create_prediction_plot(params, output_dir, all_timing_data, valid_range_valu
         if energy in range_dict:
             max_distance = min(range_dict[energy], 5000)  # Cap at 5000mm for plotting
         else:
-            max_distance = 5000  # Use full range for energies not in range_dict (like 1000 MeV)
+            max_distance = 5000  # Use full range for energies not in range_dict (like reference energy)
         
         # Create prediction curve only up to the expected range
         distances = np.linspace(0, max_distance, 100)
@@ -141,7 +141,7 @@ def create_prediction_plot(params, output_dir, all_timing_data, valid_range_valu
     print(f"Generated predictions for {len(energies)} energies from {min(energies)} to {max(energies)} MeV")
     print(f"Each energy limited to its expected muon range")
     print(f"Left plot: Complete timing (baseline + delta) vs original data")
-    print(f"Right plot: Delta timing only (excluding 1000 MeV reference) vs delta data")
+    print(f"Right plot: Delta timing only (excluding reference energy) vs delta data")
     
     return fig_pred
 
@@ -408,29 +408,32 @@ def analyze_energy_scan(scan_directory):
             # New timing delta analysis with power law fits
             print(f"\\n=== Power Law Timing Delta Analysis ===")
             
-            # Find 1000 MeV data for reference timing fit
-            timing_1000_data = None
+            # Find reference energy data for timing fit (use highest available energy)
+            available_energies = [td['energy'] for td in all_timing_data]
+            reference_energy = max(available_energies)
+            
+            timing_ref_data = None
             for timing_data in all_timing_data:
-                if timing_data['energy'] == 1000:
-                    timing_1000_data = timing_data
+                if timing_data['energy'] == reference_energy:
+                    timing_ref_data = timing_data
                     break
             
-            if timing_1000_data is not None:
-                # Fit timing vs distance for 1000 MeV using only first 1000mm
-                distances_1000 = np.array(timing_1000_data['distances'])
-                times_1000 = np.array(timing_1000_data['times'])
+            if timing_ref_data is not None:
+                # Fit timing vs distance for reference energy using only first 1000mm
+                distances_ref = np.array(timing_ref_data['distances'])
+                times_ref = np.array(timing_ref_data['times'])
                 
                 # Filter to first 1000mm
-                mask_1000mm = distances_1000 <= 1000.0
+                mask_1000mm = distances_ref <= 1000.0
                 if np.any(mask_1000mm):
-                    dist_fit = distances_1000[mask_1000mm]
-                    time_fit = times_1000[mask_1000mm]
+                    dist_fit = distances_ref[mask_1000mm]
+                    time_fit = times_ref[mask_1000mm]
                     
                     # Linear fit: time = c * distance + d
                     timing_coeffs = np.polyfit(dist_fit, time_fit, 1)
                     c_timing, d_timing = timing_coeffs
                     
-                    print(f"  1000 MeV timing fit (first 1000mm): t = {c_timing:.6f}*d + {d_timing:.3f}")
+                    print(f"  {reference_energy} MeV timing fit (first 1000mm): t = {c_timing:.6f}*d + {d_timing:.3f}")
                     
                     # Store power law fit parameters for each energy
                     power_law_params = []
@@ -442,7 +445,7 @@ def analyze_energy_scan(scan_directory):
                         times = np.array(timing_data['times'])
                         color = timing_data['color']
                         
-                        # Calculate expected timing using 1000 MeV fit
+                        # Calculate expected timing using reference energy fit
                         expected_timing = c_timing * distances + d_timing
                         
                         # Calculate timing delta (actual - expected)
@@ -596,7 +599,8 @@ def analyze_energy_scan(scan_directory):
                                 "baseline": {
                                     "slope": c_timing,
                                     "intercept": d_timing,
-                                    "description": "Linear fit for 1000 MeV: t = slope * d + intercept"
+                                    "reference_energy": reference_energy,
+                                    "description": f"Linear fit for {reference_energy} MeV: t = slope * d + intercept"
                                 },
                                 "delta_parameterization": {
                                     "A_slope": m_A,
@@ -633,9 +637,9 @@ def analyze_energy_scan(scan_directory):
                             print(f"\\nParameter trend fitting failed: {e}")
                             
                 else:
-                    print("  Warning: No 1000 MeV data found within first 1000mm")
+                    print(f"  Warning: No {reference_energy} MeV data found within first 1000mm")
             else:
-                print("  Warning: No 1000 MeV data found for timing reference")
+                print(f"  Warning: No {reference_energy} MeV data found for timing reference")
             
         except Exception as e:
             print(f"  Could not fit range vs energy relationship: {e}")
