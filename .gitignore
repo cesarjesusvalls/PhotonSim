@@ -33,6 +33,7 @@ Thumbs.db
 .vscode/
 .idea/
 *.sublime-*
+sftp-config.json
 
 # Python cache files
 __pycache__/

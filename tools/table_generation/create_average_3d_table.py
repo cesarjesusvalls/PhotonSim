@@ -253,7 +253,7 @@ class AveragePhotonTable3D:
             ax.set_ylabel('Distance (mm)')
             ax.set_title(f'{energy} MeV (log₁₀ average)')
             ax.set_xlim(0, 90)
-            ax.set_ylim(0, 4000)
+            ax.set_ylim(0, 10000)
             
             cbar = plt.colorbar(im, ax=ax)
             cbar.set_label('log₁₀(photons/event)', rotation=270, labelpad=20)
@@ -312,7 +312,7 @@ Units: photons/event"""
         
         plt.show()
     
-    def visualize_single_energy(self, energy_mev=500, output_path=None, comparison_energies=[300, 1000, 1700]):
+    def visualize_single_energy(self, energy_mev=500, output_path=None, comparison_energies=[300, 1000, 1800]):
         """Create focused visualization for a single energy value.
         
         Parameters:
@@ -324,6 +324,10 @@ Units: photons/event"""
         comparison_energies : list
             List of energies to compare in angular distribution plot
         """
+
+        plt.rcParams['text.usetex'] = False
+        plt.rcParams['font.family'] = 'serif'
+
         if self.average_table is None:
             print("No data to visualize. Run create_3d_table first.")
             return
@@ -339,7 +343,7 @@ Units: photons/event"""
             actual_energy = energy_mev
         
         # 1. 2D slice at specified energy
-        fig1 = plt.figure(figsize=(4,3))
+        fig1 = plt.figure(figsize=(4,2))
         ax1 = fig1.add_subplot(111)
         
         slice_2d = self.average_table[idx]
@@ -357,7 +361,7 @@ Units: photons/event"""
         ax1.set_xlabel('Opening Angle (degrees)')
         ax1.set_ylabel('Distance (mm)')
         ax1.set_xlim(0, 90)
-        ax1.set_ylim(0, 4000)
+        ax1.set_ylim(0, 10000)
         
         cbar = plt.colorbar(im, ax=ax1)
         cbar.set_label('log₁₀(photons/event)', rotation=270, labelpad=20)
@@ -367,16 +371,16 @@ Units: photons/event"""
         if output_path:
             output_path = Path(output_path)
             output_path.mkdir(exist_ok=True, parents=True)
-            fig1.savefig(output_path / f"photon_2d_slice_{actual_energy}MeV.png", 
-                        dpi=150, bbox_inches='tight')
-            print(f"2D slice saved to {output_path}/photon_2d_slice_{actual_energy}MeV.png")
+            fig1.savefig(output_path / f"photon_2d_slice_{actual_energy}MeV.pdf", bbox_inches='tight')
+            print(f"2D slice saved to {output_path}/photon_2d_slice_{actual_energy}MeV.pdf")
         
         # 2. Angular distribution summed over distance for multiple energies
-        fig2 = plt.figure(figsize=(4,3))
+        fig2 = plt.figure(figsize=(4,2.5))
         ax2 = fig2.add_subplot(111)
         
+        colors = ['cyan', 'cornflowerblue', 'navy']
         # Plot angular distributions for comparison energies
-        for energy in comparison_energies:
+        for i, energy in enumerate(comparison_energies):
             if energy not in self.energy_values:
                 # Find nearest energy
                 energy_idx = np.argmin(np.abs(np.array(self.energy_values) - energy))
@@ -390,23 +394,22 @@ Units: photons/event"""
             angular_distribution = self.average_table[energy_idx].sum(axis=1)
             angle_degrees = np.degrees(self.bin_centers[1])
             
-            ax2.plot(angle_degrees, angular_distribution, linewidth=2, 
+            ax2.plot(angle_degrees, angular_distribution, linewidth=2, color=colors[i],
                     label=f'{actual_comp_energy} MeV')
         
         ax2.set_xlabel('Opening Angle (degrees)')
-        ax2.set_ylabel('Total Photons per Event')
+        ax2.set_ylabel('Photons')
         ax2.set_xlim(0, 90)
-        ax2.set_ylim(0.1, 5e4)
+        ax2.set_ylim(1., 1e5)
         ax2.grid(True, alpha=0.3)
         ax2.set_yscale('log')
-        ax2.legend(fontsize=10)
+        ax2.legend(fontsize=10, frameon=False, ncol=1, handlelength=1.)
         
         plt.tight_layout()
         
         if output_path:
-            fig2.savefig(output_path / f"angular_distribution_comparison.png", 
-                        dpi=150, bbox_inches='tight')
-            print(f"Angular distribution comparison saved to {output_path}/angular_distribution_comparison.png")
+            fig2.savefig(output_path / f"angular_distribution_comparison.pdf", bbox_inches='tight')
+            print(f"Angular distribution comparison saved to {output_path}/angular_distribution_comparison.pdf")
         
         plt.show()
 
