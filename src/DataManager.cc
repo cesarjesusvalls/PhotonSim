@@ -31,6 +31,7 @@
 #include "TFile.h"
 #include "TTree.h"
 #include "TH2D.h"
+#include "TH1D.h"
 #include "G4SystemOfUnits.hh"
 #include "G4ios.hh"
 #include <cmath>
@@ -91,6 +92,7 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("PhotonDirY", &fPhotonDirY);
   fTree->Branch("PhotonDirZ", &fPhotonDirZ);
   fTree->Branch("PhotonTime", &fPhotonTime);
+  fTree->Branch("PhotonWavelength", &fPhotonWavelength);
   fTree->Branch("PhotonProcess", &fPhotonProcess);
   fTree->Branch("PhotonParent", &fPhotonParent);
   fTree->Branch("PhotonParentID", &fPhotonParentID);
@@ -125,9 +127,15 @@ void DataManager::Initialize(const G4String& filename)
                                      "Photon Time vs Distance from Origin;Distance (mm);Time (ns)",
                                      500, 0.0, 10000.0,        // 0 to 10 meters in mm
                                      500, 0.0, 50.0);          // 0 to 50 ns
-  
+
+  // Photon wavelength histogram: Wavelength (0-800 nm, full range)
+  fPhotonHist_Wavelength = new TH1D("PhotonHist_Wavelength",
+                                   "Photon Wavelength Distribution;Wavelength (nm);Counts",
+                                   800, 0.0, 800.0);          // 0 to 800 nm
+
   G4cout << "ROOT file " << actualFilename << " created for optical photon and energy deposit data" << G4endl;
   G4cout << "2D histograms created: 500x500 bins for aggregated data analysis" << G4endl;
+  G4cout << "1D wavelength histogram created: 800 bins from 0-800 nm" << G4endl;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -162,7 +170,13 @@ void DataManager::Finalize()
         // Histogram is now owned by the ROOT file, don't delete it manually
         fPhotonHist_TimeDistance = nullptr;
       }
-      
+      if (fPhotonHist_Wavelength) {
+        fPhotonHist_Wavelength->Write();
+        G4cout << "Photon wavelength histogram written with " << fPhotonHist_Wavelength->GetEntries() << " entries" << G4endl;
+        // Histogram is now owned by the ROOT file, don't delete it manually
+        fPhotonHist_Wavelength = nullptr;
+      }
+
       G4cout << "ROOT file closed with " << fTree->GetEntries() << " events" << G4endl;
       
       // Important: Let ROOT manage the tree cleanup when the file is closed
@@ -195,6 +209,8 @@ void DataManager::Reset()
   fRootFile.reset();
   fPhotonHist_AngleDistance = nullptr;
   fEdepHist_DistanceEnergy = nullptr;
+  fPhotonHist_TimeDistance = nullptr;
+  fPhotonHist_Wavelength = nullptr;
   
   // Clear output filename
   fOutputFilename = "output.root";
@@ -231,7 +247,8 @@ void DataManager::EndEvent()
 
 void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
                                   G4double dx, G4double dy, G4double dz,
-                                  G4double time, const G4String& process,
+                                  G4double time, G4double wavelength,
+                                  const G4String& process,
                                   const G4String& parentParticle,
                                   G4int parentID, G4int trackID)
 {
@@ -239,18 +256,24 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
   if (fPhotonHist_AngleDistance) {
     // Calculate distance from origin
     G4double distance = std::sqrt(x*x + y*y + z*z) / mm;  // Convert to mm
-    
+
     // Calculate opening angle with respect to muon direction (0,0,1)
     // Assume muon travels along +Z axis
     G4double muon_z = 1.0;  // Unit vector in Z direction
     G4double dot_product = dz * muon_z;  // dx*0 + dy*0 + dz*1 = dz
     G4double opening_angle = std::acos(std::max(-1.0, std::min(1.0, dot_product)));
-    
+
     fPhotonHist_AngleDistance->Fill(opening_angle, distance);
-    
+
     // Fill time vs distance histogram
     G4double time_ns = time / ns;  // Convert to ns
     fPhotonHist_TimeDistance->Fill(distance, time_ns);
+  }
+
+  // Fill wavelength histogram
+  if (fPhotonHist_Wavelength) {
+    G4double wavelength_nm = wavelength / nm;  // Convert to nm
+    fPhotonHist_Wavelength->Fill(wavelength_nm);
   }
   
   // Conditionally store individual photon data
@@ -262,6 +285,7 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
     fPhotonDirY.push_back(dy);
     fPhotonDirZ.push_back(dz);
     fPhotonTime.push_back(time / ns); // Store in ns
+    fPhotonWavelength.push_back(wavelength / nm); // Store in nm
     fPhotonProcess.push_back(std::string(process));
     fPhotonParent.push_back(std::string(parentParticle));
     fPhotonParentID.push_back(parentID);
@@ -336,6 +360,7 @@ void DataManager::ClearEventData()
   fPhotonDirY.clear();
   fPhotonDirZ.clear();
   fPhotonTime.clear();
+  fPhotonWavelength.clear();
   fPhotonProcess.clear();
   fPhotonParent.clear();
   fPhotonParentID.clear();
@@ -374,6 +399,8 @@ DataManager::~DataManager()
   // Just make sure pointers are null
   fPhotonHist_AngleDistance = nullptr;
   fEdepHist_DistanceEnergy = nullptr;
+  fPhotonHist_TimeDistance = nullptr;
+  fPhotonHist_Wavelength = nullptr;
   fTree = nullptr;
   fRootFile.reset();
 }

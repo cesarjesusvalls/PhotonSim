@@ -39,6 +39,7 @@
 class TFile;
 class TTree;
 class TH2D;
+class TH1D;
 
 namespace PhotonSim
 {
@@ -62,7 +63,8 @@ class DataManager
     
     void AddOpticalPhoton(G4double x, G4double y, G4double z,
                          G4double dx, G4double dy, G4double dz,
-                         G4double time, const G4String& process,
+                         G4double time, G4double wavelength,
+                         const G4String& process,
                          const G4String& parentParticle = "Unknown",
                          G4int parentID = -1,
                          G4int trackID = -1);
@@ -115,6 +117,7 @@ class DataManager
     std::vector<G4double> fPhotonDirY;
     std::vector<G4double> fPhotonDirZ;
     std::vector<G4double> fPhotonTime;
+    std::vector<G4double> fPhotonWavelength;
     std::vector<std::string> fPhotonProcess;
     std::vector<std::string> fPhotonParent;
     std::vector<G4int> fPhotonParentID;
@@ -143,6 +146,9 @@ class DataManager
     TH2D* fPhotonHist_AngleDistance = nullptr;  // Opening angle vs distance
     TH2D* fEdepHist_DistanceEnergy = nullptr;   // Distance vs energy deposit
     TH2D* fPhotonHist_TimeDistance = nullptr;   // Photon time vs distance
+
+    // 1D ROOT histogram for wavelength distribution
+    TH1D* fPhotonHist_Wavelength = nullptr;     // Photon wavelength distribution
     
     // Output filename
     G4String fOutputFilename = "optical_photons.root";

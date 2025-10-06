@@ -41,6 +41,7 @@
 #include "G4OpticalPhoton.hh"
 #include "G4VProcess.hh"
 #include "G4SystemOfUnits.hh"
+#include "G4PhysicalConstants.hh"
 
 namespace PhotonSim
 {
@@ -106,19 +107,24 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
       }
       
       // Store ALL photons for investigation (no filtering)
-      
+
       // Get position and direction at creation
       // Use vertex position (where photon was actually created) instead of current position
       G4ThreeVector position = track->GetVertexPosition();
       G4ThreeVector direction = track->GetVertexMomentumDirection();
       // Get creation time - for first step, we need to subtract the time spent in this step
       G4double time = track->GetGlobalTime() - step->GetDeltaTime();
-      
+
+      // Calculate wavelength from photon energy
+      // λ = h*c/E where h*c ≈ 1.23984198 eV·μm
+      G4double photonEnergy = track->GetKineticEnergy();
+      G4double wavelength = (h_Planck * c_light) / photonEnergy;  // in Geant4 units
+
       // Record this optical photon using DataManager
       G4int trackID = track->GetTrackID();
       dataManager->AddOpticalPhoton(position.x(), position.y(), position.z(),
                                    direction.x(), direction.y(), direction.z(),
-                                   time, processName, parentParticle,
+                                   time, wavelength, processName, parentParticle,
                                    parentID, trackID);
       
       // Debug prints removed
