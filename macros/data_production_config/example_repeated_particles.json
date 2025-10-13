@@ -1,0 +1,26 @@
+{
+  "config_number": 2,
+  "name": "multi_muon_different_energy_ranges",
+  "description": "Multi-particle events with multiple muons at different energy ranges",
+  "output_base_dir": "/sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy/multiparticle",
+  "particles": [
+    {
+      "type": "mu-",
+      "energy_min_MeV": 210,
+      "energy_max_MeV": 500
+    },
+    {
+      "type": "mu-",
+      "energy_min_MeV": 600,
+      "energy_max_MeV": 1000
+    },
+    {
+      "type": "e-",
+      "energy_min_MeV": 150,
+      "energy_max_MeV": 400
+    }
+  ],
+  "n_jobs": 3,
+  "n_events_per_job": 10,
+  "lucid_path": "/sdf/home/c/cjesus/Dev/LUCiD"
+}

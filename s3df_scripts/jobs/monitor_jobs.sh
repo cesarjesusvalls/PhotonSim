@@ -38,19 +38,19 @@ function show_jobs() {
     if [ "$SHOW_ALL" = true ]; then
         squeue -u $USER
     else
-        squeue -u $USER | grep -E "(JOBID|photonsi)"
+        squeue -u $USER | grep -E "(JOBID|photonsi|multiparticle)"
     fi
-    
+
     echo ""
-    
+
     # Show job statistics
     echo -e "${YELLOW}Job Statistics:${NC}"
-    RUNNING=$(squeue -u $USER -h -t RUNNING | grep -c "photonsi" || true)
-    PENDING=$(squeue -u $USER -h -t PENDING | grep -c "photonsi" || true)
+    RUNNING=$(squeue -u $USER -h -t RUNNING | grep -E "photonsi|multiparticle" | wc -l || true)
+    PENDING=$(squeue -u $USER -h -t PENDING | grep -E "photonsi|multiparticle" | wc -l || true)
     RUNNING=${RUNNING:-0}
     PENDING=${PENDING:-0}
     TOTAL=$((RUNNING + PENDING))
-    
+
     echo -e "PhotonSim jobs running: ${GREEN}$RUNNING${NC}"
     echo -e "PhotonSim jobs pending: ${YELLOW}$PENDING${NC}"
     echo -e "Total PhotonSim jobs: ${BLUE}$TOTAL${NC}"
