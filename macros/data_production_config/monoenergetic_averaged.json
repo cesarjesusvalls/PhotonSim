@@ -1,0 +1,25 @@
+{
+  "config_number": 1,
+  "name": "muon_monoenergetic_averaged_lookup",
+  "description": "Monoenergetic muons for lookup table generation - averaged photon data, high statistics",
+  "output_base_dir": "/sdf/data/neutrino/cjesus/photonsim_output/water/monoenergetic/averaged",
+
+  "energy_distribution": "monoenergetic",
+  "energy_scan": {
+    "start_MeV": 100,
+    "stop_MeV": 2000,
+    "step_MeV": 1000
+  },
+
+  "store_individual_photons": false,
+  "run_lucid": false,
+
+  "particles": [
+    {
+      "type": "mu-"
+    }
+  ],
+
+  "n_jobs": 1,
+  "n_events_per_job": 10
+}

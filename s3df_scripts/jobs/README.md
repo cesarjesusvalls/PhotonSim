@@ -1,254 +1,380 @@
-# PhotonSim S3DF Job Scripts
+# PhotonSim S3DF Job Scripts - Unified JSON-Based System
 
-This directory contains scripts for submitting and managing PhotonSim jobs on the S3DF cluster.
+This directory contains a unified script for submitting and managing PhotonSim jobs on the S3DF cluster using JSON configuration files.
 
-## Scripts Overview
-
-### Job Submission Scripts
-
-#### 1. submit_photonsim_job.sh
-Submit a single PhotonSim job with **fixed energy** and **averaged photon data** (no individual photon storage).
+## Quick Start
 
 ```bash
-./submit_photonsim_job.sh -p <particle> -n <nevents> -e <energy> -o <output_dir> [-f <filename>]
+# Create or edit a JSON configuration file
+# See macros/data_production_config/ for examples
+
+# Test with one job (doesn't submit)
+./generate_jobs.sh -c ../../macros/data_production_config/your_config.json -t
+
+# Prepare all jobs without submitting
+./generate_jobs.sh -c ../../macros/data_production_config/your_config.json
+
+# Prepare and submit all jobs to SLURM
+./generate_jobs.sh -c ../../macros/data_production_config/your_config.json -s
+
+# Monitor your jobs
+./monitor_jobs.sh -w
 ```
 
-Options:
-- `-p`: Particle type (default: mu-)
-- `-n`: Number of events (default: 1000)
-- `-e`: Energy in MeV (default: 1000)
-- `-o`: Output directory (required)
-- `-f`: Output filename (default: output.root)
+## Main Script
 
-**Physics**: Disables muon and pion decay processes. Individual photon storage is **disabled**.
+### generate_jobs.sh
 
-Example:
+Unified script that handles all PhotonSim job generation from JSON configuration files.
+
 ```bash
-./submit_photonsim_job.sh -p mu- -n 10000 -e 1000 -o /sdf/data/neutrino/cjesus/photonsim_output/water/monoenergetic/averaged
+./generate_jobs.sh -c <config_json> [-s] [-t]
 ```
 
-#### 2. submit_photonsim_batch.sh
-Submit multiple averaged photon jobs from a configuration file.
-
-```bash
-./submit_photonsim_batch.sh -c <config_file> [-s] [-t]
-```
-
-Options:
-- `-c`: Configuration file (required)
+**Options:**
+- `-c`: Path to JSON configuration file (required)
 - `-s`: Submit jobs to SLURM (default: prepare only)
 - `-t`: Test mode - create only one job
 
-Configuration file format (one job per line):
-```
-particle nevents energy output_dir [filename]
+**Features:**
+- Supports all energy distributions (monoenergetic, energy scans, uniform)
+- Handles single and multi-particle events
+- Optional LUCiD processing pipeline
+- Configurable photon storage (averaged vs. individual)
+- Maintains backward-compatible directory structure
+
+## JSON Configuration Format
+
+All configurations are defined in JSON files located in `macros/data_production_config/`.
+
+### Required Fields
+
+```json
+{
+  "config_number": 1,
+  "name": "config_name",
+  "description": "Description of this dataset",
+  "output_base_dir": "/path/to/output",
+  "energy_distribution": "monoenergetic" | "uniform",
+  "store_individual_photons": true | false,
+  "run_lucid": true | false,
+  "particles": [...],
+  "n_jobs": 100,
+  "n_events_per_job": 1000
+}
 ```
 
-Example:
+### Energy Distribution Options
+
+#### 1. Monoenergetic - Single Energy
+
+```json
+{
+  "energy_distribution": "monoenergetic",
+  "energy_MeV": 1000
+}
+```
+
+**Output structure:** `output_base_dir/particle/1000MeV/`
+
+#### 2. Monoenergetic - Energy Scan
+
+```json
+{
+  "energy_distribution": "monoenergetic",
+  "energy_scan": {
+    "start_MeV": 100,
+    "stop_MeV": 2000,
+    "step_MeV": 10
+  }
+}
+```
+
+**Output structure:** `output_base_dir/particle/100MeV/`, `output_base_dir/particle/110MeV/`, etc.
+
+#### 3. Uniform Energy Distribution
+
+```json
+{
+  "energy_distribution": "uniform",
+  "energy_min_MeV": 210,
+  "energy_max_MeV": 1500
+}
+```
+
+**Output structure:** `output_base_dir/particle/210_1500MeV_uniform/`
+
+### Particle Configuration
+
+#### Single Particle
+
+```json
+{
+  "particles": [
+    {
+      "type": "mu-"
+    }
+  ]
+}
+```
+
+For uniform energy, uses global `energy_min_MeV` and `energy_max_MeV`.
+
+#### Multiple Particles (requires LUCiD)
+
+```json
+{
+  "particles": [
+    {
+      "type": "mu-",
+      "energy_min_MeV": 210,
+      "energy_max_MeV": 1500
+    },
+    {
+      "type": "pi-",
+      "energy_min_MeV": 300,
+      "energy_max_MeV": 1200
+    }
+  ]
+}
+```
+
+**Requirements:**
+- `energy_distribution` must be `"uniform"`
+- `run_lucid` must be `true`
+- `lucid_path` must be specified
+
+Per-particle energy ranges override global settings. If not specified, falls back to global `energy_min_MeV`/`energy_max_MeV`.
+
+**Output structure:** `output_base_dir/config_XXXXXX/`
+
+### LUCiD Processing
+
+```json
+{
+  "run_lucid": true,
+  "lucid_path": "/sdf/home/c/cjesus/Dev/LUCiD"
+}
+```
+
+When enabled:
+- Automatically runs LUCiD after PhotonSim
+- Generates HDF5 files (`events_jobXXXXXX.h5`)
+- Sets up singularity environment with CPU-only JAX
+
+## Example Configurations
+
+All examples are in `macros/data_production_config/`:
+
+### 1. Monoenergetic Energy Scan (Averaged Data)
+**File:** `monoenergetic_averaged.json`
+```json
+{
+  "energy_distribution": "monoenergetic",
+  "energy_scan": {
+    "start_MeV": 100,
+    "stop_MeV": 2000,
+    "step_MeV": 10
+  },
+  "store_individual_photons": false,
+  "run_lucid": false,
+  "n_jobs": 1,
+  "n_events_per_job": 10000
+}
+```
+**Use case:** Generating lookup tables with high statistics
+
+### 2. Monoenergetic Single Energy (Averaged Data)
+**File:** `monoenergetic_single_energy_averaged.json`
+```json
+{
+  "energy_distribution": "monoenergetic",
+  "energy_MeV": 1000,
+  "store_individual_photons": false,
+  "run_lucid": false
+}
+```
+**Use case:** High-statistics simulation at specific energy
+
+### 3. Monoenergetic Event-by-Event
+**File:** `monoenergetic_event_by_event.json`
+```json
+{
+  "energy_distribution": "monoenergetic",
+  "energy_MeV": 1050,
+  "store_individual_photons": true,
+  "run_lucid": false,
+  "n_jobs": 100,
+  "n_events_per_job": 100
+}
+```
+**Use case:** Individual event analysis at fixed energy
+
+### 4. Uniform Energy (No LUCiD)
+**File:** `uniform_single_particle.json`
+```json
+{
+  "energy_distribution": "uniform",
+  "energy_min_MeV": 210,
+  "energy_max_MeV": 1500,
+  "store_individual_photons": true,
+  "run_lucid": false
+}
+```
+**Use case:** Energy range sampling with ROOT output only
+
+### 5. Uniform Energy + LUCiD
+**File:** `uniform_single_particle_lucid.json`
+```json
+{
+  "energy_distribution": "uniform",
+  "energy_min_MeV": 210,
+  "energy_max_MeV": 1500,
+  "store_individual_photons": true,
+  "run_lucid": true,
+  "lucid_path": "/sdf/home/c/cjesus/Dev/LUCiD"
+}
+```
+**Use case:** Full pipeline with PhotonSim ROOT and LUCiD HDF5 output
+
+### 6. Multi-Particle + LUCiD
+**File:** `multiparticle_uniform_lucid.json`
+```json
+{
+  "energy_distribution": "uniform",
+  "particles": [
+    {
+      "type": "mu-",
+      "energy_min_MeV": 210,
+      "energy_max_MeV": 1500
+    },
+    {
+      "type": "pi-",
+      "energy_min_MeV": 300,
+      "energy_max_MeV": 1200
+    }
+  ],
+  "store_individual_photons": true,
+  "run_lucid": true
+}
+```
+**Use case:** Multi-particle events with shared vertex
+
+## Directory Structure
+
+The script maintains backward-compatible directory structures:
+
+### Monoenergetic (Single Particle)
+```
+output_base_dir/
+└── mu-/
+    ├── 100MeV/
+    │   ├── output.root (or output_job001.root for multiple jobs)
+    │   ├── run_mu-_100MeV.mac
+    │   ├── run_photonsim.sh
+    │   ├── submit_job.sbatch
+    │   └── job-*.{out,err}
+    ├── 110MeV/
+    └── ...
+```
+
+### Uniform Energy (Single Particle)
+```
+output_base_dir/
+└── mu-/
+    └── 210_1500MeV_uniform/
+        ├── output_job000001.root
+        ├── output_job000002.root
+        ├── events_job_000001.h5 (if run_lucid: true)
+        ├── events_job_000002.h5
+        └── ...
+```
+
+### Multi-Particle
+```
+output_base_dir/
+└── config_000001/
+    ├── README.md
+    ├── particle_0_mu-_job_000001.root
+    ├── particle_1_pi-_job_000001.root
+    ├── events_job_000001.h5
+    └── ...
+```
+
+## Workflow Examples
+
+### Example 1: Generate Lookup Table
 ```bash
-# Prepare jobs without submitting
-./submit_photonsim_batch.sh -c muons_100_2000_10k.txt
-
-# Prepare and submit all jobs
-./submit_photonsim_batch.sh -c muons_100_2000_10k.txt -s
-
-# Test with first job only
-./submit_photonsim_batch.sh -c muons_100_2000_10k.txt -t
+# Use monoenergetic energy scan config
+./generate_jobs.sh -c ../../macros/data_production_config/monoenergetic_averaged.json -s
 ```
 
----
-
-#### 3. submit_photonsim_job_individual.sh
-Submit a single PhotonSim job with **fixed energy** and **individual photon storage enabled**.
-
+### Example 2: Event-by-Event Analysis at Fixed Energy
 ```bash
-./submit_photonsim_job_individual.sh -p <particle> -n <nevents> -e <energy> -o <output_dir> [-f <filename>]
+# Edit the JSON to set your desired energy
+vim ../../macros/data_production_config/monoenergetic_event_by_event.json
+
+# Generate and submit 100 jobs
+./generate_jobs.sh -c ../../macros/data_production_config/monoenergetic_event_by_event.json -s
 ```
 
-Options:
-- `-p`: Particle type (default: mu-)
-- `-n`: Number of events (default: 100)
-- `-e`: Energy in MeV (default: 1000)
-- `-o`: Output directory (required)
-- `-f`: Output filename (default: output.root)
-
-**Physics**: Disables muon and pion decay processes. Individual photon storage is **enabled**.
-
-Example:
+### Example 3: Uniform Energy + LUCiD Pipeline
 ```bash
-./submit_photonsim_job_individual.sh -p mu- -n 100 -e 1050 -o /sdf/data/neutrino/cjesus/photonsim_output/water/monoenergetic/event_by_event -f output_job001.root
+# Test first
+./generate_jobs.sh -c ../../macros/data_production_config/uniform_single_particle_lucid.json -t
+
+# Submit all jobs
+./generate_jobs.sh -c ../../macros/data_production_config/uniform_single_particle_lucid.json -s
 ```
 
-#### 4. submit_photonsim_batch_individual.sh
-Submit multiple event-by-event jobs from a configuration file.
-
+### Example 4: Multi-Particle Events
 ```bash
-./submit_photonsim_batch_individual.sh -c <config_file> [-s] [-t]
+# Create custom configuration
+cat > ../../macros/data_production_config/my_multiparticle.json << EOF
+{
+  "config_number": 10,
+  "name": "my_custom_multiparticle",
+  "description": "Custom multi-particle configuration",
+  "output_base_dir": "/sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy/multiparticle",
+  "energy_distribution": "uniform",
+  "store_individual_photons": true,
+  "run_lucid": true,
+  "lucid_path": "/sdf/home/c/cjesus/Dev/LUCiD",
+  "particles": [
+    {"type": "mu-", "energy_min_MeV": 200, "energy_max_MeV": 1000},
+    {"type": "e-", "energy_min_MeV": 100, "energy_max_MeV": 500}
+  ],
+  "n_jobs": 50,
+  "n_events_per_job": 500
+}
+EOF
+
+# Generate and submit
+./generate_jobs.sh -c ../../macros/data_production_config/my_multiparticle.json -s
 ```
 
-Example:
-```bash
-# Prepare and submit 100 jobs at 1050 MeV
-./submit_photonsim_batch_individual.sh -c muons_1050_100jobs_100events.txt -s
-```
+## Job Management Scripts
 
----
-
-#### 5. submit_photonsim_job_uniform.sh
-Submit a single PhotonSim job with **uniform random energy distribution** and **individual photon storage enabled**.
-
-```bash
-./submit_photonsim_job_uniform.sh -p <particle> -n <nevents> -m <min_energy> -M <max_energy> -o <output_dir> [-f <filename>]
-```
-
-Options:
-- `-p`: Particle type (default: mu-)
-- `-n`: Number of events (default: 100)
-- `-m`: Minimum energy in MeV (default: 210)
-- `-M`: Maximum energy in MeV (default: 1500)
-- `-o`: Output directory (required)
-- `-f`: Output filename (default: output.root)
-
-**Physics**: Disables muon and pion decay processes. Each event has a uniformly random energy between min and max. Individual photon storage is **enabled**.
-
-Example:
-```bash
-./submit_photonsim_job_uniform.sh -p mu- -n 100 -m 210 -M 1500 -o /sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy
-```
-
-#### 6. submit_photonsim_batch_uniform.sh
-Submit multiple uniform energy jobs from a configuration file.
-
-```bash
-./submit_photonsim_batch_uniform.sh -c <config_file> [-s] [-t]
-```
-
-Configuration file format (one job per line):
-```
-particle nevents min_energy max_energy output_dir filename
-```
-
-Example:
-```bash
-# Prepare and submit uniform energy muon jobs
-./submit_photonsim_batch_uniform.sh -c muon_uniform_210_1500_MeV_100jobs_100events.txt -s
-```
-
----
-
-#### 7. submit_photonsim_lucid_job_uniform.sh
-Submit a single PhotonSim job with **uniform random energy distribution** and **LUCiD processing**.
-
-```bash
-./submit_photonsim_lucid_job_uniform.sh -p <particle> -n <nevents> -m <min_energy> -M <max_energy> -o <output_dir> [-f <filename>] [-l <lucid_path>]
-```
-
-Options:
-- `-p`: Particle type (default: mu-)
-- `-n`: Number of events (default: 100)
-- `-m`: Minimum energy in MeV (default: 210)
-- `-M`: Maximum energy in MeV (default: 1500)
-- `-o`: Output directory (required)
-- `-f`: Output filename (default: output.root)
-- `-l`: LUCiD installation path (default: /sdf/home/c/cjesus/Dev/LUCiD)
-
-**Pipeline**:
-1. Runs PhotonSim with uniform energy distribution
-2. Runs LUCiD using singularity (develop.sif) to process ROOT files
-3. Generates final HDF5 output files (events_jobXXX.h5)
-
-**Physics**: Same as uniform energy jobs. Individual photon storage is **enabled**.
-
-Example:
-```bash
-./submit_photonsim_lucid_job_uniform.sh -p mu- -n 100 -m 210 -M 1500 -o /sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy -f output_job001.root
-```
-
-#### 8. submit_photonsim_lucid_batch_uniform.sh
-Submit multiple PhotonSim + LUCiD jobs from a configuration file.
-
-```bash
-./submit_photonsim_lucid_batch_uniform.sh -c <config_file> [-s] [-t] [-l <lucid_path>]
-```
-
-Options:
-- `-c`: Configuration file (required)
-- `-s`: Submit jobs to SLURM (default: prepare only)
-- `-t`: Test mode - create only one job
-- `-l`: LUCiD installation path (default: /sdf/home/c/cjesus/Dev/LUCiD)
-
-Configuration file format (same as uniform energy):
-```
-particle nevents min_energy max_energy output_dir filename
-```
-
-Example:
-```bash
-# Generate config using existing generator
-./generate_uniform_energy_config.sh -p mu- -n 100
-
-# Prepare and submit with LUCiD processing
-./submit_photonsim_lucid_batch_uniform.sh -c muon_uniform_210_1500_MeV_100jobs_100events.txt -s
-```
-
-**Output**: Each job produces both `output_jobXXX.root` and `events_jobXXX.h5` files.
-
----
-
-### Configuration Generator
-
-#### 9. generate_uniform_energy_config.sh
-Generate configuration files for uniform energy simulations with **N** jobs as a parameter.
-
-```bash
-./generate_uniform_energy_config.sh -p <particle> -n <njobs> [-e <nevents>] [-o <output_dir>]
-```
-
-Options:
-- `-p`: Particle type (mu- or pi+) (required)
-- `-n`: Number of jobs to generate (required)
-- `-e`: Number of events per job (default: 100)
-- `-o`: Output directory (default: /sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy)
-
-**Energy ranges** (Cherenkov threshold + 50 MeV to 1500 MeV):
-- **mu-**: 210-1500 MeV (threshold at 160.3 MeV)
-- **pi+**: 262-1500 MeV (threshold at 211.8 MeV)
-
-Example:
-```bash
-# Generate config for 100 muon jobs
-./generate_uniform_energy_config.sh -p mu- -n 100
-
-# Generate config for 50 pion jobs with 200 events each
-./generate_uniform_energy_config.sh -p pi+ -n 50 -e 200
-```
-
-This creates a configuration file like `muon_uniform_210_1500_MeV_100jobs_100events.txt` that can be used with `submit_photonsim_batch_uniform.sh`.
-
----
-
-### Job Management Scripts
-
-#### 10. monitor_jobs.sh
-Monitor PhotonSim jobs running on S3DF.
+### monitor_jobs.sh
+Monitor running PhotonSim jobs.
 
 ```bash
 ./monitor_jobs.sh [-a] [-w] [-o output_dir]
 ```
 
 Options:
-- `-a`: Show all jobs (default: only PhotonSim jobs)
+- `-a`: Show all jobs (default: only PhotonSim/multiparticle jobs)
 - `-w`: Watch mode - refresh every 30 seconds
 - `-o`: Check specific output directory for results
 
 Example:
 ```bash
-# Monitor PhotonSim jobs in watch mode
+# Watch mode with output directory
 ./monitor_jobs.sh -w -o /sdf/data/neutrino/cjesus/photonsim_output/water
 ```
 
-#### 11. cleanup_jobs.sh
-Clean up job-related files (logs, macros, scripts) while preserving ROOT output files.
+### cleanup_jobs.sh
+Clean up job-related files while preserving ROOT and HDF5 output files.
 
 ```bash
 ./cleanup_jobs.sh -o <output_dir> [-l] [-m] [-s] [-a]
@@ -261,167 +387,53 @@ Options:
 - `-s`: Clean script files (*.sh, *.sbatch)
 - `-a`: Clean all (logs, macros, and scripts)
 
-**Note**: By default runs in dry-run mode. Edit the script to set `DRY_RUN=false` to actually delete files.
-
-Example:
-```bash
-# See what would be cleaned (dry run)
-./cleanup_jobs.sh -o /sdf/data/neutrino/cjesus/photonsim_output/water/monoenergetic/averaged -a
-
-# Clean only log files
-./cleanup_jobs.sh -o /sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy -l
-```
-
-## Directory Structure
-
-The recommended directory structure organizes simulations by medium, energy type, and data storage mode:
-
-```
-/sdf/data/neutrino/cjesus/photonsim_output/
-├── water/
-│   ├── monoenergetic/
-│   │   ├── averaged/              # Fixed energy, averaged photon data (no individual storage)
-│   │   │   ├── mu-/
-│   │   │   │   ├── 100MeV/
-│   │   │   │   │   ├── output.root
-│   │   │   │   │   ├── run_*.mac
-│   │   │   │   │   ├── run_photonsim.sh
-│   │   │   │   │   ├── submit_job.sbatch
-│   │   │   │   │   ├── job-*.out
-│   │   │   │   │   └── job-*.err
-│   │   │   │   ├── 110MeV/
-│   │   │   │   └── ...
-│   │   │   └── pi+/
-│   │   │       └── ...
-│   │   └── event_by_event/        # Fixed energy, individual photon storage enabled
-│   │       ├── mu-/
-│   │       │   ├── 1050MeV/
-│   │       │   │   ├── output_job001.root
-│   │       │   │   ├── output_job002.root
-│   │       │   │   ├── ...
-│   │       │   │   └── run_*.mac
-│   │       │   └── ...
-│   │       └── pi+/
-│   │           └── ...
-│   └── uniform_energy/            # Uniform energy distribution, individual photon storage enabled
-│       ├── mu-/
-│       │   ├── 210_1500MeV_uniform/
-│       │   │   ├── output_job001.root      # PhotonSim ROOT output
-│       │   │   ├── output_job002.root
-│       │   │   ├── events_job001.h5         # LUCiD HDF5 output (if using LUCiD scripts)
-│       │   │   ├── events_job002.h5
-│       │   │   ├── ...
-│       │   │   └── run_*.mac
-│       │   └── ...
-│       └── pi+/
-│           ├── 262_1500MeV_uniform/
-│           │   └── ...
-│           └── ...
-```
+**Note:** Runs in dry-run mode by default. Edit script to set `DRY_RUN=false`.
 
 ## Physics Configuration
 
-All job scripts automatically disable the following processes to prevent particle decay:
+All jobs automatically disable decay processes:
 - **Muons (mu-, mu+)**: Process 1 (Decay), Process 7 (muMinusCaptureAtRest for mu-)
 - **Pions (pi+, pi-)**: Process 1 (Decay)
 
-To see all available processes for a particle, run:
-```bash
-./build/PhotonSim macros/list_processes.mac
-```
-
-## Workflow Examples
-
-### Example 1: Monoenergetic Averaged Data (Large Statistics)
-For generating lookup tables with high statistics (10k events) and averaged photon data:
-
-```bash
-# Use existing config or create one
-./submit_photonsim_batch.sh -c muons_100_2000_10k.txt -s
-```
-
-### Example 2: Event-by-Event Fixed Energy
-For studying individual events at a specific energy (e.g., 1050 MeV):
-
-```bash
-# Prepare and submit 100 jobs with 100 events each
-./submit_photonsim_batch_individual.sh -c muons_1050_100jobs_100events.txt -s
-
-# Monitor
-./monitor_jobs.sh -w -o /sdf/data/neutrino/cjesus/photonsim_output/water/monoenergetic/event_by_event
-```
-
-### Example 3: Uniform Energy Distribution
-For sampling across an energy range with individual photon information:
-
-```bash
-# Generate config for 100 muon jobs
-./generate_uniform_energy_config.sh -p mu- -n 100
-
-# Prepare and submit
-./submit_photonsim_batch_uniform.sh -c muon_uniform_210_1500_MeV_100jobs_100events.txt -s
-
-# Monitor
-./monitor_jobs.sh -w -o /sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy
-
-# Clean up temporary files after completion
-./cleanup_jobs.sh -o /sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy -a
-```
-
-### Example 4: Pion Uniform Energy
-```bash
-# Generate config for 50 pion jobs with 200 events each
-./generate_uniform_energy_config.sh -p pi+ -n 50 -e 200
-
-# Submit
-./submit_photonsim_batch_uniform.sh -c pion_plus_uniform_262_1500_MeV_50jobs_200events.txt -s
-```
-
-### Example 5: PhotonSim + LUCiD Pipeline
-For generating both ROOT files and LUCiD-processed HDF5 files in a single job:
-
-```bash
-# Generate config for 100 muon jobs
-./generate_uniform_energy_config.sh -p mu- -n 100
-
-# Prepare and submit with LUCiD processing
-./submit_photonsim_lucid_batch_uniform.sh -c muon_uniform_210_1500_MeV_100jobs_100events.txt -s
-
-# Monitor
-./monitor_jobs.sh -w -o /sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy
-
-# Output will include both:
-#   - output_jobXXX.root (PhotonSim)
-#   - events_jobXXX.h5 (LUCiD)
-```
-
-**Custom LUCiD Path**:
-```bash
-./submit_photonsim_lucid_batch_uniform.sh -c config.txt -l /custom/path/to/LUCiD -s
-```
-
 ## SLURM Configuration
 
-Default SLURM settings (configured in `../user_paths.sh`):
+Default settings (configured in `../user_paths.sh`):
 - Partition: `shared`
 - Account: `neutrino:cider-ml`
 - CPUs: 1
 - Memory: 4GB per CPU
 - Time limit: 2 hours
 
-Modify `user_paths.sh` to change these defaults.
+## Migration from Old Scripts
 
-## Quick Reference: Which Script to Use?
+The new unified system replaces these legacy scripts:
+- `submit_photonsim_job.sh` → Use JSON with `energy_distribution: "monoenergetic"`, `energy_MeV: X`, `store_individual_photons: false`
+- `submit_photonsim_batch.sh` → Use JSON with energy scan
+- `submit_photonsim_job_individual.sh` → Use JSON with `store_individual_photons: true`
+- `submit_photonsim_batch_individual.sh` → Use JSON with multiple jobs
+- `submit_photonsim_job_uniform.sh` → Use JSON with `energy_distribution: "uniform"`
+- `submit_photonsim_batch_uniform.sh` → Use JSON with uniform energy
+- `submit_photonsim_lucid_job_uniform.sh` → Use JSON with `run_lucid: true`
+- `submit_photonsim_lucid_batch_uniform.sh` → Use JSON with uniform + LUCiD
+- `generate_dataset.sh` → Use JSON for multi-particle configs
 
-| Use Case | Energy | Individual Photons | Output Format | Script to Use | Config Generator |
-|----------|--------|-------------------|---------------|---------------|------------------|
-| Lookup tables, high stats | Fixed | No | ROOT | `submit_photonsim_batch.sh` | Manual config |
-| Event-by-event at fixed E | Fixed | Yes | ROOT | `submit_photonsim_batch_individual.sh` | Manual config |
-| Scan energy range | Uniform random | Yes | ROOT | `submit_photonsim_batch_uniform.sh` | `generate_uniform_energy_config.sh` |
-| Full pipeline with LUCiD | Uniform random | Yes | ROOT + HDF5 | `submit_photonsim_lucid_batch_uniform.sh` | `generate_uniform_energy_config.sh` |
+**Legacy scripts are still available but deprecated.**
 
-## Available Configuration Files
+## Quick Reference Table
 
-- `muons_100_2000_10k.txt` - Muons from 100-2000 MeV (10 MeV steps), 10k events each, averaged data
-- `muons_1050_100jobs_100events.txt` - 100 jobs at 1050 MeV, 100 events each, event-by-event
-- Generated by `generate_uniform_energy_config.sh` - Uniform energy distributions for mu- and pi+
+| Use Case | Energy Mode | Individual Photons | LUCiD | Example Config |
+|----------|-------------|-------------------|-------|----------------|
+| Lookup tables | Monoenergetic scan | No | No | `monoenergetic_averaged.json` |
+| Single energy, high stats | Monoenergetic | No | No | `monoenergetic_single_energy_averaged.json` |
+| Event analysis, fixed E | Monoenergetic | Yes | No | `monoenergetic_event_by_event.json` |
+| Energy range, ROOT only | Uniform | Yes | No | `uniform_single_particle.json` |
+| Energy range + LUCiD | Uniform | Yes | Yes | `uniform_single_particle_lucid.json` |
+| Multi-particle events | Uniform | Yes | Yes | `multiparticle_uniform_lucid.json` |
+
+## Tips
+
+1. **Start with test mode** (`-t`) to verify your configuration before submitting all jobs
+2. **Use unique config_number** for each configuration to avoid directory conflicts
+3. **Check disk space** before large batch submissions
+4. **Monitor job progress** with `monitor_jobs.sh -w`
+5. **Clean up** completed job logs with `cleanup_jobs.sh` after verification

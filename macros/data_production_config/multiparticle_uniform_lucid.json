@@ -1,8 +1,15 @@
 {
-  "config_number": 7,
+  "config_number": 6,
   "name": "mu_pi_mixed_210_1500MeV",
-  "description": "Multi-particle events with muons and pions in water detector",
+  "description": "Multi-particle events with muons and pions at different energy ranges, with LUCiD processing",
   "output_base_dir": "/sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy/multiparticle",
+
+  "energy_distribution": "uniform",
+
+  "store_individual_photons": true,
+  "run_lucid": true,
+  "lucid_path": "/sdf/home/c/cjesus/Dev/LUCiD",
+
   "particles": [
     {
       "type": "mu-",
@@ -15,7 +22,7 @@
       "energy_max_MeV": 1200
     }
   ],
+
   "n_jobs": 3,
-  "n_events_per_job": 10,
-  "lucid_path": "/sdf/home/c/cjesus/Dev/LUCiD"
+  "n_events_per_job": 10
 }

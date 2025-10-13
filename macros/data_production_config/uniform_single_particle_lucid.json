@@ -1,0 +1,23 @@
+{
+  "config_number": 5,
+  "name": "muon_uniform_210_1500MeV_lucid",
+  "description": "Uniform energy distribution for muons with LUCiD processing",
+  "output_base_dir": "/sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy",
+
+  "energy_distribution": "uniform",
+  "energy_min_MeV": 210,
+  "energy_max_MeV": 1500,
+
+  "store_individual_photons": true,
+  "run_lucid": true,
+  "lucid_path": "/sdf/home/c/cjesus/Dev/LUCiD",
+
+  "particles": [
+    {
+      "type": "mu-"
+    }
+  ],
+
+  "n_jobs": 3,
+  "n_events_per_job": 10
+}
