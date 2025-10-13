@@ -8,7 +8,7 @@
   "energy_scan": {
     "start_MeV": 100,
     "stop_MeV": 2000,
-    "step_MeV": 1000
+    "step_MeV": 10
   },
 
   "store_individual_photons": false,

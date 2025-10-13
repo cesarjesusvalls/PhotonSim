@@ -3,6 +3,11 @@
   "name": "mu_pi_mixed_210_1500MeV",
   "description": "Multi-particle events with muons and pions in water detector",
   "output_base_dir": "/sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy/multiparticle",
+
+  "energy_distribution": "uniform",
+  "store_individual_photons": true,
+  "run_lucid": true,
+
   "particles": [
     {
       "type": "mu-",

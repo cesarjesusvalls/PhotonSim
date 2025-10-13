@@ -3,6 +3,11 @@
   "name": "multi_muon_different_energy_ranges",
   "description": "Multi-particle events with multiple muons at different energy ranges",
   "output_base_dir": "/sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy/multiparticle",
+
+  "energy_distribution": "uniform",
+  "store_individual_photons": true,
+  "run_lucid": true,
+
   "particles": [
     {
       "type": "mu-",
