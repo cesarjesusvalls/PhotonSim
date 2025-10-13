@@ -1,8 +1,11 @@
 {
-  "config_number": 2,
+  "config_number": 1,
+  "use_config_number": true,
   "name": "muon_1000MeV_averaged",
   "description": "Single energy muons at 1000 MeV - averaged photon data",
-  "output_base_dir": "/sdf/data/neutrino/cjesus/photonsim_output/water/monoenergetic/averaged",
+
+  "material": "water",
+  "output_path": "monoenergetic/averaged",
 
   "energy_distribution": "monoenergetic",
   "energy_MeV": 1000,
@@ -16,6 +19,6 @@
     }
   ],
 
-  "n_jobs": 3,
-  "n_events_per_job": 10
+  "n_jobs": 2,
+  "n_events_per_job": 100
 }

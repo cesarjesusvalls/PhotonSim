@@ -1,8 +1,11 @@
 {
-  "config_number": 6,
+  "config_number": 4,
+  "use_config_number": true,
   "name": "mu_pi_mixed_210_1500MeV",
   "description": "Multi-particle events with muons and pions at different energy ranges, with LUCiD processing",
-  "output_base_dir": "/sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy/multiparticle",
+
+  "material": "water",
+  "output_path": "uniform_energy/multiparticle",
 
   "energy_distribution": "uniform",
 
@@ -17,12 +20,12 @@
       "energy_max_MeV": 1500
     },
     {
-      "type": "pi-",
+      "type": "pi+",
       "energy_min_MeV": 300,
       "energy_max_MeV": 1200
     }
   ],
 
-  "n_jobs": 3,
-  "n_events_per_job": 10
+  "n_jobs": 2,
+  "n_events_per_job": 100
 }

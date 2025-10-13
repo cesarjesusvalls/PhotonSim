@@ -7,12 +7,21 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PHOTONSIM_DIR="$( cd "${SCRIPT_DIR}/../.." && pwd )"
 UTILS_DIR="${SCRIPT_DIR}/../utils"
 USER_PATHS="${SCRIPT_DIR}/../user_paths.sh"
+BASE_CONFIG="${SCRIPT_DIR}/../base_config.sh"
 
 # Source user paths
 if [ -f "${USER_PATHS}" ]; then
     source "${USER_PATHS}"
 else
     echo "Error: user_paths.sh not found at ${USER_PATHS}"
+    exit 1
+fi
+
+# Source base config
+if [ -f "${BASE_CONFIG}" ]; then
+    source "${BASE_CONFIG}"
+else
+    echo "Error: base_config.sh not found at ${BASE_CONFIG}"
     exit 1
 fi
 
@@ -60,9 +69,11 @@ echo ""
 
 # Parse JSON config
 CONFIG_NUMBER=$(jq -r '.config_number' "$CONFIG_FILE")
+USE_CONFIG_NUMBER=$(jq -r '.use_config_number' "$CONFIG_FILE")
 CONFIG_NAME=$(jq -r '.name' "$CONFIG_FILE")
 CONFIG_DESC=$(jq -r '.description' "$CONFIG_FILE")
-OUTPUT_BASE_DIR=$(jq -r '.output_base_dir' "$CONFIG_FILE")
+MATERIAL=$(jq -r '.material' "$CONFIG_FILE")
+OUTPUT_PATH=$(jq -r '.output_path' "$CONFIG_FILE")
 ENERGY_DIST=$(jq -r '.energy_distribution' "$CONFIG_FILE")
 STORE_INDIVIDUAL=$(jq -r '.store_individual_photons' "$CONFIG_FILE")
 RUN_LUCID=$(jq -r '.run_lucid' "$CONFIG_FILE")
@@ -70,10 +81,36 @@ N_JOBS=$(jq -r '.n_jobs' "$CONFIG_FILE")
 N_EVENTS=$(jq -r '.n_events_per_job' "$CONFIG_FILE")
 N_PARTICLES=$(jq '.particles | length' "$CONFIG_FILE")
 
+# Handle backward compatibility - check for old output_base_dir field
+OLD_OUTPUT_BASE_DIR=$(jq -r '.output_base_dir' "$CONFIG_FILE")
+if [ "$OLD_OUTPUT_BASE_DIR" != "null" ]; then
+    echo "Warning: 'output_base_dir' field is deprecated. Please use 'material' and 'output_path' instead."
+    echo "Using old format for now..."
+    OUTPUT_BASE_DIR="$OLD_OUTPUT_BASE_DIR"
+else
+    # Build output directory from new fields
+    OUTPUT_BASE_DIR="${OUTPUT_BASE_PATH}/${MATERIAL}/${OUTPUT_PATH}"
+fi
+
 # Validate parsed values
-if [ "$CONFIG_NUMBER" == "null" ] || [ "$CONFIG_NAME" == "null" ] || [ "$OUTPUT_BASE_DIR" == "null" ]; then
-    echo "Error: Invalid JSON configuration. Required fields: config_number, name, output_base_dir"
+if [ "$CONFIG_NAME" == "null" ]; then
+    echo "Error: Invalid JSON configuration. Required field: name"
     exit 1
+fi
+
+if [ "$MATERIAL" == "null" ] && [ "$OLD_OUTPUT_BASE_DIR" == "null" ]; then
+    echo "Error: Invalid JSON configuration. Required field: material (or use deprecated output_base_dir)"
+    exit 1
+fi
+
+if [ "$OUTPUT_PATH" == "null" ] && [ "$OLD_OUTPUT_BASE_DIR" == "null" ]; then
+    echo "Error: Invalid JSON configuration. Required field: output_path (or use deprecated output_base_dir)"
+    exit 1
+fi
+
+# Default use_config_number to false if not specified
+if [ "$USE_CONFIG_NUMBER" == "null" ]; then
+    USE_CONFIG_NUMBER="false"
 fi
 
 if [ "$ENERGY_DIST" != "monoenergetic" ] && [ "$ENERGY_DIST" != "uniform" ]; then
@@ -114,6 +151,7 @@ create_macro() {
     cat > "$macro_file" << EOFMACRO
 # PhotonSim macro
 # Configuration: $CONFIG_NAME
+# Material: $MATERIAL
 # Particle: $particle_type
 EOFMACRO
 
@@ -127,6 +165,9 @@ EOFMACRO
 
 # Set output filename before initialization
 /output/filename ${output_file}
+
+# TODO: Add PhotonSim macro command to set detector material when available
+# For now, material is: $MATERIAL
 
 /run/initialize
 
@@ -562,7 +603,15 @@ handle_multiparticle() {
         exit 1
     fi
 
-    CONFIG_DIR="${OUTPUT_BASE_DIR}/config_$(printf "%06d" $CONFIG_NUMBER)"
+    # Determine output directory based on use_config_number
+    if [ "$USE_CONFIG_NUMBER" == "true" ]; then
+        CONFIG_DIR="${OUTPUT_BASE_DIR}/config_$(printf "%06d" $CONFIG_NUMBER)"
+        echo "Using config number: $(printf "%06d" $CONFIG_NUMBER)"
+    else
+        CONFIG_DIR="${OUTPUT_BASE_DIR}"
+        echo "Not using config number subdirectory"
+    fi
+
     echo "Output directory: $CONFIG_DIR"
     echo ""
 

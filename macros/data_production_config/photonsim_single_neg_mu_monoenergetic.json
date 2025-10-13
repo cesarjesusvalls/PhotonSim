@@ -1,8 +1,11 @@
 {
-  "config_number": 3,
+  "config_number": -1,
+  "use_config_number": false,
   "name": "muon_1050MeV_event_by_event",
   "description": "Monoenergetic muons at 1050 MeV with individual photon storage - 100 jobs for statistics",
-  "output_base_dir": "/sdf/data/neutrino/cjesus/photonsim_output/water/monoenergetic/event_by_event",
+
+  "material": "water",
+  "output_path": "monoenergetic/event_by_event",
 
   "energy_distribution": "monoenergetic",
   "energy_MeV": 1050,
