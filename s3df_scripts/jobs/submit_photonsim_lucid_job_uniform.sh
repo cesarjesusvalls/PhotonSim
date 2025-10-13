@@ -151,8 +151,9 @@ fi
 echo ""
 echo "=== Step 2: Setting up LUCiD environment ==="
 export SINGULARITY_IMAGE_PATH=/sdf/group/neutrino/images/develop.sif
+export JAX_PLATFORMS=cpu
 function spython() {
-    singularity exec --nv -B /sdf,/fs,/sdf/scratch,/lscratch ${SINGULARITY_IMAGE_PATH} python "$@"
+    singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch ${SINGULARITY_IMAGE_PATH} python "$@"
 }
 
 # Create output folder for LUCiD
