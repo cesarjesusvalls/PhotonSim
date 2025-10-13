@@ -136,9 +136,68 @@ Example:
 
 ---
 
+#### 7. submit_photonsim_lucid_job_uniform.sh
+Submit a single PhotonSim job with **uniform random energy distribution** and **LUCiD processing**.
+
+```bash
+./submit_photonsim_lucid_job_uniform.sh -p <particle> -n <nevents> -m <min_energy> -M <max_energy> -o <output_dir> [-f <filename>] [-l <lucid_path>]
+```
+
+Options:
+- `-p`: Particle type (default: mu-)
+- `-n`: Number of events (default: 100)
+- `-m`: Minimum energy in MeV (default: 210)
+- `-M`: Maximum energy in MeV (default: 1500)
+- `-o`: Output directory (required)
+- `-f`: Output filename (default: output.root)
+- `-l`: LUCiD installation path (default: /sdf/home/c/cjesus/Dev/LUCiD)
+
+**Pipeline**:
+1. Runs PhotonSim with uniform energy distribution
+2. Runs LUCiD using singularity (develop.sif) to process ROOT files
+3. Generates final HDF5 output files (events_jobXXX.h5)
+
+**Physics**: Same as uniform energy jobs. Individual photon storage is **enabled**.
+
+Example:
+```bash
+./submit_photonsim_lucid_job_uniform.sh -p mu- -n 100 -m 210 -M 1500 -o /sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy -f output_job001.root
+```
+
+#### 8. submit_photonsim_lucid_batch_uniform.sh
+Submit multiple PhotonSim + LUCiD jobs from a configuration file.
+
+```bash
+./submit_photonsim_lucid_batch_uniform.sh -c <config_file> [-s] [-t] [-l <lucid_path>]
+```
+
+Options:
+- `-c`: Configuration file (required)
+- `-s`: Submit jobs to SLURM (default: prepare only)
+- `-t`: Test mode - create only one job
+- `-l`: LUCiD installation path (default: /sdf/home/c/cjesus/Dev/LUCiD)
+
+Configuration file format (same as uniform energy):
+```
+particle nevents min_energy max_energy output_dir filename
+```
+
+Example:
+```bash
+# Generate config using existing generator
+./generate_uniform_energy_config.sh -p mu- -n 100
+
+# Prepare and submit with LUCiD processing
+./submit_photonsim_lucid_batch_uniform.sh -c muon_uniform_210_1500_MeV_100jobs_100events.txt -s
+```
+
+**Output**: Each job produces both `output_jobXXX.root` and `events_jobXXX.h5` files.
+
+---
+
 ### Configuration Generator
 
-#### 7. generate_uniform_energy_config.sh
+#### 9. generate_uniform_energy_config.sh
 Generate configuration files for uniform energy simulations with **N** jobs as a parameter.
 
 ```bash
@@ -170,7 +229,7 @@ This creates a configuration file like `muon_uniform_210_1500_MeV_100jobs_100eve
 
 ### Job Management Scripts
 
-#### 8. monitor_jobs.sh
+#### 10. monitor_jobs.sh
 Monitor PhotonSim jobs running on S3DF.
 
 ```bash
@@ -188,7 +247,7 @@ Example:
 ./monitor_jobs.sh -w -o /sdf/data/neutrino/cjesus/photonsim_output/water
 ```
 
-#### 9. cleanup_jobs.sh
+#### 11. cleanup_jobs.sh
 Clean up job-related files (logs, macros, scripts) while preserving ROOT output files.
 
 ```bash
@@ -247,8 +306,10 @@ The recommended directory structure organizes simulations by medium, energy type
 │   └── uniform_energy/            # Uniform energy distribution, individual photon storage enabled
 │       ├── mu-/
 │       │   ├── 210_1500MeV_uniform/
-│       │   │   ├── output_job001.root
+│       │   │   ├── output_job001.root      # PhotonSim ROOT output
 │       │   │   ├── output_job002.root
+│       │   │   ├── events_job001.h5         # LUCiD HDF5 output (if using LUCiD scripts)
+│       │   │   ├── events_job002.h5
 │       │   │   ├── ...
 │       │   │   └── run_*.mac
 │       │   └── ...
@@ -316,6 +377,29 @@ For sampling across an energy range with individual photon information:
 ./submit_photonsim_batch_uniform.sh -c pion_plus_uniform_262_1500_MeV_50jobs_200events.txt -s
 ```
 
+### Example 5: PhotonSim + LUCiD Pipeline
+For generating both ROOT files and LUCiD-processed HDF5 files in a single job:
+
+```bash
+# Generate config for 100 muon jobs
+./generate_uniform_energy_config.sh -p mu- -n 100
+
+# Prepare and submit with LUCiD processing
+./submit_photonsim_lucid_batch_uniform.sh -c muon_uniform_210_1500_MeV_100jobs_100events.txt -s
+
+# Monitor
+./monitor_jobs.sh -w -o /sdf/data/neutrino/cjesus/photonsim_output/water/uniform_energy
+
+# Output will include both:
+#   - output_jobXXX.root (PhotonSim)
+#   - events_jobXXX.h5 (LUCiD)
+```
+
+**Custom LUCiD Path**:
+```bash
+./submit_photonsim_lucid_batch_uniform.sh -c config.txt -l /custom/path/to/LUCiD -s
+```
+
 ## SLURM Configuration
 
 Default SLURM settings (configured in `../user_paths.sh`):
@@ -329,11 +413,12 @@ Modify `user_paths.sh` to change these defaults.
 
 ## Quick Reference: Which Script to Use?
 
-| Use Case | Energy | Individual Photons | Script to Use | Config Generator |
-|----------|--------|-------------------|---------------|------------------|
-| Lookup tables, high stats | Fixed | No | `submit_photonsim_batch.sh` | Manual config |
-| Event-by-event at fixed E | Fixed | Yes | `submit_photonsim_batch_individual.sh` | Manual config |
-| Scan energy range | Uniform random | Yes | `submit_photonsim_batch_uniform.sh` | `generate_uniform_energy_config.sh` |
+| Use Case | Energy | Individual Photons | Output Format | Script to Use | Config Generator |
+|----------|--------|-------------------|---------------|---------------|------------------|
+| Lookup tables, high stats | Fixed | No | ROOT | `submit_photonsim_batch.sh` | Manual config |
+| Event-by-event at fixed E | Fixed | Yes | ROOT | `submit_photonsim_batch_individual.sh` | Manual config |
+| Scan energy range | Uniform random | Yes | ROOT | `submit_photonsim_batch_uniform.sh` | `generate_uniform_energy_config.sh` |
+| Full pipeline with LUCiD | Uniform random | Yes | ROOT + HDF5 | `submit_photonsim_lucid_batch_uniform.sh` | `generate_uniform_energy_config.sh` |
 
 ## Available Configuration Files
 

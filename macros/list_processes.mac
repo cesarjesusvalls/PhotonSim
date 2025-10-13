@@ -1,0 +1,31 @@
+# Macro to list all physics processes for different particles
+# This helps identify which process indices to inactivate
+
+/run/initialize
+
+# List processes for e-
+/particle/select e-
+/particle/process/dump
+
+# List processes for e+
+/particle/select e+
+/particle/process/dump
+
+# List processes for mu-
+/particle/select mu-
+/particle/process/dump
+
+# List processes for mu+
+/particle/select mu+
+/particle/process/dump
+
+# List processes for pi+
+/particle/select pi+
+/particle/process/dump
+
+# List processes for pi-
+/particle/select pi-
+/particle/process/dump
+
+# Exit without running events
+/run/beamOn 0

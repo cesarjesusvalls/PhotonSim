@@ -1,0 +1,27 @@
+# Test wavelength histogram with 5 mu- events at 1050 MeV
+
+# Set output filename before initialization
+/output/filename test_wavelength_5_events.root
+
+/run/initialize
+
+# Enable individual photon storage to capture photon information
+/photon/storeIndividual true
+/edep/storeIndividual false
+
+# Disable muon decay processes via macro commands
+/particle/select mu-
+/particle/process/inactivate 1
+/particle/process/inactivate 7
+/particle/select mu+
+/particle/process/inactivate 1
+
+# Set up primary particle with fixed energy
+/gun/particle mu-
+/gun/randomEnergy false
+/gun/energy 1050 MeV
+/gun/position 0 0 0 m
+/gun/direction 0 0 1
+
+# Run 5 events
+/run/beamOn 5

@@ -1,0 +1,27 @@
+# Macro for 50 muons with individual photon information
+
+# Set output filename before initialization
+/output/filename muon_gun_500_MeV_100_events_fixed_energy.root
+
+/run/initialize
+
+# Enable individual photon storage to capture photon information
+/photon/storeIndividual true
+/edep/storeIndividual false
+
+# Disable muon decay processes via macro commands
+/particle/select mu-
+/particle/process/inactivate 1
+/particle/process/inactivate 7
+/particle/select mu+
+/particle/process/inactivate 1
+
+# Set up primary particle with random energy
+/gun/particle mu-
+/gun/randomEnergy false
+/gun/energy 500 MeV
+/gun/position 0 0 0 m
+/gun/direction 0 0 1
+
+# Run 50 events
+/run/beamOn 100

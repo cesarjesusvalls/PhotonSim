@@ -1,7 +1,7 @@
 # Macro for 50 muons with individual photon information
 
 # Set output filename before initialization
-/output/filename muons_50_with_photons.root
+/output/filename muon_gun_100_events_uniform_energy.root
 
 /run/initialize
 
@@ -19,10 +19,10 @@
 # Set up primary particle with random energy
 /gun/particle mu-
 /gun/randomEnergy true
-/gun/energyMin 100 MeV
-/gun/energyMax 1000 MeV
+/gun/energyMin 500 MeV
+/gun/energyMax 1500 MeV
 /gun/position 0 0 0 m
 /gun/direction 0 0 1
 
 # Run 50 events
-/run/beamOn 50
+/run/beamOn 100
