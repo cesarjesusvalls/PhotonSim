@@ -120,9 +120,17 @@ fi
 
 # Get LUCiD path if needed
 if [ "$RUN_LUCID" == "true" ]; then
-    LUCID_PATH=$(jq -r '.lucid_path' "$CONFIG_FILE")
-    if [ "$LUCID_PATH" == "null" ]; then
-        echo "Error: lucid_path is required when run_lucid is true"
+    # Check if lucid_path is specified in JSON (backward compatibility)
+    JSON_LUCID_PATH=$(jq -r '.lucid_path' "$CONFIG_FILE")
+    if [ "$JSON_LUCID_PATH" != "null" ]; then
+        echo "Warning: 'lucid_path' in JSON is deprecated. Using value from base_config.sh instead."
+        echo "Please remove 'lucid_path' from your JSON config."
+        # Still use the base_config.sh value for consistency
+    fi
+
+    # Use LUCID_PATH from base_config.sh (sourced earlier)
+    if [ -z "$LUCID_PATH" ]; then
+        echo "Error: LUCID_PATH not set. Check base_config.sh"
         exit 1
     fi
 fi
