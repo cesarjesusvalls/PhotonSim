@@ -13,7 +13,6 @@
 
   "store_individual_photons": true,
   "run_lucid": true,
-  "lucid_path": "/sdf/home/c/cjesus/Dev/LUCiD",
 
   "particles": [
     {

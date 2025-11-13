@@ -19,6 +19,6 @@
     }
   ],
 
-  "n_jobs": 3,
-  "n_events_per_job": 10
+  "n_jobs": 10,
+  "n_events_per_job": 100
 }
