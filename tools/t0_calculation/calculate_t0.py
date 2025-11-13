@@ -13,6 +13,10 @@ from pathlib import Path
 import sys
 import argparse
 
+plt.rcParams['text.usetex'] = False
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams['font.size'] = 10
+
 def predict_timing(distance, energy, params, debug=False):
     """
     Predict average photon creation time using the parameterization.
@@ -55,7 +59,7 @@ def create_prediction_plot(params, output_dir, all_timing_data, valid_range_valu
     fig_pred, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
     
     # Colors for different energies
-    energies = params['energy_range']['values']
+    energies = np.array([1000])#np.array([200,400,600,800,1000,1200,1400,1600,1800])#params['energy_range']['values']
     colors = plt.cm.viridis(np.linspace(0, 1, len(energies)))
     
     # Create energy to range mapping
@@ -177,9 +181,12 @@ def analyze_energy_scan(scan_directory):
     
     # Create main figure with two subplots for timing analysis
     fig_main, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-    
+
     # Create separate figure for range analysis
     fig_range, (ax3, ax4) = plt.subplots(1, 2, figsize=(12, 4))
+
+    # Create independent figure for timing delta analysis
+    fig_delta, ax_delta = plt.subplots(1, 1, figsize=(6, 3))
     
     energies = []
     ranges = []  # Store calculated ranges for each energy
@@ -249,7 +256,7 @@ def analyze_energy_scan(scan_directory):
             
             # Store time data (only if we have at least 10 photons on average)
             avg_photons_in_bin = total_weight / n_events
-            if avg_photons_in_bin >= 10.0:
+            if avg_photons_in_bin >= 10.0 and (bin_x+1)%2==0:
                 mean_time = total_time_weighted / total_weight
                 distances_time.append(distance)
                 mean_times.append(mean_time)
@@ -452,8 +459,12 @@ def analyze_energy_scan(scan_directory):
                         timing_delta = times - expected_timing
                         
                         # Plot timing delta vs distance (not remaining range)
-                        ax2.plot(distances, timing_delta, color=color, alpha=0.6, 
-                                linewidth=0, marker='o', markersize=2, label=f'{energy} MeV data')
+                        ax2.plot(distances, timing_delta, color=color, alpha=1.0,
+                                linewidth=0, marker='x', markersize=5, label=f'{energy} MeV data')
+
+                        # Also plot to independent delta figure
+                        ax_delta.plot(distances/1000, timing_delta, color=color, alpha=1.0,
+                                     linewidth=0, marker='*', markersize=5, label=f'{energy} MeV data')
                         
                         # Fit power law with offset: δt = A * d^B + C
                         valid_mask = (distances > 0) & (np.abs(timing_delta) > 0.001)
@@ -489,8 +500,12 @@ def analyze_energy_scan(scan_directory):
                                 # Format the equation
                                 formula = f'δt = 10^{A:.3f}×d^{B:.3f} + 0.001'
                                 
-                                ax2.plot(x_fit, y_fit, '--', color=color, alpha=0.8, linewidth=2,
+                                ax2.plot(x_fit, y_fit, '-', color=color, alpha=0.8, linewidth=5,
                                         label=f'{energy} MeV: {formula} (R²={r2:.3f})')
+
+                                # Also plot to independent delta figure
+                                ax_delta.plot(x_fit/1000, y_fit, '-', color=color, alpha=0.5, linewidth=6,
+                                             label=f'{energy} MeV: {formula} (R²={r2:.3f})')
                                 
                                 power_law_params.append({'energy': energy, 'A': A, 'B': B, 'r2': r2})
                                 
@@ -657,9 +672,16 @@ def analyze_energy_scan(scan_directory):
     
     # Format timing delta plot
     ax2.set_xlabel('Distance from Origin (mm)', fontsize=12)
-    ax2.set_ylabel('Timing Delta (ns)', fontsize=12)
+    ax2.set_ylabel('$t_0$ Correction (ns)', fontsize=12)
     ax2.set_title('Timing Delta vs Distance with Power Law Fits', fontsize=14)
     ax2.set_xlim(0, None)
+
+    # Format independent timing delta plot
+    ax_delta.set_xlabel('Distance from Origin (m)', fontsize=12)
+    ax_delta.set_ylabel('$t_0$ Correction (ns)', fontsize=12)
+    #ax_delta.set_title('Timing Delta vs Distance with Power Law Fits', fontsize=14)
+    ax_delta.set_xlim(0, None)
+    #ax_delta.legend(fontsize=9)
     
     # Format the range analysis plots
     ax3.set_xlabel('Distance from Origin (mm)', fontsize=12)
@@ -679,7 +701,8 @@ def analyze_energy_scan(scan_directory):
     
     fig_main.tight_layout()
     fig_range.tight_layout()
-    
+    fig_delta.tight_layout()
+
     # Save plots after all data is plotted and formatted
     output_plot_main = scan_dir / "timing_analysis.png"
     plt.figure(fig_main.number)
@@ -690,7 +713,12 @@ def analyze_energy_scan(scan_directory):
     plt.figure(fig_range.number)
     fig_range.savefig(output_plot_range, dpi=150, bbox_inches='tight')
     print(f"Range analysis plot saved to: {output_plot_range}")
-    
+
+    output_plot_delta = scan_dir / "timing_delta_independent.pdf"
+    plt.figure(fig_delta.number)
+    fig_delta.savefig(output_plot_delta, dpi=150, bbox_inches='tight')
+    print(f"Independent timing delta plot saved to: {output_plot_delta}")
+
     # Show all plots after everything is saved
     plt.show()
 
