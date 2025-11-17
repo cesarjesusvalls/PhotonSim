@@ -15,7 +15,7 @@ echo "===================="
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-PHOTONSIM_DIR="$( cd "${SCRIPT_DIR}/.." && pwd )"
+PHOTONSIM_DIR="$( cd "${SCRIPT_DIR}/../.." && pwd )"
 
 # Check if environment is set up
 if [ -z "${GEANT4_DIR}" ] || [ -z "${ROOT_DIR}" ]; then

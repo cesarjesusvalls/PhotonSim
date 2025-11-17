@@ -15,7 +15,7 @@ echo "========================"
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-PHOTONSIM_DIR="$( cd "${SCRIPT_DIR}/.." && pwd )"
+PHOTONSIM_DIR="$( cd "${SCRIPT_DIR}/../.." && pwd )"
 
 # Check if environment is set up
 if [ -z "${GEANT4_DIR}" ] || [ -z "${ROOT_DIR}" ]; then
@@ -61,8 +61,8 @@ if [ $? -eq 0 ]; then
     echo -e "${GREEN}PhotonSim executable created at: $(pwd)/PhotonSim${NC}"
     echo ""
     echo "To run PhotonSim:"
-    echo "  cd build"
-    echo "  ./PhotonSim ../macros/test_muon.mac"
+    echo "  cd ${PHOTONSIM_DIR}/build"
+    echo "  ./PhotonSim ../macros/test_fixed_energy.mac"
 else
     echo -e "${RED}✗ Build failed${NC}"
     exit 1

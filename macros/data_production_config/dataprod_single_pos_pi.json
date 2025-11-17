@@ -1,7 +1,7 @@
 {
   "config_number": 2,
   "use_config_number": true,
-  "name": "muon_uniform_210_1500MeV_lucid",
+  "name": "charged_pion_uniform_up_to_1500MeV",
   "description": "Uniform energy distribution for muons with LUCiD processing",
 
   "material": "water",

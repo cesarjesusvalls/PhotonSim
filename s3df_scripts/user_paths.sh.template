@@ -23,8 +23,3 @@ export DEFAULT_CPUS="1"
 export DEFAULT_MEMORY="4g"
 export DEFAULT_TIME="02:00:00"
 
-# Example configuration for S3DF:
-# export GEANT4_INSTALL_DIR="/sdf/data/neutrino/username/software/builds/geant4"
-# export ROOT_INSTALL_DIR="/sdf/data/neutrino/username/software/builds/root"
-# export PHOTONSIM_OUTPUT_BASE="/sdf/data/neutrino/username/photonsim_output"
-# export SLURM_ACCOUNT="neutrino:cider-ml"
