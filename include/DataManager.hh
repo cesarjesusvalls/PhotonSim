@@ -108,6 +108,7 @@ class DataManager
     void ClearTrackRegistry();
 
     // Get next SubID for a category
+    G4int GetNextPrimaryID() { return fNPrimaries++; }
     G4int GetNextDecayElectronID() { return fNDecayElectrons++; }
     G4int GetNextSecondaryPionID() { return fNSecondaryPions++; }
     G4int GetNextGammaShowerID() { return fNGammaShowers++; }
@@ -178,6 +179,7 @@ class DataManager
     std::map<G4int, TrackInfo> fTrackRegistry;
 
     // Category counters for current event
+    G4int fNPrimaries = 0;
     G4int fNDecayElectrons = 0;
     G4int fNSecondaryPions = 0;
     G4int fNGammaShowers = 0;

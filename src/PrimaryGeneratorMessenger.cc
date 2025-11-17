@@ -36,6 +36,7 @@
 #include "G4UIcmdWith3VectorAndUnit.hh"
 #include "G4UIcmdWith3Vector.hh"
 #include "G4UIcmdWithABool.hh"
+#include "G4UIcmdWithAnInteger.hh"
 #include "G4SystemOfUnits.hh"
 
 namespace PhotonSim
@@ -96,6 +97,12 @@ PrimaryGeneratorMessenger::PrimaryGeneratorMessenger(PrimaryGeneratorAction* pri
   fEnergyMaxCmd->SetDefaultUnit("MeV");
   fEnergyMaxCmd->SetUnitCandidates("eV keV MeV GeV TeV");
   fEnergyMaxCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
+  fNumberOfPrimariesCmd = new G4UIcmdWithAnInteger("/gun/numberOfPrimaries", this);
+  fNumberOfPrimariesCmd->SetGuidance("Set number of primary particles per event");
+  fNumberOfPrimariesCmd->SetParameterName("n", false);
+  fNumberOfPrimariesCmd->SetRange("n>=1");
+  fNumberOfPrimariesCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -109,6 +116,7 @@ PrimaryGeneratorMessenger::~PrimaryGeneratorMessenger()
   delete fRandomEnergyCmd;
   delete fEnergyMinCmd;
   delete fEnergyMaxCmd;
+  delete fNumberOfPrimariesCmd;
   delete fGunDir;
 }
 
@@ -140,6 +148,9 @@ void PrimaryGeneratorMessenger::SetNewValue(G4UIcommand* command, G4String newVa
     G4double currentMin = fPrimaryGeneratorAction->GetMinEnergy();
     G4double newMax = fEnergyMaxCmd->GetNewDoubleValue(newValue);
     fPrimaryGeneratorAction->SetEnergyRange(currentMin, newMax);
+  }
+  else if (command == fNumberOfPrimariesCmd) {
+    fPrimaryGeneratorAction->SetNumberOfPrimaries(fNumberOfPrimariesCmd->GetNewIntValue(newValue));
   }
 }
 

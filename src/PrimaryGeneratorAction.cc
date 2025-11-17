@@ -76,19 +76,22 @@ PrimaryGeneratorAction::~PrimaryGeneratorAction()
 
 void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event)
 {
-  // Generate random energy if requested
-  if (fRandomEnergy) {
-    fTrueEnergy = fMinEnergy + (fMaxEnergy - fMinEnergy) * G4UniformRand();
-    fParticleGun->SetParticleEnergy(fTrueEnergy);
-  } else {
-    fTrueEnergy = fParticleGun->GetParticleEnergy();
-  }
-  
-  // Always fire from center of detector along z-axis
-  fParticleGun->SetParticlePosition(G4ThreeVector(0., 0., 0.));
-  fParticleGun->SetParticleMomentumDirection(G4ThreeVector(0., 0., 1.));
+  // Generate multiple primary particles
+  for (G4int i = 0; i < fNumberOfPrimaries; i++) {
+    // Generate random energy if requested
+    if (fRandomEnergy) {
+      fTrueEnergy = fMinEnergy + (fMaxEnergy - fMinEnergy) * G4UniformRand();
+      fParticleGun->SetParticleEnergy(fTrueEnergy);
+    } else {
+      fTrueEnergy = fParticleGun->GetParticleEnergy();
+    }
 
-  fParticleGun->GeneratePrimaryVertex(event);
+    // Always fire from center of detector along z-axis
+    fParticleGun->SetParticlePosition(G4ThreeVector(0., 0., 0.));
+    fParticleGun->SetParticleMomentumDirection(G4ThreeVector(0., 0., 1.));
+
+    fParticleGun->GeneratePrimaryVertex(event);
+  }
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

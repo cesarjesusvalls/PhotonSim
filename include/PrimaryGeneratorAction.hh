@@ -63,23 +63,26 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     void SetRandomEnergy(G4bool useRandom) { fRandomEnergy = useRandom; }
     void SetParticlePosition(const G4ThreeVector& position);
     void SetParticleDirection(const G4ThreeVector& direction);
-    
+    void SetNumberOfPrimaries(G4int n) { fNumberOfPrimaries = n; }
+
     // method to access particle gun
     const G4ParticleGun* GetParticleGun() const { return fParticleGun; }
     G4double GetTrueEnergy() const { return fTrueEnergy; }
     G4double GetMinEnergy() const { return fMinEnergy; }
     G4double GetMaxEnergy() const { return fMaxEnergy; }
     G4bool GetRandomEnergy() const { return fRandomEnergy; }
+    G4int GetNumberOfPrimaries() const { return fNumberOfPrimaries; }
 
   private:
     G4ParticleGun* fParticleGun = nullptr;
     PrimaryGeneratorMessenger* fMessenger = nullptr;
-    
+
     // Configurable parameters
     G4double fMinEnergy = 100.0*MeV;
     G4double fMaxEnergy = 500.0*MeV;
     G4bool fRandomEnergy = false;
     G4double fTrueEnergy = 0.0; // Store the actual energy used for this event
+    G4int fNumberOfPrimaries = 1; // Number of primary particles per event
 };
 
 }  // namespace PhotonSim

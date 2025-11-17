@@ -542,6 +542,7 @@ void DataManager::ClearEventData()
   fTrackInfo_PDG.clear();
 
   // Reset category counters
+  fNPrimaries = 0;
   fNDecayElectrons = 0;
   fNSecondaryPions = 0;
   fNGammaShowers = 0;

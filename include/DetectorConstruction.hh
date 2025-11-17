@@ -64,19 +64,23 @@ class DetectorConstruction : public G4VUserDetectorConstruction
     G4Material* ConstructLiquidArgon();
     G4Material* ConstructIce();
     G4Material* ConstructLiquidScintillator();
-    
+    G4Material* ConstructHydrogen();
+    G4Material* ConstructOxygen();
+
     G4LogicalVolume* fDetectorLogical = nullptr;
-    
+
     // Detector parameters
     G4double fDetectorSizeX = 100.0*CLHEP::m;
-    G4double fDetectorSizeY = 100.0*CLHEP::m;  
+    G4double fDetectorSizeY = 100.0*CLHEP::m;
     G4double fDetectorSizeZ = 100.0*CLHEP::m;
     G4String fDetectorMaterialName = "Water";
-    
+
     // Materials
     G4Material* fWater = nullptr;
     G4Material* fLiquidArgon = nullptr;
     G4Material* fIce = nullptr;
+    G4Material* fLiquidHydrogen = nullptr;
+    G4Material* fLiquidOxygen = nullptr;
     G4Material* fLiquidScintillator = nullptr;
 };
 

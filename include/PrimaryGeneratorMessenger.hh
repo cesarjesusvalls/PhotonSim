@@ -39,6 +39,7 @@ class G4UIcmdWithADoubleAndUnit;
 class G4UIcmdWith3VectorAndUnit;
 class G4UIcmdWith3Vector;
 class G4UIcmdWithABool;
+class G4UIcmdWithAnInteger;
 
 namespace PhotonSim
 {
@@ -55,6 +56,7 @@ class PrimaryGeneratorAction;
 /// - /gun/randomEnergy [true/false]
 /// - /gun/energyMin [value] [unit]
 /// - /gun/energyMax [value] [unit]
+/// - /gun/numberOfPrimaries [int]
 
 class PrimaryGeneratorMessenger: public G4UImessenger
 {
@@ -75,6 +77,7 @@ class PrimaryGeneratorMessenger: public G4UImessenger
     G4UIcmdWithABool*              fRandomEnergyCmd = nullptr;
     G4UIcmdWithADoubleAndUnit*     fEnergyMinCmd = nullptr;
     G4UIcmdWithADoubleAndUnit*     fEnergyMaxCmd = nullptr;
+    G4UIcmdWithAnInteger*          fNumberOfPrimariesCmd = nullptr;
 };
 
 }  // namespace PhotonSim

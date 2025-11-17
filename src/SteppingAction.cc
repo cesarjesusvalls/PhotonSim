@@ -77,9 +77,10 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
     const G4VProcess* creationProcess = track->GetCreatorProcess();
     G4String processName = creationProcess ? creationProcess->GetProcessName() : "Primary";
 
-    // 1. Primary particle
-    if (trackID == 1) {
-      dataManager->UpdateTrackCategory(trackID, kPrimary, 0, 0);
+    // 1. Primary particles (parentID == 0)
+    if (parentID == 0) {
+      G4int subID = dataManager->GetNextPrimaryID();
+      dataManager->UpdateTrackCategory(trackID, kPrimary, subID, 0);
     }
 
     // 2. Decay electrons: electrons from Decay process

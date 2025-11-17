@@ -55,18 +55,24 @@ DetectorConstruction::DetectorConstruction()
 void DetectorConstruction::DefineMaterials()
 {
   G4NistManager* nist = G4NistManager::Instance();
-  
+
   // Water with optical properties
   fWater = ConstructWater();
-  
-  // Liquid Argon with optical properties  
+
+  // Liquid Argon with optical properties
   fLiquidArgon = ConstructLiquidArgon();
-  
+
   // Ice with optical properties
   fIce = ConstructIce();
-  
+
   // Liquid Scintillator with optical properties
   fLiquidScintillator = ConstructLiquidScintillator();
+
+  // Liquid Hydrogen with optical properties
+  fLiquidHydrogen = ConstructHydrogen();
+
+  // Liquid Oxygen with optical properties
+  fLiquidOxygen = ConstructOxygen();
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -235,8 +241,88 @@ G4Material* DetectorConstruction::ConstructLiquidScintillator()
   scintMPT->AddConstProperty("SCINTILLATIONYIELD2", 0.2);
   
   scintillator->SetMaterialPropertiesTable(scintMPT);
-  
+
   return scintillator;
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+G4Material* DetectorConstruction::ConstructHydrogen()
+{
+  // Liquid hydrogen at 20K
+  G4double density = 0.071*g/cm3;
+  G4Material* liquidH2 = new G4Material("LiquidHydrogen", density, 1);
+  G4Element* H = G4NistManager::Instance()->FindOrBuildElement("H");
+  liquidH2->AddElement(H, 2);  // H2 molecules
+
+  // Liquid hydrogen optical properties
+  G4MaterialPropertiesTable* h2MPT = new G4MaterialPropertiesTable();
+
+  // Photon energies (wavelengths from 200-700 nm)
+  const G4int nEntries = 10;
+  G4double photonEnergy[nEntries] = {
+    1.77*eV, 2.07*eV, 2.48*eV, 2.76*eV, 3.10*eV,
+    3.54*eV, 4.13*eV, 4.96*eV, 5.64*eV, 6.20*eV
+  };
+
+  // Refractive index of liquid hydrogen (~1.11)
+  G4double refractiveIndex[nEntries] = {
+    1.110, 1.110, 1.111, 1.111, 1.112,
+    1.112, 1.113, 1.114, 1.115, 1.116
+  };
+
+  // Absorption length (very transparent, ~10m)
+  G4double absorption[nEntries] = {
+    10.*m, 10.*m, 10.*m, 10.*m, 10.*m,
+    10.*m, 10.*m, 10.*m, 10.*m, 10.*m
+  };
+
+  h2MPT->AddProperty("RINDEX", photonEnergy, refractiveIndex, nEntries);
+  h2MPT->AddProperty("ABSLENGTH", photonEnergy, absorption, nEntries);
+
+  liquidH2->SetMaterialPropertiesTable(h2MPT);
+
+  return liquidH2;
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+G4Material* DetectorConstruction::ConstructOxygen()
+{
+  // Liquid oxygen at 90K
+  G4double density = 1.141*g/cm3;
+  G4Material* liquidO2 = new G4Material("LiquidOxygen", density, 1);
+  G4Element* O = G4NistManager::Instance()->FindOrBuildElement("O");
+  liquidO2->AddElement(O, 2);  // O2 molecules
+
+  // Liquid oxygen optical properties
+  G4MaterialPropertiesTable* o2MPT = new G4MaterialPropertiesTable();
+
+  // Photon energies (wavelengths from 200-700 nm)
+  const G4int nEntries = 10;
+  G4double photonEnergy[nEntries] = {
+    1.77*eV, 2.07*eV, 2.48*eV, 2.76*eV, 3.10*eV,
+    3.54*eV, 4.13*eV, 4.96*eV, 5.64*eV, 6.20*eV
+  };
+
+  // Refractive index of liquid oxygen (~1.22)
+  G4double refractiveIndex[nEntries] = {
+    1.220, 1.220, 1.221, 1.221, 1.222,
+    1.222, 1.223, 1.224, 1.225, 1.226
+  };
+
+  // Absorption length (transparent, ~5m)
+  G4double absorption[nEntries] = {
+    5.*m, 5.*m, 5.*m, 5.*m, 5.*m,
+    5.*m, 5.*m, 5.*m, 5.*m, 5.*m
+  };
+
+  o2MPT->AddProperty("RINDEX", photonEnergy, refractiveIndex, nEntries);
+  o2MPT->AddProperty("ABSLENGTH", photonEnergy, absorption, nEntries);
+
+  liquidO2->SetMaterialPropertiesTable(o2MPT);
+
+  return liquidO2;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -284,6 +370,10 @@ G4VPhysicalVolume* DetectorConstruction::Construct()
     detector_mat = fIce;
   } else if (fDetectorMaterialName == "LiquidScintillator") {
     detector_mat = fLiquidScintillator;
+  } else if (fDetectorMaterialName == "LiquidHydrogen") {
+    detector_mat = fLiquidHydrogen;
+  } else if (fDetectorMaterialName == "LiquidOxygen") {
+    detector_mat = fLiquidOxygen;
   } else {
     detector_mat = fWater; // Default to water
   }
