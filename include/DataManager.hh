@@ -89,8 +89,6 @@ class DataManager
                          G4double dx, G4double dy, G4double dz,
                          G4double time, G4double wavelength,
                          const G4String& process,
-                         G4int category,
-                         G4int subID,
                          const std::vector<G4int>& genealogy);
 
     void AddEnergyDeposit(G4double x, G4double y, G4double z,
@@ -153,10 +151,16 @@ class DataManager
     std::vector<G4double> fPhotonTime;
     std::vector<G4double> fPhotonWavelength;
     std::vector<std::string> fPhotonProcess;
-    std::vector<G4int> fPhotonCategory;
-    std::vector<G4int> fPhotonSubCategoryID;
-    std::vector<G4int> fPhotonGenealogySize;  // Size of each genealogy
-    std::vector<G4int> fPhotonGenealogyData;  // Flattened genealogy track IDs
+
+    // Label system: unique genealogies and their photons
+    G4int fNLabels = 0;
+    std::vector<G4int> fLabel_GenealogySize;
+    std::vector<G4int> fLabel_GenealogyData;
+    std::vector<G4int> fLabel_PhotonIDsSize;
+    std::vector<G4int> fLabel_PhotonIDsData;
+
+    // Internal map for building labels during event
+    std::map<std::vector<G4int>, std::vector<G4int>> fGenealogyToPhotonIDs;
     
     // Energy deposit data (vectors for multiple deposits per event)
     std::vector<G4double> fEdepPosX;

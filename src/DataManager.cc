@@ -95,10 +95,13 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("PhotonTime", &fPhotonTime);
   fTree->Branch("PhotonWavelength", &fPhotonWavelength);
   fTree->Branch("PhotonProcess", &fPhotonProcess);
-  fTree->Branch("PhotonCategory", &fPhotonCategory);
-  fTree->Branch("PhotonSubCategoryID", &fPhotonSubCategoryID);
-  fTree->Branch("PhotonGenealogySize", &fPhotonGenealogySize);
-  fTree->Branch("PhotonGenealogyData", &fPhotonGenealogyData);
+
+  // Label system branches
+  fTree->Branch("NLabels", &fNLabels, "NLabels/I");
+  fTree->Branch("Label_GenealogySize", &fLabel_GenealogySize);
+  fTree->Branch("Label_GenealogyData", &fLabel_GenealogyData);
+  fTree->Branch("Label_PhotonIDsSize", &fLabel_PhotonIDsSize);
+  fTree->Branch("Label_PhotonIDsData", &fLabel_PhotonIDsData);
 
   // Event-level track information branches
   fTree->Branch("TrackInfo_TrackID", &fTrackInfo_TrackID);
@@ -256,6 +259,26 @@ void DataManager::EndEvent()
   fNOpticalPhotons = fPhotonPosX.size();
   fNEnergyDeposits = fEdepEnergy.size();
 
+  // Convert genealogy map to label arrays
+  fNLabels = fGenealogyToPhotonIDs.size();
+
+  for (const auto& pair : fGenealogyToPhotonIDs) {
+    const std::vector<G4int>& genealogy = pair.first;
+    const std::vector<G4int>& photonIDs = pair.second;
+
+    // Store genealogy
+    fLabel_GenealogySize.push_back(genealogy.size());
+    for (G4int trackID : genealogy) {
+      fLabel_GenealogyData.push_back(trackID);
+    }
+
+    // Store photon IDs for this label
+    fLabel_PhotonIDsSize.push_back(photonIDs.size());
+    for (G4int photonID : photonIDs) {
+      fLabel_PhotonIDsData.push_back(photonID);
+    }
+  }
+
   // Collect track IDs to store: categorized tracks + their parents (no duplicates)
   std::set<G4int> tracksToStore;
 
@@ -303,8 +326,6 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
                                   G4double dx, G4double dy, G4double dz,
                                   G4double time, G4double wavelength,
                                   const G4String& process,
-                                  G4int category,
-                                  G4int subID,
                                   const std::vector<G4int>& genealogy)
 {
   // Always fill the 2D histogram for aggregated data
@@ -342,14 +363,10 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
     fPhotonTime.push_back(time / ns); // Store in ns
     fPhotonWavelength.push_back(wavelength / nm); // Store in nm
     fPhotonProcess.push_back(std::string(process));
-    fPhotonCategory.push_back(category);
-    fPhotonSubCategoryID.push_back(subID);
 
-    // Store flattened genealogy
-    fPhotonGenealogySize.push_back(genealogy.size());
-    for (const auto& trackID : genealogy) {
-      fPhotonGenealogyData.push_back(trackID);
-    }
+    // Track this photon's genealogy (photon index is current size - 1)
+    G4int photonIndex = fPhotonPosX.size() - 1;
+    fGenealogyToPhotonIDs[genealogy].push_back(photonIndex);
   }
 }
 
@@ -490,10 +507,14 @@ void DataManager::ClearEventData()
   fPhotonTime.clear();
   fPhotonWavelength.clear();
   fPhotonProcess.clear();
-  fPhotonCategory.clear();
-  fPhotonSubCategoryID.clear();
-  fPhotonGenealogySize.clear();
-  fPhotonGenealogyData.clear();
+
+  // Clear label system
+  fNLabels = 0;
+  fLabel_GenealogySize.clear();
+  fLabel_GenealogyData.clear();
+  fLabel_PhotonIDsSize.clear();
+  fLabel_PhotonIDsData.clear();
+  fGenealogyToPhotonIDs.clear();
 
   // Clear energy deposit data
   fEdepPosX.clear();

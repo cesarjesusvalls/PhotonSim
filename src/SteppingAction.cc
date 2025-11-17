@@ -177,14 +177,6 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
         parentInfo = dataManager->GetTrackInfo(categoryParentID);
       }
 
-      // Get category and subID from the categorized parent
-      G4int category = kPrimary;
-      G4int subID = 0;
-      if (parentInfo && parentInfo->category >= 0) {
-        category = parentInfo->category;
-        subID = parentInfo->subID;
-      }
-
       // Build genealogy using the DataManager method
       std::vector<G4int> genealogy = dataManager->BuildGenealogy(categoryParentID);
 
@@ -197,11 +189,11 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
       G4double photonEnergy = track->GetKineticEnergy();
       G4double wavelength = (h_Planck * c_light) / photonEnergy;
 
-      // Record this optical photon with category information
+      // Record this optical photon with genealogy
       dataManager->AddOpticalPhoton(position.x(), position.y(), position.z(),
                                    direction.x(), direction.y(), direction.z(),
                                    time, wavelength, processName,
-                                   category, subID, genealogy);
+                                   genealogy);
     }
     return; // Don't process further for optical photons
   }

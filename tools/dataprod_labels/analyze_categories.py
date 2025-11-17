@@ -23,7 +23,7 @@ def get_pdg_name(pdg_code):
     return pdg_names.get(pdg_code, f"PDG_{pdg_code}")
 
 def analyze_root_file(filename):
-    """Analyze PhotonSim category classification output"""
+    """Analyze PhotonSim label-centric classification output"""
 
     f = ROOT.TFile(filename, "READ")
     tree = f.Get("OpticalPhotons")
@@ -48,28 +48,29 @@ def analyze_root_file(filename):
     for evt in range(tree.GetEntries()):
         tree.GetEntry(evt)
 
-        # Count categories
-        cat_counts = {0: 0, 1: 0, 2: 0, 3: 0}
-        for i in range(tree.NOpticalPhotons):
-            cat = tree.PhotonCategory[i]
-            cat_counts[cat] = cat_counts.get(cat, 0) + 1
-            total_by_category[cat] += 1
-
-        total_photons += tree.NOpticalPhotons
-
         print(f"Event {evt}:")
         print(f"  Primary Energy: {tree.PrimaryEnergy} MeV")
         print(f"  Total photons: {tree.NOpticalPhotons}")
+        total_photons += tree.NOpticalPhotons
 
-        # Photon breakdown by category
-        print(f"  Photon breakdown:")
-        for cat in sorted(cat_counts.keys()):
-            if cat_counts[cat] > 0:
-                pct = 100.0 * cat_counts[cat] / tree.NOpticalPhotons
-                print(f"    {category_names[cat]}: {cat_counts[cat]:6d} ({pct:5.1f}%)")
+        # Build track ID to track info mapping for easy lookup
+        track_info_map = {}
+        for i in range(len(tree.TrackInfo_TrackID)):
+            track_id = tree.TrackInfo_TrackID[i]
+            track_info_map[track_id] = {
+                'trackID': track_id,
+                'category': tree.TrackInfo_Category[i],
+                'subID': tree.TrackInfo_SubID[i],
+                'energy': tree.TrackInfo_Energy[i],
+                'parent': tree.TrackInfo_ParentTrackID[i],
+                'pos': (tree.TrackInfo_PosX[i], tree.TrackInfo_PosY[i], tree.TrackInfo_PosZ[i]),
+                'dir': (tree.TrackInfo_DirX[i], tree.TrackInfo_DirY[i], tree.TrackInfo_DirZ[i]),
+                'time': tree.TrackInfo_Time[i],
+                'pdg': tree.TrackInfo_PDG[i]
+            }
 
         # Track information
-        print(f"  Categorized tracks: {len(tree.TrackInfo_TrackID)}")
+        print(f"  Categorized tracks (with parents): {len(tree.TrackInfo_TrackID)}")
 
         # Group tracks by category
         track_by_cat = {}
@@ -90,22 +91,6 @@ def analyze_root_file(filename):
             }
             track_by_cat[cat].append(track_info)
 
-        # Build track ID to track info mapping for easy lookup
-        track_info_map = {}
-        for i in range(len(tree.TrackInfo_TrackID)):
-            track_id = tree.TrackInfo_TrackID[i]
-            track_info_map[track_id] = {
-                'trackID': track_id,
-                'category': tree.TrackInfo_Category[i],
-                'subID': tree.TrackInfo_SubID[i],
-                'energy': tree.TrackInfo_Energy[i],
-                'parent': tree.TrackInfo_ParentTrackID[i],
-                'pos': (tree.TrackInfo_PosX[i], tree.TrackInfo_PosY[i], tree.TrackInfo_PosZ[i]),
-                'dir': (tree.TrackInfo_DirX[i], tree.TrackInfo_DirY[i], tree.TrackInfo_DirZ[i]),
-                'time': tree.TrackInfo_Time[i],
-                'pdg': tree.TrackInfo_PDG[i]
-            }
-
         # Print track details
         for cat in sorted(track_by_cat.keys()):
             tracks = track_by_cat[cat]
@@ -117,42 +102,70 @@ def analyze_root_file(filename):
                 print(f"        Pos=({t['pos'][0]:.2f}, {t['pos'][1]:.2f}, {t['pos'][2]:.2f}) mm")
                 print(f"        Dir=({t['dir'][0]:.4f}, {t['dir'][1]:.4f}, {t['dir'][2]:.4f})")
 
-        # Collect and print all unique genealogies for this event
-        if tree.NOpticalPhotons > 0:
-            # Dictionary to track: genealogy_tuple -> (category, subID, count)
-            genealogy_info = {}
-            data_idx = 0
+        # Parse label-centric structure
+        print(f"  Number of labels: {tree.NLabels}")
 
-            for i in range(len(tree.PhotonGenealogySize)):
-                size = tree.PhotonGenealogySize[i]
-                gen = tuple([tree.PhotonGenealogyData[data_idx + j] for j in range(size)])
-                cat = tree.PhotonCategory[i]
-                subid = tree.PhotonSubCategoryID[i]
+        # Unflatten genealogy and photon ID data
+        gen_idx = 0
+        photon_idx = 0
 
-                # Track unique genealogies with their info
-                if gen not in genealogy_info:
-                    genealogy_info[gen] = {'category': cat, 'subID': subid, 'count': 0}
-                genealogy_info[gen]['count'] += 1
+        cat_counts = {0: 0, 1: 0, 2: 0, 3: 0}
 
-                data_idx += size
+        for label_i in range(tree.NLabels):
+            # Extract genealogy for this label
+            gen_size = tree.Label_GenealogySize[label_i]
+            genealogy = []
+            for j in range(gen_size):
+                genealogy.append(tree.Label_GenealogyData[gen_idx + j])
+            gen_idx += gen_size
 
-            # Print all unique genealogies
-            print(f"  Unique genealogies in this event: {len(genealogy_info)}")
-            for gen, info in sorted(genealogy_info.items(), key=lambda x: x[1]['count'], reverse=True):
-                gen_list = list(gen)
-                print(f"    Genealogy {gen_list}: Category={category_names.get(info['category'], info['category'])}, "
-                      f"SubID={info['subID']}, Photons={info['count']}")
+            # Extract photon IDs for this label
+            photon_ids_size = tree.Label_PhotonIDsSize[label_i]
+            photon_ids = []
+            for j in range(photon_ids_size):
+                photon_ids.append(tree.Label_PhotonIDsData[photon_idx + j])
+            photon_idx += photon_ids_size
 
-                # Print track info for each track in this genealogy
-                for track_id in gen_list:
-                    if track_id in track_info_map:
-                        t = track_info_map[track_id]
-                        pdg_name = get_pdg_name(t.get('pdg', 0))
-                        print(f"      -> Track {track_id}: PDG={t.get('pdg', 'N/A')} ({pdg_name}), "
-                              f"Category={category_names.get(t['category'], t['category'])}, "
-                              f"SubID={t['subID']}, E={t['energy']:.3f} MeV, Parent={t['parent']}")
-                    else:
-                        print(f"      -> Track {track_id}: [No track info available]")
+            # Derive category and subID from last track in genealogy
+            if len(genealogy) > 0:
+                last_track_id = genealogy[-1]
+                if last_track_id in track_info_map:
+                    category = track_info_map[last_track_id]['category']
+                    subID = track_info_map[last_track_id]['subID']
+                else:
+                    category = -1
+                    subID = -1
+            else:
+                category = -1
+                subID = -1
+
+            # Count photons by category
+            if category in cat_counts:
+                cat_counts[category] += len(photon_ids)
+
+            # Print label information
+            print(f"    Label {label_i}: Category={category_names.get(category, category)}, SubID={subID}")
+            print(f"      Genealogy: {genealogy}")
+            print(f"      Number of photons: {len(photon_ids)}")
+
+            # Print track info for each track in genealogy
+            for track_id in genealogy:
+                if track_id in track_info_map:
+                    t = track_info_map[track_id]
+                    pdg_name = get_pdg_name(t.get('pdg', 0))
+                    print(f"        -> Track {track_id}: PDG={t.get('pdg', 'N/A')} ({pdg_name}), "
+                          f"Category={category_names.get(t['category'], t['category'])}, "
+                          f"SubID={t['subID']}, E={t['energy']:.3f} MeV, Parent={t['parent']}")
+                else:
+                    print(f"        -> Track {track_id}: [No track info available]")
+
+        # Photon breakdown by category (derived from labels)
+        print(f"  Photon breakdown by category:")
+        for cat in sorted(cat_counts.keys()):
+            if cat_counts[cat] > 0:
+                pct = 100.0 * cat_counts[cat] / tree.NOpticalPhotons if tree.NOpticalPhotons > 0 else 0
+                print(f"    {category_names[cat]}: {cat_counts[cat]:6d} ({pct:5.1f}%)")
+                total_by_category[cat] += cat_counts[cat]
 
         print()
 
@@ -168,15 +181,22 @@ def analyze_root_file(filename):
             pct = 100.0 * count / total_photons if total_photons > 0 else 0
             print(f"  {category_names[cat]:20s}: {count:8d} ({pct:5.1f}%)")
 
-    # Check genealogy data integrity
+    # Data integrity check
     print(f"\nData integrity check:")
     tree.GetEntry(0)
-    total_gen_size = sum([tree.PhotonGenealogySize[i]
-                          for i in range(len(tree.PhotonGenealogySize))])
-    genealogy_ok = (total_gen_size == len(tree.PhotonGenealogyData))
+    total_gen_size = sum([tree.Label_GenealogySize[i]
+                          for i in range(len(tree.Label_GenealogySize))])
+    genealogy_ok = (total_gen_size == len(tree.Label_GenealogyData))
     print(f"  Genealogy structure: {'OK' if genealogy_ok else 'ERROR'}")
     print(f"  Expected genealogy entries: {total_gen_size}")
-    print(f"  Actual genealogy entries: {len(tree.PhotonGenealogyData)}")
+    print(f"  Actual genealogy entries: {len(tree.Label_GenealogyData)}")
+
+    total_photon_ids_size = sum([tree.Label_PhotonIDsSize[i]
+                                 for i in range(len(tree.Label_PhotonIDsSize))])
+    photon_ids_ok = (total_photon_ids_size == tree.NOpticalPhotons)
+    print(f"  Photon IDs structure: {'OK' if photon_ids_ok else 'ERROR'}")
+    print(f"  Sum of label photon counts: {total_photon_ids_size}")
+    print(f"  Total optical photons: {tree.NOpticalPhotons}")
 
     f.Close()
     print()
@@ -197,3 +217,5 @@ if __name__ == "__main__":
             analyze_root_file(filename)
         except Exception as e:
             print(f"Error analyzing {filename}: {e}\n")
+            import traceback
+            traceback.print_exc()
