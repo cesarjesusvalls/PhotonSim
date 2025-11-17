@@ -1,0 +1,20 @@
+# Test macro for category classification - charged pions that decay
+
+# Set output filename before initialization
+/output/filename test_pions.root
+
+/run/initialize
+
+# Enable individual photon storage to see category data
+/photon/storeIndividual true
+/edep/storeIndividual true
+
+# Set up primary particle - charged pion that will decay pi -> mu -> e
+/gun/particle pi+
+/gun/randomEnergy false
+/gun/energy 1000 MeV
+/gun/position 0 0 0 m
+/gun/direction 0 0 1
+
+# Run 5 events
+/run/beamOn 5

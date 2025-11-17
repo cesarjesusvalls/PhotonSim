@@ -31,6 +31,7 @@
 
 #include "G4String.hh"
 #include "G4Types.hh"
+#include "G4ThreeVector.hh"
 #include <vector>
 #include <memory>
 #include <string>
@@ -43,6 +44,29 @@ class TH1D;
 
 namespace PhotonSim
 {
+
+/// Category enumeration for photon classification
+enum PhotonCategory {
+  kPrimary = 0,
+  kDecayElectron = 1,
+  kSecondaryPion = 2,
+  kGammaShower = 3
+};
+
+/// Structure to hold track information for categorized particles
+struct TrackInfo {
+  G4int trackID;
+  G4int category;
+  G4int subID;
+  G4double posX, posY, posZ;
+  G4double dirX, dirY, dirZ;
+  G4double energy;
+  G4double time;
+  G4int parentTrackID;
+  G4String particleName;
+  G4int pdgCode;
+  G4ThreeVector preMomentumDir;  // For pion deflection detection
+};
 
 /// Singleton class to manage ROOT data output for optical photons
 
@@ -65,20 +89,30 @@ class DataManager
                          G4double dx, G4double dy, G4double dz,
                          G4double time, G4double wavelength,
                          const G4String& process,
-                         const G4String& parentParticle = "Unknown",
-                         G4int parentID = -1,
-                         G4int trackID = -1);
-    
+                         G4int category,
+                         G4int subID,
+                         const std::vector<G4int>& genealogy);
+
     void AddEnergyDeposit(G4double x, G4double y, G4double z,
                          G4double energy, G4double time,
                          const G4String& particleName,
                          G4int trackID = -1,
                          G4int parentID = -1);
-    
-    // Track registry for parent particle identification
-    void RegisterTrack(G4int trackID, const G4String& particleName, G4int parentID);
-    G4String GetParticleNameFromTrackID(G4int trackID);
+
+    // Enhanced track registry for category-based system
+    void RegisterTrack(G4int trackID, const G4String& particleName, G4int parentID,
+                      const G4ThreeVector& position, const G4ThreeVector& momentum,
+                      G4double energy, G4double time, G4int pdgCode);
+    void UpdateTrackCategory(G4int trackID, G4int category, G4int subID, G4int categoryParentTrackID);
+    void UpdatePionMomentum(G4int trackID, const G4ThreeVector& momentum);
+    TrackInfo* GetTrackInfo(G4int trackID);
+    std::vector<G4int> BuildGenealogy(G4int trackID);
     void ClearTrackRegistry();
+
+    // Get next SubID for a category
+    G4int GetNextDecayElectronID() { return fNDecayElectrons++; }
+    G4int GetNextSecondaryPionID() { return fNSecondaryPions++; }
+    G4int GetNextGammaShowerID() { return fNGammaShowers++; }
     
     // Control methods for individual data storage
     void SetStoreIndividualPhotons(bool store) { fStoreIndividualPhotons = store; }
@@ -119,9 +153,10 @@ class DataManager
     std::vector<G4double> fPhotonTime;
     std::vector<G4double> fPhotonWavelength;
     std::vector<std::string> fPhotonProcess;
-    std::vector<std::string> fPhotonParent;
-    std::vector<G4int> fPhotonParentID;
-    std::vector<G4int> fPhotonTrackID;
+    std::vector<G4int> fPhotonCategory;
+    std::vector<G4int> fPhotonSubCategoryID;
+    std::vector<G4int> fPhotonGenealogySize;  // Size of each genealogy
+    std::vector<G4int> fPhotonGenealogyData;  // Flattened genealogy track IDs
     
     // Energy deposit data (vectors for multiple deposits per event)
     std::vector<G4double> fEdepPosX;
@@ -134,10 +169,30 @@ class DataManager
     std::vector<G4int> fEdepParentID;
     
     bool fFinalized = false;  // Flag to prevent double finalization
-    
-    // Track registry to map track IDs to particle names
-    std::map<G4int, G4String> fTrackRegistry;
-    
+
+    // Enhanced track registry: map track IDs to full TrackInfo
+    std::map<G4int, TrackInfo> fTrackRegistry;
+
+    // Category counters for current event
+    G4int fNDecayElectrons = 0;
+    G4int fNSecondaryPions = 0;
+    G4int fNGammaShowers = 0;
+
+    // Event-level track information (parallel arrays for categorized tracks)
+    std::vector<G4int> fTrackInfo_TrackID;
+    std::vector<G4int> fTrackInfo_Category;
+    std::vector<G4int> fTrackInfo_SubID;
+    std::vector<G4double> fTrackInfo_PosX;
+    std::vector<G4double> fTrackInfo_PosY;
+    std::vector<G4double> fTrackInfo_PosZ;
+    std::vector<G4double> fTrackInfo_DirX;
+    std::vector<G4double> fTrackInfo_DirY;
+    std::vector<G4double> fTrackInfo_DirZ;
+    std::vector<G4double> fTrackInfo_Energy;
+    std::vector<G4double> fTrackInfo_Time;
+    std::vector<G4int> fTrackInfo_ParentTrackID;
+    std::vector<G4int> fTrackInfo_PDG;
+
     // Control flags for individual data storage
     bool fStoreIndividualPhotons = true;
     bool fStoreIndividualEdeps = true;

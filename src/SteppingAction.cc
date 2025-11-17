@@ -57,77 +57,151 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
   // Get the track and particle information
   G4Track* track = step->GetTrack();
   G4ParticleDefinition* particle = track->GetDefinition();
-  
+
   DataManager* dataManager = DataManager::GetInstance();
-  
-  // Register all new tracks (first step) for parent tracking
+
+  // Register all new tracks (first step) with full information
   if (track->GetCurrentStepNumber() == 1) {
     G4int trackID = track->GetTrackID();
     G4String particleName = particle->GetParticleName();
     G4int parentID = track->GetParentID();
-    dataManager->RegisterTrack(trackID, particleName, parentID);
-    
-    // Track electron creation processes specifically
-    if (trackID > 1 && particleName == "e-") {
-      const G4VProcess* creationProcess = track->GetCreatorProcess();
-      G4String processName = "Unknown";
-      if (creationProcess) {
-        processName = creationProcess->GetProcessName();
+    G4ThreeVector position = track->GetVertexPosition();
+    G4ThreeVector momentum = track->GetMomentum();
+    G4double energy = track->GetKineticEnergy();
+    G4double time = track->GetGlobalTime() - step->GetDeltaTime();
+    G4int pdgCode = particle->GetPDGEncoding();
+
+    dataManager->RegisterTrack(trackID, particleName, parentID, position, momentum, energy, time, pdgCode);
+
+    // Category classification logic
+    const G4VProcess* creationProcess = track->GetCreatorProcess();
+    G4String processName = creationProcess ? creationProcess->GetProcessName() : "Primary";
+
+    // 1. Primary particle
+    if (trackID == 1) {
+      dataManager->UpdateTrackCategory(trackID, kPrimary, 0, 0);
+    }
+
+    // 2. Decay electrons: electrons from Decay process
+    else if (particleName == "e-" || particleName == "e+") {
+      if (processName == "Decay") {
+        // Trace ancestry to find ultimate source (μ or π)
+        TrackInfo* parentInfo = dataManager->GetTrackInfo(parentID);
+        if (parentInfo) {
+          G4int ultimateParentTrackID = parentID;
+
+          // Walk up ancestry to find muon or pion
+          while (parentInfo && parentInfo->particleName != "mu-" && parentInfo->particleName != "mu+" &&
+                 parentInfo->particleName != "pi-" && parentInfo->particleName != "pi+") {
+            ultimateParentTrackID = parentInfo->parentTrackID;
+            if (ultimateParentTrackID == 0) break;
+            parentInfo = dataManager->GetTrackInfo(ultimateParentTrackID);
+          }
+
+          // Assign new decay electron SubID
+          G4int subID = dataManager->GetNextDecayElectronID();
+          dataManager->UpdateTrackCategory(trackID, kDecayElectron, subID, ultimateParentTrackID);
+        }
       }
-      
-      // Debug prints removed
+    }
+
+    // 3. Gamma showers: gammas from pi0 decay
+    else if (particleName == "gamma") {
+      if (processName == "Decay") {
+        TrackInfo* parentInfo = dataManager->GetTrackInfo(parentID);
+        if (parentInfo && parentInfo->particleName == "pi0") {
+          // Assign new gamma shower SubID
+          G4int subID = dataManager->GetNextGammaShowerID();
+          dataManager->UpdateTrackCategory(trackID, kGammaShower, subID, parentID);
+        }
+      }
     }
   }
-  
+
+  // 4. Secondary pion deflection detection: check for inelastic interactions
+  G4String particleName = particle->GetParticleName();
+  if (particleName == "pi+" || particleName == "pi-") {
+    const G4VProcess* process = step->GetPostStepPoint()->GetProcessDefinedStep();
+    if (process) {
+      G4String currentProcessName = process->GetProcessName();
+      // Check for inelastic processes
+      if (currentProcessName.contains("Inelastic") || currentProcessName.contains("inelastic")) {
+        G4int trackID = track->GetTrackID();
+        TrackInfo* info = dataManager->GetTrackInfo(trackID);
+        if (info) {
+          // Compare pre-step and post-step momentum directions
+          G4ThreeVector postMomentum = track->GetMomentumDirection();
+          G4double angle = std::acos(info->preMomentumDir.dot(postMomentum));
+
+          // If deflection > 20 degrees, create new secondary pion instance
+          if (angle > 20.0 * deg) {
+            // Find the category-relevant parent
+            G4int categoryParent = info->parentTrackID;
+            TrackInfo* parentInfo = dataManager->GetTrackInfo(categoryParent);
+            while (parentInfo && parentInfo->category < 0 && parentInfo->parentTrackID > 0) {
+              categoryParent = parentInfo->parentTrackID;
+              parentInfo = dataManager->GetTrackInfo(categoryParent);
+            }
+
+            G4int subID = dataManager->GetNextSecondaryPionID();
+            dataManager->UpdateTrackCategory(trackID, kSecondaryPion, subID, categoryParent);
+          }
+
+          // Update momentum for next check
+          dataManager->UpdatePionMomentum(trackID, track->GetMomentum());
+        }
+      }
+    }
+  }
+
   // Check if this is an optical photon on its first step (creation)
   if (particle == G4OpticalPhoton::OpticalPhotonDefinition()) {
     // Only record optical photons at their first step (when they're created)
     if (track->GetCurrentStepNumber() == 1) {
-      
+
       // Get the creation process from the track
       const G4VProcess* creationProcess = track->GetCreatorProcess();
       G4String processName = "Unknown";
       if (creationProcess) {
         processName = creationProcess->GetProcessName();
       }
-      
-      // Get the parent particle information using our track registry
-      G4String parentParticle = "Unknown";
+
+      // Find category-relevant parent by tracing back through ancestry
       G4int parentID = track->GetParentID();
-      
-      if (parentID == 0) {
-        // Primary particle (original muon)
-        parentParticle = "Primary";
-      } else {
-        // Look up the parent particle name from our registry
-        parentParticle = dataManager->GetParticleNameFromTrackID(parentID);
-        if (parentParticle == "Unknown") {
-          parentParticle = "Secondary_ID_" + std::to_string(parentID);
-        }
+      G4int categoryParentID = parentID;
+      TrackInfo* parentInfo = dataManager->GetTrackInfo(parentID);
+
+      // Trace back to find most recent categorized ancestor
+      while (parentInfo && parentInfo->category < 0 && parentInfo->parentTrackID > 0) {
+        categoryParentID = parentInfo->parentTrackID;
+        parentInfo = dataManager->GetTrackInfo(categoryParentID);
       }
-      
-      // Store ALL photons for investigation (no filtering)
+
+      // Get category and subID from the categorized parent
+      G4int category = kPrimary;
+      G4int subID = 0;
+      if (parentInfo && parentInfo->category >= 0) {
+        category = parentInfo->category;
+        subID = parentInfo->subID;
+      }
+
+      // Build genealogy using the DataManager method
+      std::vector<G4int> genealogy = dataManager->BuildGenealogy(categoryParentID);
 
       // Get position and direction at creation
-      // Use vertex position (where photon was actually created) instead of current position
       G4ThreeVector position = track->GetVertexPosition();
       G4ThreeVector direction = track->GetVertexMomentumDirection();
-      // Get creation time - for first step, we need to subtract the time spent in this step
       G4double time = track->GetGlobalTime() - step->GetDeltaTime();
 
       // Calculate wavelength from photon energy
-      // λ = h*c/E where h*c ≈ 1.23984198 eV·μm
       G4double photonEnergy = track->GetKineticEnergy();
-      G4double wavelength = (h_Planck * c_light) / photonEnergy;  // in Geant4 units
+      G4double wavelength = (h_Planck * c_light) / photonEnergy;
 
-      // Record this optical photon using DataManager
-      G4int trackID = track->GetTrackID();
+      // Record this optical photon with category information
       dataManager->AddOpticalPhoton(position.x(), position.y(), position.z(),
                                    direction.x(), direction.y(), direction.z(),
-                                   time, wavelength, processName, parentParticle,
-                                   parentID, trackID);
-      
-      // Debug prints removed
+                                   time, wavelength, processName,
+                                   category, subID, genealogy);
     }
     return; // Don't process further for optical photons
   }

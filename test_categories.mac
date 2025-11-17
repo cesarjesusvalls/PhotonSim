@@ -1,0 +1,20 @@
+# Test macro for category classification system - 5 muon events with decays enabled
+
+# Set output filename before initialization
+/output/filename test_categories.root
+
+/run/initialize
+
+# Enable individual photon storage to see category data
+/photon/storeIndividual true
+/edep/storeIndividual true
+
+# Set up primary particle - muon that can decay
+/gun/particle mu-
+/gun/randomEnergy false
+/gun/energy 500 MeV
+/gun/position 0 0 0 m
+/gun/direction 0 0 1
+
+# Run 5 events for quick test
+/run/beamOn 5

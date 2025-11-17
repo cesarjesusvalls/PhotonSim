@@ -35,6 +35,7 @@
 #include "G4SystemOfUnits.hh"
 #include "G4ios.hh"
 #include <cmath>
+#include <set>
 
 namespace PhotonSim
 {
@@ -94,9 +95,25 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("PhotonTime", &fPhotonTime);
   fTree->Branch("PhotonWavelength", &fPhotonWavelength);
   fTree->Branch("PhotonProcess", &fPhotonProcess);
-  fTree->Branch("PhotonParent", &fPhotonParent);
-  fTree->Branch("PhotonParentID", &fPhotonParentID);
-  fTree->Branch("PhotonTrackID", &fPhotonTrackID);
+  fTree->Branch("PhotonCategory", &fPhotonCategory);
+  fTree->Branch("PhotonSubCategoryID", &fPhotonSubCategoryID);
+  fTree->Branch("PhotonGenealogySize", &fPhotonGenealogySize);
+  fTree->Branch("PhotonGenealogyData", &fPhotonGenealogyData);
+
+  // Event-level track information branches
+  fTree->Branch("TrackInfo_TrackID", &fTrackInfo_TrackID);
+  fTree->Branch("TrackInfo_Category", &fTrackInfo_Category);
+  fTree->Branch("TrackInfo_SubID", &fTrackInfo_SubID);
+  fTree->Branch("TrackInfo_PosX", &fTrackInfo_PosX);
+  fTree->Branch("TrackInfo_PosY", &fTrackInfo_PosY);
+  fTree->Branch("TrackInfo_PosZ", &fTrackInfo_PosZ);
+  fTree->Branch("TrackInfo_DirX", &fTrackInfo_DirX);
+  fTree->Branch("TrackInfo_DirY", &fTrackInfo_DirY);
+  fTree->Branch("TrackInfo_DirZ", &fTrackInfo_DirZ);
+  fTree->Branch("TrackInfo_Energy", &fTrackInfo_Energy);
+  fTree->Branch("TrackInfo_Time", &fTrackInfo_Time);
+  fTree->Branch("TrackInfo_ParentTrackID", &fTrackInfo_ParentTrackID);
+  fTree->Branch("TrackInfo_PDG", &fTrackInfo_PDG);
   
   // Energy deposit data branches
   fTree->Branch("EdepPosX", &fEdepPosX);
@@ -238,6 +255,43 @@ void DataManager::EndEvent()
 {
   fNOpticalPhotons = fPhotonPosX.size();
   fNEnergyDeposits = fEdepEnergy.size();
+
+  // Collect track IDs to store: categorized tracks + their parents (no duplicates)
+  std::set<G4int> tracksToStore;
+
+  for (const auto& pair : fTrackRegistry) {
+    const TrackInfo& info = pair.second;
+    if (info.category >= 0) {
+      // Store categorized tracks
+      tracksToStore.insert(info.trackID);
+      // Also store their parents (if they exist in registry)
+      if (info.parentTrackID > 0) {
+        tracksToStore.insert(info.parentTrackID);
+      }
+    }
+  }
+
+  // Now store all unique tracks
+  for (G4int trackID : tracksToStore) {
+    auto it = fTrackRegistry.find(trackID);
+    if (it != fTrackRegistry.end()) {
+      const TrackInfo& info = it->second;
+      fTrackInfo_TrackID.push_back(info.trackID);
+      fTrackInfo_Category.push_back(info.category);  // May be -1 for non-categorized parents
+      fTrackInfo_SubID.push_back(info.subID);        // May be -1 for non-categorized parents
+      fTrackInfo_PosX.push_back(info.posX / mm);
+      fTrackInfo_PosY.push_back(info.posY / mm);
+      fTrackInfo_PosZ.push_back(info.posZ / mm);
+      fTrackInfo_DirX.push_back(info.dirX);
+      fTrackInfo_DirY.push_back(info.dirY);
+      fTrackInfo_DirZ.push_back(info.dirZ);
+      fTrackInfo_Energy.push_back(info.energy / MeV);
+      fTrackInfo_Time.push_back(info.time / ns);
+      fTrackInfo_ParentTrackID.push_back(info.parentTrackID);
+      fTrackInfo_PDG.push_back(info.pdgCode);
+    }
+  }
+
   if (fTree) {
     fTree->Fill();
   }
@@ -249,8 +303,9 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
                                   G4double dx, G4double dy, G4double dz,
                                   G4double time, G4double wavelength,
                                   const G4String& process,
-                                  const G4String& parentParticle,
-                                  G4int parentID, G4int trackID)
+                                  G4int category,
+                                  G4int subID,
+                                  const std::vector<G4int>& genealogy)
 {
   // Always fill the 2D histogram for aggregated data
   if (fPhotonHist_AngleDistance) {
@@ -275,7 +330,7 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
     G4double wavelength_nm = wavelength / nm;  // Convert to nm
     fPhotonHist_Wavelength->Fill(wavelength_nm);
   }
-  
+
   // Conditionally store individual photon data
   if (fStoreIndividualPhotons) {
     fPhotonPosX.push_back(x / mm);   // Store in mm
@@ -287,9 +342,14 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
     fPhotonTime.push_back(time / ns); // Store in ns
     fPhotonWavelength.push_back(wavelength / nm); // Store in nm
     fPhotonProcess.push_back(std::string(process));
-    fPhotonParent.push_back(std::string(parentParticle));
-    fPhotonParentID.push_back(parentID);
-    fPhotonTrackID.push_back(trackID);
+    fPhotonCategory.push_back(category);
+    fPhotonSubCategoryID.push_back(subID);
+
+    // Store flattened genealogy
+    fPhotonGenealogySize.push_back(genealogy.size());
+    for (const auto& trackID : genealogy) {
+      fPhotonGenealogyData.push_back(trackID);
+    }
   }
 }
 
@@ -326,20 +386,88 @@ void DataManager::AddEnergyDeposit(G4double x, G4double y, G4double z,
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-void DataManager::RegisterTrack(G4int trackID, const G4String& particleName, G4int parentID)
+void DataManager::RegisterTrack(G4int trackID, const G4String& particleName, G4int parentID,
+                               const G4ThreeVector& position, const G4ThreeVector& momentum,
+                               G4double energy, G4double time, G4int pdgCode)
 {
-  fTrackRegistry[trackID] = particleName;
+  TrackInfo info;
+  info.trackID = trackID;
+  info.category = -1;  // Not yet categorized
+  info.subID = -1;
+  info.posX = position.x();
+  info.posY = position.y();
+  info.posZ = position.z();
+  info.dirX = momentum.unit().x();
+  info.dirY = momentum.unit().y();
+  info.dirZ = momentum.unit().z();
+  info.energy = energy;
+  info.time = time;
+  info.parentTrackID = parentID;
+  info.particleName = particleName;
+  info.pdgCode = pdgCode;
+  info.preMomentumDir = momentum.unit();  // Store initial momentum
+
+  fTrackRegistry[trackID] = info;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-G4String DataManager::GetParticleNameFromTrackID(G4int trackID)
+void DataManager::UpdateTrackCategory(G4int trackID, G4int category, G4int subID, G4int categoryParentTrackID)
 {
   auto it = fTrackRegistry.find(trackID);
   if (it != fTrackRegistry.end()) {
-    return it->second;
+    it->second.category = category;
+    it->second.subID = subID;
+    it->second.parentTrackID = categoryParentTrackID;
   }
-  return "Unknown";
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void DataManager::UpdatePionMomentum(G4int trackID, const G4ThreeVector& momentum)
+{
+  auto it = fTrackRegistry.find(trackID);
+  if (it != fTrackRegistry.end()) {
+    it->second.preMomentumDir = momentum.unit();
+  }
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+TrackInfo* DataManager::GetTrackInfo(G4int trackID)
+{
+  auto it = fTrackRegistry.find(trackID);
+  if (it != fTrackRegistry.end()) {
+    return &(it->second);
+  }
+  return nullptr;
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+std::vector<G4int> DataManager::BuildGenealogy(G4int trackID)
+{
+  std::vector<G4int> genealogy;
+
+  TrackInfo* info = GetTrackInfo(trackID);
+  if (!info) return genealogy;
+
+  // Build ancestry chain by following parent track IDs
+  // Only include tracks that have been assigned a category
+  G4int currentTrackID = trackID;
+  while (currentTrackID > 0) {
+    TrackInfo* currentInfo = GetTrackInfo(currentTrackID);
+    if (!currentInfo) break;
+
+    // Only add to genealogy if this track has a category assigned
+    if (currentInfo->category >= 0) {
+      genealogy.insert(genealogy.begin(), currentTrackID);  // Insert at front to maintain order
+    }
+
+    currentTrackID = currentInfo->parentTrackID;
+  }
+
+  return genealogy;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -362,10 +490,11 @@ void DataManager::ClearEventData()
   fPhotonTime.clear();
   fPhotonWavelength.clear();
   fPhotonProcess.clear();
-  fPhotonParent.clear();
-  fPhotonParentID.clear();
-  fPhotonTrackID.clear();
-  
+  fPhotonCategory.clear();
+  fPhotonSubCategoryID.clear();
+  fPhotonGenealogySize.clear();
+  fPhotonGenealogyData.clear();
+
   // Clear energy deposit data
   fEdepPosX.clear();
   fEdepPosY.clear();
@@ -375,7 +504,27 @@ void DataManager::ClearEventData()
   fEdepParticle.clear();
   fEdepTrackID.clear();
   fEdepParentID.clear();
-  
+
+  // Clear track info arrays
+  fTrackInfo_TrackID.clear();
+  fTrackInfo_Category.clear();
+  fTrackInfo_SubID.clear();
+  fTrackInfo_PosX.clear();
+  fTrackInfo_PosY.clear();
+  fTrackInfo_PosZ.clear();
+  fTrackInfo_DirX.clear();
+  fTrackInfo_DirY.clear();
+  fTrackInfo_DirZ.clear();
+  fTrackInfo_Energy.clear();
+  fTrackInfo_Time.clear();
+  fTrackInfo_ParentTrackID.clear();
+  fTrackInfo_PDG.clear();
+
+  // Reset category counters
+  fNDecayElectrons = 0;
+  fNSecondaryPions = 0;
+  fNGammaShowers = 0;
+
   // Clear track registry for new event
   ClearTrackRegistry();
 }
