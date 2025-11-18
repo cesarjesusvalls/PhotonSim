@@ -86,9 +86,27 @@ void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event)
       fTrueEnergy = fParticleGun->GetParticleEnergy();
     }
 
-    // Always fire from center of detector along z-axis
+    // Always fire from center of detector
     fParticleGun->SetParticlePosition(G4ThreeVector(0., 0., 0.));
-    fParticleGun->SetParticleMomentumDirection(G4ThreeVector(0., 0., 1.));
+
+    // Generate random direction if requested (isotropic on sphere)
+    if (fRandomDirection) {
+      // Use Marsaglia method for uniform distribution on sphere
+      G4double cosTheta = 2.0 * G4UniformRand() - 1.0;  // cos(theta) in [-1, 1]
+      G4double sinTheta = std::sqrt(1.0 - cosTheta * cosTheta);
+      G4double phi = 2.0 * M_PI * G4UniformRand();  // phi in [0, 2π]
+
+      G4ThreeVector direction(
+        sinTheta * std::cos(phi),
+        sinTheta * std::sin(phi),
+        cosTheta
+      );
+
+      fParticleGun->SetParticleMomentumDirection(direction);
+    } else {
+      // Default: fire along z-axis
+      fParticleGun->SetParticleMomentumDirection(G4ThreeVector(0., 0., 1.));
+    }
 
     fParticleGun->GeneratePrimaryVertex(event);
   }

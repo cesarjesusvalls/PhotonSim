@@ -56,6 +56,7 @@ class PrimaryGeneratorAction;
 /// - /gun/randomEnergy [true/false]
 /// - /gun/energyMin [value] [unit]
 /// - /gun/energyMax [value] [unit]
+/// - /gun/randomDirection [true/false]
 /// - /gun/numberOfPrimaries [int]
 
 class PrimaryGeneratorMessenger: public G4UImessenger
@@ -77,6 +78,7 @@ class PrimaryGeneratorMessenger: public G4UImessenger
     G4UIcmdWithABool*              fRandomEnergyCmd = nullptr;
     G4UIcmdWithADoubleAndUnit*     fEnergyMinCmd = nullptr;
     G4UIcmdWithADoubleAndUnit*     fEnergyMaxCmd = nullptr;
+    G4UIcmdWithABool*              fRandomDirectionCmd = nullptr;
     G4UIcmdWithAnInteger*          fNumberOfPrimariesCmd = nullptr;
 };
 

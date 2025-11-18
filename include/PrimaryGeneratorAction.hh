@@ -63,6 +63,7 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     void SetRandomEnergy(G4bool useRandom) { fRandomEnergy = useRandom; }
     void SetParticlePosition(const G4ThreeVector& position);
     void SetParticleDirection(const G4ThreeVector& direction);
+    void SetRandomDirection(G4bool useRandom) { fRandomDirection = useRandom; }
     void SetNumberOfPrimaries(G4int n) { fNumberOfPrimaries = n; }
 
     // method to access particle gun
@@ -71,6 +72,7 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     G4double GetMinEnergy() const { return fMinEnergy; }
     G4double GetMaxEnergy() const { return fMaxEnergy; }
     G4bool GetRandomEnergy() const { return fRandomEnergy; }
+    G4bool GetRandomDirection() const { return fRandomDirection; }
     G4int GetNumberOfPrimaries() const { return fNumberOfPrimaries; }
 
   private:
@@ -81,6 +83,7 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     G4double fMinEnergy = 100.0*MeV;
     G4double fMaxEnergy = 500.0*MeV;
     G4bool fRandomEnergy = false;
+    G4bool fRandomDirection = false;
     G4double fTrueEnergy = 0.0; // Store the actual energy used for this event
     G4int fNumberOfPrimaries = 1; // Number of primary particles per event
 };

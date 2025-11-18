@@ -98,6 +98,13 @@ PrimaryGeneratorMessenger::PrimaryGeneratorMessenger(PrimaryGeneratorAction* pri
   fEnergyMaxCmd->SetUnitCandidates("eV keV MeV GeV TeV");
   fEnergyMaxCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
 
+  fRandomDirectionCmd = new G4UIcmdWithABool("/gun/randomDirection", this);
+  fRandomDirectionCmd->SetGuidance("Enable/disable random direction generation");
+  fRandomDirectionCmd->SetGuidance("If true, each primary is fired in a random direction (isotropic on sphere)");
+  fRandomDirectionCmd->SetGuidance("If false, uses the fixed direction set by /gun/direction (default: 0 0 1)");
+  fRandomDirectionCmd->SetParameterName("useRandom", false);
+  fRandomDirectionCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
   fNumberOfPrimariesCmd = new G4UIcmdWithAnInteger("/gun/numberOfPrimaries", this);
   fNumberOfPrimariesCmd->SetGuidance("Set number of primary particles per event");
   fNumberOfPrimariesCmd->SetParameterName("n", false);
@@ -116,6 +123,7 @@ PrimaryGeneratorMessenger::~PrimaryGeneratorMessenger()
   delete fRandomEnergyCmd;
   delete fEnergyMinCmd;
   delete fEnergyMaxCmd;
+  delete fRandomDirectionCmd;
   delete fNumberOfPrimariesCmd;
   delete fGunDir;
 }
@@ -148,6 +156,9 @@ void PrimaryGeneratorMessenger::SetNewValue(G4UIcommand* command, G4String newVa
     G4double currentMin = fPrimaryGeneratorAction->GetMinEnergy();
     G4double newMax = fEnergyMaxCmd->GetNewDoubleValue(newValue);
     fPrimaryGeneratorAction->SetEnergyRange(currentMin, newMax);
+  }
+  else if (command == fRandomDirectionCmd) {
+    fPrimaryGeneratorAction->SetRandomDirection(fRandomDirectionCmd->GetNewBoolValue(newValue));
   }
   else if (command == fNumberOfPrimariesCmd) {
     fPrimaryGeneratorAction->SetNumberOfPrimaries(fNumberOfPrimariesCmd->GetNewIntValue(newValue));
