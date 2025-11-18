@@ -83,25 +83,23 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
       dataManager->UpdateTrackCategory(trackID, kPrimary, subID, 0);
     }
 
-    // 2. Decay electrons: electrons from Decay process
+    // 2. Decay electrons: electrons from Decay or muMinusCaptureAtRest process
     else if (particleName == "e-" || particleName == "e+") {
-      if (processName == "Decay") {
-        // Trace ancestry to find ultimate source (μ or π)
+      // Accept electrons from both free decay and bound muon decay
+      // - "Decay": free muon/pion decay
+      // - "muMinusCaptureAtRest": bound muon decay (~80-90% branch) or nuclear capture (10-20% - no electron)
+      if (processName == "Decay" || processName == "muMinusCaptureAtRest") {
+        // Check DIRECT parent is muon or pion
         TrackInfo* parentInfo = dataManager->GetTrackInfo(parentID);
-        if (parentInfo) {
-          G4int ultimateParentTrackID = parentID;
-
-          // Walk up ancestry to find muon or pion
-          while (parentInfo && parentInfo->particleName != "mu-" && parentInfo->particleName != "mu+" &&
-                 parentInfo->particleName != "pi-" && parentInfo->particleName != "pi+") {
-            ultimateParentTrackID = parentInfo->parentTrackID;
-            if (ultimateParentTrackID == 0) break;
-            parentInfo = dataManager->GetTrackInfo(ultimateParentTrackID);
+        if (parentInfo && (parentInfo->particleName == "mu-" || parentInfo->particleName == "mu+" ||
+                           parentInfo->particleName == "pi-" || parentInfo->particleName == "pi+")) {
+          // Apply energy threshold to exclude Auger electrons from muonic atom de-excitation
+          // and other low-energy secondaries (typically eV-keV range)
+          if (energy > 1.0 * MeV) {
+            // Assign new decay electron SubID using DIRECT parent
+            G4int subID = dataManager->GetNextDecayElectronID();
+            dataManager->UpdateTrackCategory(trackID, kDecayElectron, subID, parentID);
           }
-
-          // Assign new decay electron SubID
-          G4int subID = dataManager->GetNextDecayElectronID();
-          dataManager->UpdateTrackCategory(trackID, kDecayElectron, subID, ultimateParentTrackID);
         }
       }
     }
