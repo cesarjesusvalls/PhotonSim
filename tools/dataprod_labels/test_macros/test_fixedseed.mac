@@ -1,0 +1,23 @@
+# Test macro with fixed random seeds
+# This demonstrates using /random/setSeed to override automatic seeding
+
+# Set fixed random seeds for reproducibility
+/random/setSeed 123456789 987654321
+
+# Set output filename
+/output/filename test_fixedseed.root
+
+/run/initialize
+
+# Enable individual photon storage
+/photon/storeIndividual true
+/edep/storeIndividual false
+
+# Set up primary particle
+/gun/particle mu-
+/gun/energy 1000 MeV
+/gun/position 0 0 0 m
+/gun/randomDirection true
+
+# Run events
+/run/beamOn 5

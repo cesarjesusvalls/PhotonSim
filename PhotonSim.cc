@@ -32,6 +32,7 @@
 #include "PhysicsList.hh"
 #include "DataManager.hh"
 #include "DataManagerMessenger.hh"
+#include "RandomSeedMessenger.hh"
 
 #include "G4RunManagerFactory.hh"
 #include "G4SteppingVerbose.hh"
@@ -63,18 +64,17 @@ int main(int argc, char** argv)
   G4int precision = 4;
   G4SteppingVerbose::UseBestUnit(precision);
 
-  // TEMPORARY: Fixed random seeds for debugging - TODO: UNDO THIS LATER
-  // Set automatic random seeds based on current time
-  // auto now = std::chrono::high_resolution_clock::now();
-  // auto duration = now.time_since_epoch();
-  // auto seed1 = std::chrono::duration_cast<std::chrono::microseconds>(duration).count() % 900000000;
-  // auto seed2 = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count() % 900000000;
+  // Create random seed messenger early (before macro execution)
+  auto randomSeedMessenger = new RandomSeedMessenger();
 
-  long seed1 = 123456789;
-  long seed2 = 987654321;
+  // Set automatic random seeds based on current time (will be used unless macro overrides)
+  auto now = std::chrono::high_resolution_clock::now();
+  auto duration = now.time_since_epoch();
+  long seed1 = std::chrono::duration_cast<std::chrono::microseconds>(duration).count() % 900000000;
+  long seed2 = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count() % 900000000;
 
-  G4cout << "=== FIXED RANDOM SEEDS FOR DEBUGGING ===" << G4endl;
-  G4cout << "Setting random seeds: " << seed1 << " " << seed2 << G4endl;
+  G4cout << "Setting automatic random seeds: " << seed1 << " " << seed2 << G4endl;
+  G4cout << "(These can be overridden in macro with /random/setSeed command)" << G4endl;
   CLHEP::HepRandom::setTheSeeds(new long[2]{seed1, seed2});
 
   // Construct the run manager (single-threaded for stable ROOT output)
@@ -117,8 +117,9 @@ int main(int argc, char** argv)
   // Finalize data output before deleting managers
   DataManager* dataManager = DataManager::GetInstance();
   dataManager->Finalize();
-  
+
   // Clean up managers first
+  delete randomSeedMessenger;
   delete dataManagerMessenger;
   delete visManager;
   delete runManager;
