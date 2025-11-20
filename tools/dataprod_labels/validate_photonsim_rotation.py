@@ -410,7 +410,7 @@ for event_data in events_to_plot:
         scale = 20
         cylinder_radius = 1.5  # Cylinder radius in cm
 
-        # Cylinder for "before" plot
+        # Cylinder for "before" plot - HIDDEN BY DEFAULT
         cylinder_end_before = track_pos_before + track_dir_before * scale
         cyl_x_b, cyl_y_b, cyl_z_b, cyl_i_b, cyl_j_b, cyl_k_b = create_cylinder(
             track_pos_before, cylinder_end_before, cylinder_radius
@@ -426,13 +426,37 @@ for event_data in events_to_plot:
                 color=color,
                 opacity=1.0,
                 showlegend=False,
+                visible=False,  # Hidden by default
                 lighting=dict(ambient=0.8, diffuse=0.8, specular=0.2),
                 flatshading=False
             ),
             row=1, col=1
         )
 
-        # Cylinder for "after" plot
+        # Cone arrowhead for "before" plot - HIDDEN BY DEFAULT
+        tip_x_b = track_pos_before[0] + track_dir_before[0]*scale
+        tip_y_b = track_pos_before[1] + track_dir_before[1]*scale
+        tip_z_b = track_pos_before[2] + track_dir_before[2]*scale
+
+        fig.add_trace(
+            go.Cone(
+                x=[tip_x_b],
+                y=[tip_y_b],
+                z=[tip_z_b],
+                u=[track_dir_before[0]],
+                v=[track_dir_before[1]],
+                w=[track_dir_before[2]],
+                colorscale=[[0, color], [1, color]],
+                sizemode="absolute",
+                sizeref=20,
+                showscale=False,
+                showlegend=False,
+                visible=False  # Hidden by default
+            ),
+            row=1, col=1
+        )
+
+        # Cylinder for "after" plot - HIDDEN BY DEFAULT
         cylinder_end_after = track_pos_after + track_dir_after * scale
         cyl_x_a, cyl_y_a, cyl_z_a, cyl_i_a, cyl_j_a, cyl_k_a = create_cylinder(
             track_pos_after, cylinder_end_after, cylinder_radius
@@ -448,13 +472,57 @@ for event_data in events_to_plot:
                 color=color,
                 opacity=1.0,
                 showlegend=False,
+                visible=False,  # Hidden by default
                 lighting=dict(ambient=0.8, diffuse=0.8, specular=0.2),
                 flatshading=False
             ),
             row=1, col=2
         )
 
-    # Update layout
+        # Cone arrowhead for "after" plot - HIDDEN BY DEFAULT
+        tip_x_a = track_pos_after[0] + track_dir_after[0]*scale
+        tip_y_a = track_pos_after[1] + track_dir_after[1]*scale
+        tip_z_a = track_pos_after[2] + track_dir_after[2]*scale
+
+        fig.add_trace(
+            go.Cone(
+                x=[tip_x_a],
+                y=[tip_y_a],
+                z=[tip_z_a],
+                u=[track_dir_after[0]],
+                v=[track_dir_after[1]],
+                w=[track_dir_after[2]],
+                colorscale=[[0, color], [1, color]],
+                sizemode="absolute",
+                sizeref=20,
+                showscale=False,
+                showlegend=False,
+                visible=False  # Hidden by default
+            ),
+            row=1, col=2
+        )
+
+    # Create visibility arrays for toggle button
+    # Each label has 6 traces: photons_before, photons_after, cylinder_before, cone_before, cylinder_after, cone_after
+    n_traces = len(fig.data)
+
+    # Show arrows: keep photons visible, show arrows
+    show_arrows = []
+    for i in range(n_traces):
+        if i % 6 in [0, 1]:  # Photon traces (before and after)
+            show_arrows.append(True)
+        else:  # Arrow traces (cylinders and cones)
+            show_arrows.append(True)
+
+    # Hide arrows: keep photons visible, hide arrows
+    hide_arrows = []
+    for i in range(n_traces):
+        if i % 6 in [0, 1]:  # Photon traces (before and after)
+            hide_arrows.append(True)
+        else:  # Arrow traces (cylinders and cones)
+            hide_arrows.append(False)
+
+    # Update layout with toggle button
     fig.update_layout(
         title=f'Event {event_idx}: Rotation Validation',
         height=700,
@@ -463,7 +531,31 @@ for event_data in events_to_plot:
             itemsizing='constant',
             itemwidth=50,
             font=dict(size=10)
-        )
+        ),
+        updatemenus=[
+            dict(
+                type="buttons",
+                direction="left",
+                buttons=[
+                    dict(
+                        args=[{"visible": show_arrows}],
+                        label="Show Arrows",
+                        method="update"
+                    ),
+                    dict(
+                        args=[{"visible": hide_arrows}],
+                        label="Hide Arrows",
+                        method="update"
+                    )
+                ],
+                pad={"r": 10, "t": 10},
+                showactive=True,
+                x=0.0,
+                xanchor="left",
+                y=1.08,
+                yanchor="top"
+            ),
+        ]
     )
 
     # Update scene axes
