@@ -213,39 +213,48 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
                                       parentInfo->category >= 0);
 
       if (isFromInelastic || isFromDeflection || isFromCategorizedPion) {
-        // Find the category-relevant parent
-        G4int categoryParent = parentID;
-        while (parentInfo && parentInfo->category < 0 && parentInfo->parentTrackID > 0) {
-          categoryParent = parentInfo->parentTrackID;
-          parentInfo = dataManager->GetTrackInfo(categoryParent);
-        }
+        // TEMPORARY: Threshold set to 0 for debugging (TODO: restore to 250 MeV/c)
+        // Skip classification for low-momentum secondary pions (<250 MeV/c)
+        // They don't produce Cherenkov photons, so their photons should use parent's genealogy
+        G4double pionMomentum = track->GetMomentum().mag();
+        if (pionMomentum >= 160 * MeV) {  // TEMPORARY: was 250 * MeV
+          // Only classify pions above Cherenkov threshold
 
-        G4int subID = dataManager->GetNextSecondaryPionID();
-        dataManager->UpdateTrackCategory(trackID, kSecondaryPion, subID, categoryParent);
-
-        if (debugPions) {
-          G4cout << "  >>> CLASSIFIED as SECONDARY PION (subID=" << subID << ")" << G4endl;
-          G4cout << "      Creation process: " << processName << G4endl;
-          if (isFromCategorizedPion) {
-            G4cout << "      Reason: Parent is categorized pion (deflection-created)" << G4endl;
+          // Find the category-relevant parent
+          G4int categoryParent = parentID;
+          while (parentInfo && parentInfo->category < 0 && parentInfo->parentTrackID > 0) {
+            categoryParent = parentInfo->parentTrackID;
+            parentInfo = dataManager->GetTrackInfo(categoryParent);
           }
-          G4cout << "      Category parent: " << categoryParent << G4endl;
+
+          G4int subID = dataManager->GetNextSecondaryPionID();
+          dataManager->UpdateTrackCategory(trackID, kSecondaryPion, subID, categoryParent);
+
+          if (debugPions) {
+            G4cout << "  >>> CLASSIFIED as SECONDARY PION (subID=" << subID << ")" << G4endl;
+            G4cout << "      Creation process: " << processName << G4endl;
+            if (isFromCategorizedPion) {
+              G4cout << "      Reason: Parent is categorized pion (deflection-created)" << G4endl;
+            }
+            G4cout << "      Category parent: " << categoryParent << G4endl;
+          }
+
+          // DISABLED: Check if parent needs photon relabeling (deflection case)
+          // parentInfo = dataManager->GetTrackInfo(parentID);
+          // if (parentInfo && parentInfo->needsPhotonRelabeling) {
+          //   // Relabel photons from the parent that were created during/after deflection
+          //   dataManager->RelabelPhotonsForDeflection(trackID, parentID, parentInfo->relabelingTime);
+
+          //   if (debugPions) {
+          //     G4cout << "      >>> PHOTON RELABELING: Reassigning photons from parent " << parentID
+          //                << " created after time " << parentInfo->relabelingTime/ns << " ns" << G4endl;
+          //   }
+
+          //   // Clear the flag to prevent duplicate relabeling
+          //   parentInfo->needsPhotonRelabeling = false;
+          // }
         }
-
-        // DISABLED: Check if parent needs photon relabeling (deflection case)
-        // parentInfo = dataManager->GetTrackInfo(parentID);
-        // if (parentInfo && parentInfo->needsPhotonRelabeling) {
-        //   // Relabel photons from the parent that were created during/after deflection
-        //   dataManager->RelabelPhotonsForDeflection(trackID, parentID, parentInfo->relabelingTime);
-
-        //   if (debugPions) {
-        //     G4cout << "      >>> PHOTON RELABELING: Reassigning photons from parent " << parentID
-        //                << " created after time " << parentInfo->relabelingTime/ns << " ns" << G4endl;
-        //   }
-
-        //   // Clear the flag to prevent duplicate relabeling
-        //   parentInfo->needsPhotonRelabeling = false;
-        // }
+        // else: pion below Cherenkov threshold - skip classification
       } else if (debugPions) {
         G4cout << "  >>> NOT classified as secondary (process: " << processName << ")" << G4endl;
       }
@@ -263,47 +272,20 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
     TrackInfo* info = dataManager->GetTrackInfo(trackID);
 
     if (info) {
-      // Only check deflections for tracks that are actively continuing (fAlive)
-      // Tracks being killed or stopped are handled at creation, not deflection
-      G4TrackStatus status = track->GetTrackStatus();
-      if (status != fAlive) {
-        return; // Skip deflection detection for tracks not actively continuing
-      }
-
       const G4VProcess* process = step->GetPostStepPoint()->GetProcessDefinedStep();
       if (process) {
         G4String currentProcessName = process->GetProcessName();
 
-        // Calculate deflection angle for ALL processes (for debugging)
+        // Calculate angle change and track status
         G4ThreeVector postMomentum = track->GetMomentumDirection();
         G4double angle = std::acos(info->preMomentumDir.dot(postMomentum));
         G4double angleDeg = angle / deg;
+        G4TrackStatus status = track->GetTrackStatus();
 
-        // DEBUG: Print ALL deflections > 5 degrees to see what processes we're missing
-        if (debugPions && angleDeg > 5.0) {
-          G4cout << "\n=== PION DEFLECTION >5° DETECTED ===" << G4endl;
-          G4cout << "  TrackID: " << trackID << G4endl;
-          G4cout << "  Particle: " << particleName << " (PDG: " << info->pdgCode << ")" << G4endl;
-          G4cout << "  ParentID: " << info->parentTrackID << G4endl;
-
-          // Get parent information
-          TrackInfo* parentInfo = dataManager->GetTrackInfo(info->parentTrackID);
-          if (parentInfo) {
-            G4cout << "  Parent particle: " << parentInfo->particleName
-                   << " (PDG: " << parentInfo->pdgCode << ")" << G4endl;
-            G4cout << "  Parent category: " << parentInfo->category << G4endl;
-          }
-
-          G4cout << "  Process: " << currentProcessName << G4endl;
-          G4cout << "  Deflection angle: " << angleDeg << " degrees" << G4endl;
-          G4cout << "  Category: " << info->category << G4endl;
-          G4cout << "  Track status: " << track->GetTrackStatus() << G4endl;
-          G4cout << "  Energy: " << track->GetKineticEnergy()/MeV << " MeV" << G4endl;
-          if (currentProcessName == "hadElastic" || currentProcessName == "hIoni") {
-            G4cout << "  >> This process WILL be handled" << G4endl;
-          } else {
-            G4cout << "  >> This process will NOT be handled" << G4endl;
-          }
+        // Only skip deflection handling for tracks being killed
+        // Suspended tracks (fSuspend) should still be handled - they're temporarily paused
+        if (status == fStopAndKill) {
+          return; // Skip deflection handling for killed tracks
         }
 
         // Check for processes that cause significant deflections: hadElastic, hIoni
@@ -311,7 +293,6 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
         if (currentProcessName == "hadElastic" || currentProcessName == "hIoni") {
 
           // If deflection > 5 degrees, kill and replace the track
-          // (We already verified track is fAlive in the early check)
           if (angle > 5.0 * deg) {
             if (debugPions) {
               G4cout << "\n--- PION DEFLECTION PROCESS (>5° - Handling) ---" << G4endl;
@@ -332,6 +313,9 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
             G4double postStepEnergy = track->GetKineticEnergy();
             G4int oldTrackID = track->GetTrackID();
 
+            // Save original track status to apply to new track
+            G4TrackStatus originalStatus = status;
+
             // Kill current track
             track->SetTrackStatus(fStopAndKill);
 
@@ -349,6 +333,10 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
               kinkPosition
             );
             secondary->SetParentID(oldTrackID);
+
+            // Set new track to have the same status as the original track
+            // (fAlive stays fAlive, fSuspend stays fSuspend)
+            secondary->SetTrackStatus(originalStatus);
 
             // Set custom creator process name to identify deflection-created pions
             G4String deflectionProcessName = "Deflection_" + currentProcessName;

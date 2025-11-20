@@ -63,13 +63,17 @@ int main(int argc, char** argv)
   G4int precision = 4;
   G4SteppingVerbose::UseBestUnit(precision);
 
+  // TEMPORARY: Fixed random seeds for debugging - TODO: UNDO THIS LATER
   // Set automatic random seeds based on current time
-  auto now = std::chrono::high_resolution_clock::now();
-  auto duration = now.time_since_epoch();
-  auto seed1 = std::chrono::duration_cast<std::chrono::microseconds>(duration).count() % 900000000;
-  auto seed2 = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count() % 900000000;
-  
-  G4cout << "=== AUTOMATIC RANDOM SEED GENERATION ===" << G4endl;
+  // auto now = std::chrono::high_resolution_clock::now();
+  // auto duration = now.time_since_epoch();
+  // auto seed1 = std::chrono::duration_cast<std::chrono::microseconds>(duration).count() % 900000000;
+  // auto seed2 = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count() % 900000000;
+
+  long seed1 = 123456789;
+  long seed2 = 987654321;
+
+  G4cout << "=== FIXED RANDOM SEEDS FOR DEBUGGING ===" << G4endl;
   G4cout << "Setting random seeds: " << seed1 << " " << seed2 << G4endl;
   CLHEP::HepRandom::setTheSeeds(new long[2]{seed1, seed2});
 
