@@ -34,6 +34,7 @@
 #include "G4String.hh"
 #include "G4SystemOfUnits.hh"
 #include "G4ThreeVector.hh"
+#include <vector>
 
 class G4ParticleGun;
 class G4Event;
@@ -42,6 +43,12 @@ namespace PhotonSim
 {
 
 class PrimaryGeneratorMessenger;
+
+/// Specification for an individual primary particle
+struct PrimaryParticleSpec {
+  G4String particleName;
+  G4double energy;
+};
 
 /// The primary generator action class with configurable particle gun.
 /// Generates particles at the center of the detector (0,0,0) with 
@@ -66,6 +73,10 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     void SetRandomDirection(G4bool useRandom) { fRandomDirection = useRandom; }
     void SetNumberOfPrimaries(G4int n) { fNumberOfPrimaries = n; }
 
+    // methods for heterogeneous primary particle list
+    void AddPrimary(const G4String& particleName, G4double energy);
+    void ClearPrimaries() { fPrimaryList.clear(); }
+
     // method to access particle gun
     const G4ParticleGun* GetParticleGun() const { return fParticleGun; }
     G4double GetTrueEnergy() const { return fTrueEnergy; }
@@ -86,6 +97,9 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     G4bool fRandomDirection = false;
     G4double fTrueEnergy = 0.0; // Store the actual energy used for this event
     G4int fNumberOfPrimaries = 1; // Number of primary particles per event
+
+    // List of heterogeneous primary particles
+    std::vector<PrimaryParticleSpec> fPrimaryList;
 };
 
 }  // namespace PhotonSim

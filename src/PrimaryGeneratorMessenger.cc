@@ -37,7 +37,11 @@
 #include "G4UIcmdWith3Vector.hh"
 #include "G4UIcmdWithABool.hh"
 #include "G4UIcmdWithAnInteger.hh"
+#include "G4UIcmdWithoutParameter.hh"
+#include "G4UIcommand.hh"
+#include "G4UIparameter.hh"
 #include "G4SystemOfUnits.hh"
+#include <sstream>
 
 namespace PhotonSim
 {
@@ -110,6 +114,32 @@ PrimaryGeneratorMessenger::PrimaryGeneratorMessenger(PrimaryGeneratorAction* pri
   fNumberOfPrimariesCmd->SetParameterName("n", false);
   fNumberOfPrimariesCmd->SetRange("n>=1");
   fNumberOfPrimariesCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
+  // Command to add a primary particle to the heterogeneous list
+  fAddPrimaryCmd = new G4UIcommand("/gun/addPrimary", this);
+  fAddPrimaryCmd->SetGuidance("Add a primary particle to the heterogeneous list");
+  fAddPrimaryCmd->SetGuidance("Usage: /gun/addPrimary [particleName] [energy] [unit]");
+  fAddPrimaryCmd->SetGuidance("Example: /gun/addPrimary mu- 1000 MeV");
+
+  G4UIparameter* particleParam = new G4UIparameter("particleName", 's', false);
+  particleParam->SetGuidance("Particle name (e.g., mu-, pi+, e-, proton)");
+  fAddPrimaryCmd->SetParameter(particleParam);
+
+  G4UIparameter* energyParam = new G4UIparameter("energy", 'd', false);
+  energyParam->SetGuidance("Energy value");
+  fAddPrimaryCmd->SetParameter(energyParam);
+
+  G4UIparameter* unitParam = new G4UIparameter("unit", 's', false);
+  unitParam->SetGuidance("Energy unit (eV, keV, MeV, GeV, TeV)");
+  unitParam->SetDefaultValue("MeV");
+  fAddPrimaryCmd->SetParameter(unitParam);
+
+  fAddPrimaryCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
+  // Command to clear the heterogeneous primary list
+  fClearPrimariesCmd = new G4UIcmdWithoutParameter("/gun/clearPrimaries", this);
+  fClearPrimariesCmd->SetGuidance("Clear the heterogeneous primary particle list");
+  fClearPrimariesCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -125,6 +155,8 @@ PrimaryGeneratorMessenger::~PrimaryGeneratorMessenger()
   delete fEnergyMaxCmd;
   delete fRandomDirectionCmd;
   delete fNumberOfPrimariesCmd;
+  delete fAddPrimaryCmd;
+  delete fClearPrimariesCmd;
   delete fGunDir;
 }
 
@@ -162,6 +194,28 @@ void PrimaryGeneratorMessenger::SetNewValue(G4UIcommand* command, G4String newVa
   }
   else if (command == fNumberOfPrimariesCmd) {
     fPrimaryGeneratorAction->SetNumberOfPrimaries(fNumberOfPrimariesCmd->GetNewIntValue(newValue));
+  }
+  else if (command == fAddPrimaryCmd) {
+    // Parse the command parameters: particleName energy unit
+    std::istringstream iss(newValue);
+    G4String particleName;
+    G4double energy;
+    G4String unit;
+
+    iss >> particleName >> energy >> unit;
+
+    // Convert energy to internal units
+    G4double energyValue = energy;
+    if (unit == "eV") energyValue *= eV;
+    else if (unit == "keV") energyValue *= keV;
+    else if (unit == "MeV") energyValue *= MeV;
+    else if (unit == "GeV") energyValue *= GeV;
+    else if (unit == "TeV") energyValue *= TeV;
+
+    fPrimaryGeneratorAction->AddPrimary(particleName, energyValue);
+  }
+  else if (command == fClearPrimariesCmd) {
+    fPrimaryGeneratorAction->ClearPrimaries();
   }
 }
 

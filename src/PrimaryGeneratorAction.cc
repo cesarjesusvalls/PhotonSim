@@ -76,39 +76,70 @@ PrimaryGeneratorAction::~PrimaryGeneratorAction()
 
 void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event)
 {
-  // Generate multiple primary particles
-  for (G4int i = 0; i < fNumberOfPrimaries; i++) {
-    // Generate random energy if requested
-    if (fRandomEnergy) {
-      fTrueEnergy = fMinEnergy + (fMaxEnergy - fMinEnergy) * G4UniformRand();
-      fParticleGun->SetParticleEnergy(fTrueEnergy);
-    } else {
-      fTrueEnergy = fParticleGun->GetParticleEnergy();
-    }
-
-    // Always fire from center of detector
-    fParticleGun->SetParticlePosition(G4ThreeVector(0., 0., 0.));
-
-    // Generate random direction if requested (isotropic on sphere)
+  // Helper lambda to generate random direction
+  auto generateRandomDirection = [this]() -> G4ThreeVector {
     if (fRandomDirection) {
       // Use Marsaglia method for uniform distribution on sphere
       G4double cosTheta = 2.0 * G4UniformRand() - 1.0;  // cos(theta) in [-1, 1]
       G4double sinTheta = std::sqrt(1.0 - cosTheta * cosTheta);
       G4double phi = 2.0 * M_PI * G4UniformRand();  // phi in [0, 2π]
 
-      G4ThreeVector direction(
+      return G4ThreeVector(
         sinTheta * std::cos(phi),
         sinTheta * std::sin(phi),
         cosTheta
       );
-
-      fParticleGun->SetParticleMomentumDirection(direction);
     } else {
       // Default: fire along z-axis
-      fParticleGun->SetParticleMomentumDirection(G4ThreeVector(0., 0., 1.));
+      return G4ThreeVector(0., 0., 1.);
     }
+  };
 
-    fParticleGun->GeneratePrimaryVertex(event);
+  // Always fire from center of detector
+  fParticleGun->SetParticlePosition(G4ThreeVector(0., 0., 0.));
+
+  // If we have a heterogeneous primary list, use it
+  if (!fPrimaryList.empty()) {
+    G4ParticleTable* particleTable = G4ParticleTable::GetParticleTable();
+
+    for (const auto& spec : fPrimaryList) {
+      // Set particle type
+      G4ParticleDefinition* particle = particleTable->FindParticle(spec.particleName);
+      if (particle) {
+        fParticleGun->SetParticleDefinition(particle);
+      } else {
+        G4cerr << "Warning: Particle " << spec.particleName << " not found!" << G4endl;
+        continue;
+      }
+
+      // Set energy
+      fParticleGun->SetParticleEnergy(spec.energy);
+      fTrueEnergy = spec.energy;
+
+      // Set direction (random or default)
+      fParticleGun->SetParticleMomentumDirection(generateRandomDirection());
+
+      // Generate the primary vertex
+      fParticleGun->GeneratePrimaryVertex(event);
+    }
+  }
+  // Otherwise, use the original behavior: generate fNumberOfPrimaries copies of the same particle
+  else {
+    for (G4int i = 0; i < fNumberOfPrimaries; i++) {
+      // Generate random energy if requested
+      if (fRandomEnergy) {
+        fTrueEnergy = fMinEnergy + (fMaxEnergy - fMinEnergy) * G4UniformRand();
+        fParticleGun->SetParticleEnergy(fTrueEnergy);
+      } else {
+        fTrueEnergy = fParticleGun->GetParticleEnergy();
+      }
+
+      // Set direction (random or default)
+      fParticleGun->SetParticleMomentumDirection(generateRandomDirection());
+
+      // Generate the primary vertex
+      fParticleGun->GeneratePrimaryVertex(event);
+    }
   }
 }
 
@@ -152,6 +183,16 @@ void PrimaryGeneratorAction::SetParticlePosition(const G4ThreeVector& position)
 void PrimaryGeneratorAction::SetParticleDirection(const G4ThreeVector& direction)
 {
   fParticleGun->SetParticleMomentumDirection(direction);
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void PrimaryGeneratorAction::AddPrimary(const G4String& particleName, G4double energy)
+{
+  PrimaryParticleSpec spec;
+  spec.particleName = particleName;
+  spec.energy = energy;
+  fPrimaryList.push_back(spec);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

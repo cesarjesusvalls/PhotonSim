@@ -16,6 +16,73 @@ from plotly.subplots import make_subplots
 from tools.generate import read_label_data_from_photonsim
 import argparse
 
+def create_cylinder(start, end, radius, n_segments=16):
+    """
+    Create a 3D cylinder mesh between two points.
+
+    Args:
+        start: Starting point [x, y, z]
+        end: Ending point [x, y, z]
+        radius: Cylinder radius in world coordinates (cm)
+        n_segments: Number of segments around the cylinder
+
+    Returns:
+        x, y, z: Arrays of vertex coordinates
+        i, j, k: Arrays defining triangular faces
+    """
+    start = np.array(start)
+    end = np.array(end)
+
+    # Direction vector and length
+    direction = end - start
+    length = np.linalg.norm(direction)
+    direction = direction / length
+
+    # Find perpendicular vectors to create cylinder cross-section
+    # Choose a vector not parallel to direction
+    if abs(direction[0]) < 0.9:
+        perp1 = np.cross(direction, [1, 0, 0])
+    else:
+        perp1 = np.cross(direction, [0, 1, 0])
+    perp1 = perp1 / np.linalg.norm(perp1)
+    perp2 = np.cross(direction, perp1)
+    perp2 = perp2 / np.linalg.norm(perp2)
+
+    # Create vertices
+    vertices = []
+    angles = np.linspace(0, 2*np.pi, n_segments, endpoint=False)
+
+    # Bottom circle
+    for angle in angles:
+        point = start + radius * (np.cos(angle) * perp1 + np.sin(angle) * perp2)
+        vertices.append(point)
+
+    # Top circle
+    for angle in angles:
+        point = end + radius * (np.cos(angle) * perp1 + np.sin(angle) * perp2)
+        vertices.append(point)
+
+    vertices = np.array(vertices)
+    x, y, z = vertices[:, 0], vertices[:, 1], vertices[:, 2]
+
+    # Create triangular faces for the cylinder surface
+    i, j, k = [], [], []
+    for seg in range(n_segments):
+        next_seg = (seg + 1) % n_segments
+
+        # Two triangles per rectangular face
+        # Triangle 1
+        i.append(seg)
+        j.append(next_seg)
+        k.append(seg + n_segments)
+
+        # Triangle 2
+        i.append(next_seg)
+        j.append(next_seg + n_segments)
+        k.append(seg + n_segments)
+
+    return x, y, z, i, j, k
+
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Validate PhotonSim label classification')
 parser.add_argument('root_file', type=str, help='Input ROOT file from PhotonSim')
@@ -245,20 +312,31 @@ for event_data in events_to_plot:
         )
 
         # Plot track arrow for all categories
-        scale = 5  # Arrow length in cm
+        scale = 20  # Arrow length in cm
+        cylinder_radius = 1.5  # Cylinder radius in cm
 
-        # Draw the line (thicker) - HIDDEN BY DEFAULT
+        # Draw the cylinder (3D object with proper world-space thickness) - HIDDEN BY DEFAULT
+        cylinder_end = track_pos + track_dir * scale
+        cyl_x, cyl_y, cyl_z, cyl_i, cyl_j, cyl_k = create_cylinder(
+            track_pos, cylinder_end, cylinder_radius
+        )
+
         fig.add_trace(
-            go.Scatter3d(
-                x=[track_pos[0], track_pos[0] + track_dir[0]*scale],
-                y=[track_pos[1], track_pos[1] + track_dir[1]*scale],
-                z=[track_pos[2], track_pos[2] + track_dir[2]*scale],
-                mode='lines',
-                line=dict(color=color, width=12),
+            go.Mesh3d(
+                x=cyl_x,
+                y=cyl_y,
+                z=cyl_z,
+                i=cyl_i,
+                j=cyl_j,
+                k=cyl_k,
+                color=color,
+                opacity=1.0,
                 name=f'{label_name} track',
                 legendgroup=f'label{i}',
                 showlegend=False,
-                visible=False  # Hidden by default
+                visible=False,  # Hidden by default
+                lighting=dict(ambient=0.8, diffuse=0.8, specular=0.2),
+                flatshading=False
             )
         )
 
@@ -277,7 +355,7 @@ for event_data in events_to_plot:
                 w=[track_dir[2]],
                 colorscale=[[0, color], [1, color]],
                 sizemode="absolute",
-                sizeref=4,
+                sizeref=20,
                 showscale=False,
                 name=f'{label_name} direction',
                 legendgroup=f'label{i}',

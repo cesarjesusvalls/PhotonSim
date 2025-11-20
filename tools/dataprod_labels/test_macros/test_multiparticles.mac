@@ -1,0 +1,21 @@
+# Test macro for multiple heterogeneous primary particles per event
+# Tests both mu- and pi+ at 1 GeV with random directions
+
+# Set output filename before initialization
+/output/filename test_multiparticles.root
+
+/run/initialize
+
+# Enable individual photon storage to see category data
+/photon/storeIndividual true
+/edep/storeIndividual false
+
+# Add different particle types to the same event
+/gun/addPrimary mu- 1000 MeV
+/gun/addPrimary pi+ 1000 MeV
+
+# Use random directions for both particles
+/gun/randomDirection true
+
+# Run events
+/run/beamOn 20

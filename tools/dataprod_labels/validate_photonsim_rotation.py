@@ -18,6 +18,73 @@ from tools.generate import read_label_data_from_photonsim
 from tools.simulation import jax_rotate_vector
 import argparse
 
+def create_cylinder(start, end, radius, n_segments=16):
+    """
+    Create a 3D cylinder mesh between two points.
+
+    Args:
+        start: Starting point [x, y, z]
+        end: Ending point [x, y, z]
+        radius: Cylinder radius in world coordinates (cm)
+        n_segments: Number of segments around the cylinder
+
+    Returns:
+        x, y, z: Arrays of vertex coordinates
+        i, j, k: Arrays defining triangular faces
+    """
+    start = np.array(start)
+    end = np.array(end)
+
+    # Direction vector and length
+    direction = end - start
+    length = np.linalg.norm(direction)
+    direction = direction / length
+
+    # Find perpendicular vectors to create cylinder cross-section
+    # Choose a vector not parallel to direction
+    if abs(direction[0]) < 0.9:
+        perp1 = np.cross(direction, [1, 0, 0])
+    else:
+        perp1 = np.cross(direction, [0, 1, 0])
+    perp1 = perp1 / np.linalg.norm(perp1)
+    perp2 = np.cross(direction, perp1)
+    perp2 = perp2 / np.linalg.norm(perp2)
+
+    # Create vertices
+    vertices = []
+    angles = np.linspace(0, 2*np.pi, n_segments, endpoint=False)
+
+    # Bottom circle
+    for angle in angles:
+        point = start + radius * (np.cos(angle) * perp1 + np.sin(angle) * perp2)
+        vertices.append(point)
+
+    # Top circle
+    for angle in angles:
+        point = end + radius * (np.cos(angle) * perp1 + np.sin(angle) * perp2)
+        vertices.append(point)
+
+    vertices = np.array(vertices)
+    x, y, z = vertices[:, 0], vertices[:, 1], vertices[:, 2]
+
+    # Create triangular faces for the cylinder surface
+    i, j, k = [], [], []
+    for seg in range(n_segments):
+        next_seg = (seg + 1) % n_segments
+
+        # Two triangles per rectangular face
+        # Triangle 1
+        i.append(seg)
+        j.append(next_seg)
+        k.append(seg + n_segments)
+
+        # Triangle 2
+        i.append(next_seg)
+        j.append(next_seg + n_segments)
+        k.append(seg + n_segments)
+
+    return x, y, z, i, j, k
+
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Validate PhotonSim rotation with label classification')
 parser.add_argument('root_file', type=str, help='Input ROOT file from PhotonSim')
@@ -340,28 +407,49 @@ for event_data in events_to_plot:
         )
 
         # Track arrows (before)
-        scale = 5
+        scale = 20
+        cylinder_radius = 1.5  # Cylinder radius in cm
+
+        # Cylinder for "before" plot
+        cylinder_end_before = track_pos_before + track_dir_before * scale
+        cyl_x_b, cyl_y_b, cyl_z_b, cyl_i_b, cyl_j_b, cyl_k_b = create_cylinder(
+            track_pos_before, cylinder_end_before, cylinder_radius
+        )
         fig.add_trace(
-            go.Scatter3d(
-                x=[track_pos_before[0], track_pos_before[0] + track_dir_before[0]*scale],
-                y=[track_pos_before[1], track_pos_before[1] + track_dir_before[1]*scale],
-                z=[track_pos_before[2], track_pos_before[2] + track_dir_before[2]*scale],
-                mode='lines',
-                line=dict(color=color, width=8),
-                showlegend=False
+            go.Mesh3d(
+                x=cyl_x_b,
+                y=cyl_y_b,
+                z=cyl_z_b,
+                i=cyl_i_b,
+                j=cyl_j_b,
+                k=cyl_k_b,
+                color=color,
+                opacity=1.0,
+                showlegend=False,
+                lighting=dict(ambient=0.8, diffuse=0.8, specular=0.2),
+                flatshading=False
             ),
             row=1, col=1
         )
 
-        # Track arrows (after)
+        # Cylinder for "after" plot
+        cylinder_end_after = track_pos_after + track_dir_after * scale
+        cyl_x_a, cyl_y_a, cyl_z_a, cyl_i_a, cyl_j_a, cyl_k_a = create_cylinder(
+            track_pos_after, cylinder_end_after, cylinder_radius
+        )
         fig.add_trace(
-            go.Scatter3d(
-                x=[track_pos_after[0], track_pos_after[0] + track_dir_after[0]*scale],
-                y=[track_pos_after[1], track_pos_after[1] + track_dir_after[1]*scale],
-                z=[track_pos_after[2], track_pos_after[2] + track_dir_after[2]*scale],
-                mode='lines',
-                line=dict(color=color, width=8),
-                showlegend=False
+            go.Mesh3d(
+                x=cyl_x_a,
+                y=cyl_y_a,
+                z=cyl_z_a,
+                i=cyl_i_a,
+                j=cyl_j_a,
+                k=cyl_k_a,
+                color=color,
+                opacity=1.0,
+                showlegend=False,
+                lighting=dict(ambient=0.8, diffuse=0.8, specular=0.2),
+                flatshading=False
             ),
             row=1, col=2
         )
