@@ -1,0 +1,21 @@
+# Test macro for mu+ validation
+# 20 events at 1 GeV with random direction
+
+# Set output filename
+/output/filename test_mu_plus.root
+
+/run/initialize
+
+# Enable individual photon storage (needed for LUCiD)
+/photon/storeIndividual true
+/edep/storeIndividual false
+
+# Primary particle configuration
+/gun/numberOfPrimaries 1
+/gun/particle mu+
+/gun/energy 1000 MeV
+/gun/position 0 0 0 m
+/gun/randomDirection true
+
+# Run events
+/run/beamOn 20

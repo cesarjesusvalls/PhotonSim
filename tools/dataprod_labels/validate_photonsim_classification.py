@@ -1,37 +1,45 @@
 #!/usr/bin/env python3
 """
-Validation script for pion classification (no rotation).
+Generic validation script for PhotonSim label classification (no rotation).
 Shows photons and tracks for each label in un-rotated events.
 Creates interactive HTML plots for visual inspection.
+
+Works with any particle type and any number of primaries.
 """
 import sys
 sys.path.append('/Users/cjesus/Software/LUCiD')
 
+import os
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from tools.generate import read_label_data_from_photonsim
+import argparse
 
-# Configuration
-root_file = 'test_1pion.root'
-events_to_validate = list(range(50))  # Validate 50 events
-n_photons_to_sample = 500
-master_seed = 42
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='Validate PhotonSim label classification')
+parser.add_argument('root_file', type=str, help='Input ROOT file from PhotonSim')
+parser.add_argument('--events', type=int, default=50, help='Number of events to validate (default: 50)')
+parser.add_argument('--photons', type=int, default=500, help='Number of photons to sample per label (default: 500)')
+parser.add_argument('--seed', type=int, default=42, help='Random seed for photon sampling (default: 42)')
+args = parser.parse_args()
 
-# Get primary energy from first event
-try:
-    first_event_data = read_label_data_from_photonsim(root_file, 0)
-    primary_energy = first_event_data.get('primary_energy', 500.0)
-except:
-    primary_energy = 500.0
+root_file = args.root_file
+events_to_validate = list(range(args.events))
+n_photons_to_sample = args.photons
+master_seed = args.seed
 
 print("="*70)
-print(f"PION CLASSIFICATION VALIDATION ({primary_energy:.0f} MeV pi-)")
+print(f"PHOTONSIM LABEL CLASSIFICATION VALIDATION")
 print("="*70)
+print(f"Input file: {root_file}")
+print(f"Events to validate: {args.events}")
+print(f"Photons to sample per label: {n_photons_to_sample}")
 print()
 
 # Define colors for labels
-colors_palette = ['red', 'blue', 'green', 'orange', 'purple', 'cyan', 'magenta', 'yellow']
+colors_palette = ['red', 'blue', 'green', 'orange', 'purple', 'cyan', 'magenta', 'yellow',
+                  'brown', 'pink', 'olive', 'navy', 'teal', 'maroon']
 category_names = {0: 'Primary', 1: 'DecayElectron', 2: 'SecondaryPion', 3: 'GammaShower'}
 
 # PDG code to particle name mapping
@@ -46,19 +54,18 @@ pdg_to_name = {
     22: 'gamma',
     2212: 'proton',
     2112: 'neutron',
+    -2212: 'antiproton',
 }
 
-# Statistics tracking
+# Statistics tracking by category
 total_events = 0
-events_with_secondary_pions = 0
-total_secondary_pions = 0
-total_gamma_showers = 0
-total_decay_electrons = 0
+category_counts = {0: 0, 1: 0, 2: 0, 3: 0}  # Primary, DecayElectron, SecondaryPion, GammaShower
+events_with_category = {0: 0, 1: 0, 2: 0, 3: 0}
+primary_particles = set()  # Track unique primary particle types
 
 def process_event(event_idx):
     """Process a single event and return data for plotting"""
-    global total_events, events_with_secondary_pions, total_secondary_pions
-    global total_gamma_showers, total_decay_electrons
+    global total_events, category_counts, events_with_category, primary_particles
 
     total_events += 1
 
@@ -86,7 +93,7 @@ def process_event(event_idx):
     label_names = []
     label_categories = []
 
-    local_secondary_pions = 0
+    local_category_counts = {0: 0, 1: 0, 2: 0, 3: 0}
 
     for label_idx, label in enumerate(labels):
         photon_indices = label['photon_indices']
@@ -99,30 +106,22 @@ def process_event(event_idx):
         particle_name = pdg_to_name.get(track_info['pdg'], f"PDG{track_info['pdg']}")
         color = colors_palette[label_idx % len(colors_palette)]
 
-        # Calculate momentum for pions (E_total² = (pc)² + (mc²)²)
-        momentum = None
-        if abs(track_info['pdg']) == 211:  # Charged pion
-            pion_mass = 139.57  # MeV/c²
-            kinetic_energy = track_info['energy']  # MeV (kinetic energy from GEANT4)
-            total_energy = kinetic_energy + pion_mass  # Total energy
-            momentum_sq = total_energy**2 - pion_mass**2
-            if momentum_sq > 0:
-                momentum = int(np.sqrt(momentum_sq))  # MeV/c, no decimals
+        # Get kinetic energy (works for all particles)
+        kinetic_energy = track_info['energy']  # MeV
 
         # Update statistics
-        if track_info['category'] == 2:  # SecondaryPion
-            local_secondary_pions += 1
-            total_secondary_pions += 1
-        elif track_info['category'] == 3:  # GammaShower
-            total_gamma_showers += 1
-        elif track_info['category'] == 1:  # DecayElectron
-            total_decay_electrons += 1
+        category = track_info['category']
+        if category in category_counts:
+            category_counts[category] += 1
+            local_category_counts[category] += 1
+
+        # Track primary particle types
+        if category == 0:  # Primary
+            primary_particles.add(particle_name)
 
         print(f"Label {label_idx} ({cat_name}):")
-        print(f"  PDG: {track_info['pdg']}")
-        print(f"  Energy: {track_info['energy']:.2f} MeV")
-        if momentum is not None:
-            print(f"  Momentum: {momentum} MeV/c")
+        print(f"  Particle: {particle_name} (PDG: {track_info['pdg']})")
+        print(f"  Kinetic Energy: {kinetic_energy:.2f} MeV")
         print(f"  Color: {color}")
         print(f"  Track position: {track_info['position']}")
         print(f"  Track direction: {track_info['direction']}")
@@ -149,20 +148,18 @@ def process_event(event_idx):
         track_directions.append(track_info['direction'])
         label_colors.append(color)
 
-        # Create label name with momentum for pions
-        if momentum is not None:
-            label_name = f"Label {label_idx} ({cat_name} - {particle_name}, {momentum} MeV/c)"
-        else:
-            label_name = f"Label {label_idx} ({cat_name} - {particle_name})"
+        # Create label name with kinetic energy
+        label_name = f"Label {label_idx} ({cat_name} - {particle_name}, {kinetic_energy:.1f} MeV)"
         label_names.append(label_name)
         label_categories.append(track_info['category'])
 
         print(f"  Sampled {n_to_sample} photons")
         print()
 
-    if local_secondary_pions > 0:
-        events_with_secondary_pions += 1
-        print(f"*** Event {event_idx} has {local_secondary_pions} secondary pion(s) ***")
+    # Update events with category counts
+    for cat, count in local_category_counts.items():
+        if count > 0:
+            events_with_category[cat] += 1
 
     print()
 
@@ -186,6 +183,8 @@ for event_idx in events_to_validate:
             events_data.append(event_data)
     except Exception as e:
         print(f"ERROR processing event {event_idx}: {e}")
+        import traceback
+        traceback.print_exc()
         continue
 
 # Print summary statistics
@@ -194,11 +193,18 @@ print("="*70)
 print("CLASSIFICATION STATISTICS")
 print("="*70)
 print(f"Total events processed: {total_events}")
-print(f"Events with secondary pions: {events_with_secondary_pions} ({100*events_with_secondary_pions/total_events:.1f}%)")
-print(f"Total secondary pions: {total_secondary_pions}")
-print(f"Total gamma showers: {total_gamma_showers}")
-print(f"Total decay electrons: {total_decay_electrons}")
-print(f"Average secondary pions per event: {total_secondary_pions/total_events:.2f}")
+print()
+print("Primary particle types detected:", ', '.join(sorted(primary_particles)))
+print()
+print("Category breakdown:")
+for cat_id in sorted(category_counts.keys()):
+    cat_name = category_names.get(cat_id, f"Unknown_{cat_id}")
+    count = category_counts[cat_id]
+    events_with = events_with_category[cat_id]
+    if total_events > 0:
+        avg_per_event = count / total_events
+        pct_events = 100 * events_with / total_events
+        print(f"  {cat_name:20s}: {count:4d} total | {events_with:3d} events ({pct_events:.1f}%) | {avg_per_event:.2f} per event")
 print()
 
 # Create interactive plots for all events
@@ -238,8 +244,8 @@ for event_data in events_to_plot:
             )
         )
 
-        # Plot track arrow for all categories (now that gammas have proper directions)
-        scale = 5  # Arrow length in cm (shorter)
+        # Plot track arrow for all categories
+        scale = 5  # Arrow length in cm
 
         # Draw the line (thicker) - HIDDEN BY DEFAULT
         fig.add_trace(
@@ -301,8 +307,9 @@ for event_data in events_to_plot:
             hide_arrows.append(False)
 
     # Update layout with toggle button
+    primary_desc = ', '.join(sorted(primary_particles)) if primary_particles else "Unknown"
     fig.update_layout(
-        title=f'Event {event_idx}: Pion Classification ({primary_energy:.0f} MeV pi-)',
+        title=f'Event {event_idx}: PhotonSim Classification ({primary_desc})',
         scene=dict(
             xaxis_title='X (cm)',
             yaxis_title='Y (cm)',
@@ -343,8 +350,9 @@ for event_data in events_to_plot:
         width=1000
     )
 
-    # Save as HTML
-    filename = f'pion_classification_event{event_idx}.html'
+    # Save as HTML with root file basename to avoid overwriting
+    root_basename = os.path.splitext(os.path.basename(root_file))[0]
+    filename = f'{root_basename}_event{event_idx}.html'
     fig.write_html(filename)
     print(f"✓ Saved event {event_idx} to {filename}")
 
@@ -352,5 +360,5 @@ print()
 print("="*70)
 print("VALIDATION COMPLETE")
 print("="*70)
-print(f"\nGenerated {len(events_to_plot)} HTML files for events with secondary pions")
+print(f"\nGenerated {len(events_to_plot)} HTML files")
 print("Open the HTML files in a browser to interactively explore the 3D plots")
