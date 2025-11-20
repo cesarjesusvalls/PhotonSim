@@ -36,6 +36,7 @@
 #include "G4ios.hh"
 #include <cmath>
 #include <set>
+#include <algorithm>
 
 namespace PhotonSim
 {
@@ -441,11 +442,15 @@ void DataManager::UpdateTrackCategory(G4int trackID, G4int category, G4int subID
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-void DataManager::UpdatePionMomentum(G4int trackID, const G4ThreeVector& momentum)
+void DataManager::UpdatePionMomentum(G4int trackID, const G4ThreeVector& momentumDir,
+                                     const G4ThreeVector& position, G4double time)
 {
   auto it = fTrackRegistry.find(trackID);
   if (it != fTrackRegistry.end()) {
-    it->second.preMomentumDir = momentum.unit();
+    // Store momentum direction, position, and time as synchronized triplet
+    it->second.preMomentumDir = momentumDir.unit();
+    it->second.preMomentumPos = position;
+    it->second.preMomentumTime = time;
   }
 }
 
@@ -492,6 +497,52 @@ std::vector<G4int> DataManager::BuildGenealogy(G4int trackID)
 void DataManager::ClearTrackRegistry()
 {
   fTrackRegistry.clear();
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void DataManager::RelabelPhotonsForDeflection(G4int newTrackID, G4int oldTrackID, G4double deflectionTime)
+{
+  // Build the new genealogy for the deflected track
+  std::vector<G4int> newGenealogy = BuildGenealogy(newTrackID);
+
+  // Build the old genealogy (parent track's genealogy)
+  std::vector<G4int> oldGenealogy = BuildGenealogy(oldTrackID);
+
+  // Find photons in the old genealogy that were created after deflection time
+  auto it = fGenealogyToPhotonIDs.find(oldGenealogy);
+  if (it == fGenealogyToPhotonIDs.end()) {
+    return; // No photons with this genealogy
+  }
+
+  std::vector<G4int>& oldPhotonIDs = it->second;
+  std::vector<G4int> photonsToMove;
+
+  // Find photons created at or after deflection time
+  for (G4int photonID : oldPhotonIDs) {
+    if (photonID >= 0 && photonID < static_cast<G4int>(fPhotonTime.size())) {
+      G4double photonTime = fPhotonTime[photonID] * ns; // Convert back to GEANT4 units
+      if (photonTime >= deflectionTime) {
+        photonsToMove.push_back(photonID);
+      }
+    }
+  }
+
+  if (photonsToMove.empty()) {
+    return; // No photons to relabel
+  }
+
+  // Remove moved photons from old genealogy
+  for (G4int photonID : photonsToMove) {
+    oldPhotonIDs.erase(std::remove(oldPhotonIDs.begin(), oldPhotonIDs.end(), photonID), oldPhotonIDs.end());
+  }
+
+  // Add photons to new genealogy
+  std::vector<G4int>& newPhotonIDs = fGenealogyToPhotonIDs[newGenealogy];
+  newPhotonIDs.insert(newPhotonIDs.end(), photonsToMove.begin(), photonsToMove.end());
+
+  G4cout << "      >>> Relabeled " << photonsToMove.size() << " photons from genealogy ending with "
+         << oldTrackID << " to genealogy ending with " << newTrackID << G4endl;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

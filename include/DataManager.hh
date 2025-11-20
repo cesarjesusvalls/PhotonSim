@@ -65,7 +65,16 @@ struct TrackInfo {
   G4int parentTrackID;
   G4String particleName;
   G4int pdgCode;
-  G4ThreeVector preMomentumDir;  // For pion deflection detection
+
+  // Synchronized triplet for pion deflection detection
+  G4ThreeVector preMomentumDir;     // Momentum direction at previous step
+  G4ThreeVector preMomentumPos;     // Position where preMomentumDir was recorded
+  G4double preMomentumTime = 0.0;   // Time when preMomentumDir was recorded
+
+  // For photon relabeling in deflection handling
+  G4bool needsPhotonRelabeling = false;
+  G4int originalParentID = -1;
+  G4double relabelingTime = 0.0;
 };
 
 /// Singleton class to manage ROOT data output for optical photons
@@ -102,10 +111,14 @@ class DataManager
                       const G4ThreeVector& position, const G4ThreeVector& momentum,
                       G4double energy, G4double time, G4int pdgCode);
     void UpdateTrackCategory(G4int trackID, G4int category, G4int subID, G4int categoryParentTrackID);
-    void UpdatePionMomentum(G4int trackID, const G4ThreeVector& momentum);
+    void UpdatePionMomentum(G4int trackID, const G4ThreeVector& momentumDir,
+                           const G4ThreeVector& position, G4double time);
     TrackInfo* GetTrackInfo(G4int trackID);
     std::vector<G4int> BuildGenealogy(G4int trackID);
     void ClearTrackRegistry();
+
+    // Photon relabeling for deflection handling
+    void RelabelPhotonsForDeflection(G4int newTrackID, G4int oldTrackID, G4double deflectionTime);
 
     // Get next SubID for a category
     G4int GetNextPrimaryID() { return fNPrimaries++; }

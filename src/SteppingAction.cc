@@ -202,12 +202,19 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
 
     // 4. Secondary pions: charged pions from hadronic inelastic interactions or deflections
     else if (particleName == "pi+" || particleName == "pi-") {
-      // Check if created from inelastic hadronic process or deflection handling
-      if (processName.contains("Inelastic") || processName.contains("inelastic") ||
-          processName.contains("Deflection")) {
+      TrackInfo* parentInfo = dataManager->GetTrackInfo(parentID);
+
+      // Check if created from inelastic hadronic process, deflection handling,
+      // OR if parent is a categorized pion (deflection-created case where SetCreatorProcess fails)
+      G4bool isFromInelastic = processName.contains("Inelastic") || processName.contains("inelastic");
+      G4bool isFromDeflection = processName.contains("Deflection");
+      G4bool isFromCategorizedPion = (parentInfo &&
+                                      (parentInfo->particleName == "pi+" || parentInfo->particleName == "pi-") &&
+                                      parentInfo->category >= 0);
+
+      if (isFromInelastic || isFromDeflection || isFromCategorizedPion) {
         // Find the category-relevant parent
         G4int categoryParent = parentID;
-        TrackInfo* parentInfo = dataManager->GetTrackInfo(parentID);
         while (parentInfo && parentInfo->category < 0 && parentInfo->parentTrackID > 0) {
           categoryParent = parentInfo->parentTrackID;
           parentInfo = dataManager->GetTrackInfo(categoryParent);
@@ -219,8 +226,26 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
         if (debugPions) {
           G4cout << "  >>> CLASSIFIED as SECONDARY PION (subID=" << subID << ")" << G4endl;
           G4cout << "      Creation process: " << processName << G4endl;
+          if (isFromCategorizedPion) {
+            G4cout << "      Reason: Parent is categorized pion (deflection-created)" << G4endl;
+          }
           G4cout << "      Category parent: " << categoryParent << G4endl;
         }
+
+        // DISABLED: Check if parent needs photon relabeling (deflection case)
+        // parentInfo = dataManager->GetTrackInfo(parentID);
+        // if (parentInfo && parentInfo->needsPhotonRelabeling) {
+        //   // Relabel photons from the parent that were created during/after deflection
+        //   dataManager->RelabelPhotonsForDeflection(trackID, parentID, parentInfo->relabelingTime);
+
+        //   if (debugPions) {
+        //     G4cout << "      >>> PHOTON RELABELING: Reassigning photons from parent " << parentID
+        //                << " created after time " << parentInfo->relabelingTime/ns << " ns" << G4endl;
+        //   }
+
+        //   // Clear the flag to prevent duplicate relabeling
+        //   parentInfo->needsPhotonRelabeling = false;
+        // }
       } else if (debugPions) {
         G4cout << "  >>> NOT classified as secondary (process: " << processName << ")" << G4endl;
       }
@@ -299,27 +324,29 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
               G4cout << "  >>> DEFLECTION >5°: Killing track and creating new secondary" << G4endl;
             }
 
-            // Store current track properties before killing
-            G4ThreeVector position = track->GetPosition();
-            G4ThreeVector momentum = track->GetMomentum();
-            G4double energy = track->GetKineticEnergy();
-            G4double time = track->GetGlobalTime();
+            // Use stored position and time where old momentum was recorded
+            // This is the TRUE kink point - where the particle had the old momentum
+            G4ThreeVector kinkPosition = info->preMomentumPos;
+            G4double kinkTime = info->preMomentumTime;
+            G4ThreeVector postStepMomentum = track->GetMomentum();  // Deflected momentum
+            G4double postStepEnergy = track->GetKineticEnergy();
             G4int oldTrackID = track->GetTrackID();
 
             // Kill current track
             track->SetTrackStatus(fStopAndKill);
 
-            // Create new dynamic particle with deflected momentum
+            // Create new dynamic particle with deflected (post-step) momentum
             G4DynamicParticle* dynParticle = new G4DynamicParticle(
               particle,
-              momentum
+              postStepMomentum
             );
 
-            // Create new track
+            // Create new track at the exact kink point
+            // kinkPosition and kinkTime are where the old momentum (preMomentumDir) was recorded
             G4Track* secondary = new G4Track(
               dynParticle,
-              time,
-              position
+              kinkTime,
+              kinkPosition
             );
             secondary->SetParentID(oldTrackID);
 
@@ -328,22 +355,38 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
             G4VProcess* deflectionProcess = new DummyProcess(deflectionProcessName);
             secondary->SetCreatorProcess(deflectionProcess);
 
+            // Store relabeling information for the new track
+            // We'll use this in the first step to reassign photons from the deflection step
+            // Note: We store this now, but the new track won't be registered until its first step
+            // So we'll need to retrieve this info when the track is registered
+
             // Add to secondary stack
             fpSteppingManager->GetfSecondary()->push_back(secondary);
+
+            // Store the relabeling info for when the new track gets registered
+            // We'll mark it in the track info during registration (step 1)
+            dataManager->GetTrackInfo(oldTrackID)->needsPhotonRelabeling = true;
+            dataManager->GetTrackInfo(oldTrackID)->relabelingTime = kinkTime;
 
             if (debugPions) {
               G4cout << "      Old track ID: " << oldTrackID << " (killed)" << G4endl;
               G4cout << "      New secondary will be created with parent ID: " << oldTrackID << G4endl;
-              G4cout << "      Energy: " << energy/MeV << " MeV" << G4endl;
+              G4cout << "      Energy: " << postStepEnergy/MeV << " MeV" << G4endl;
+              G4cout << "      Kink position: (" << kinkPosition.x()/cm << ", " << kinkPosition.y()/cm
+                     << ", " << kinkPosition.z()/cm << ") cm" << G4endl;
+              G4cout << "      Deflection will trigger photon relabeling at time: " << kinkTime/ns << " ns" << G4endl;
             }
           }
           // Note: We don't print for deflections <5° as they're too frequent (especially hIoni)
         }
       }
 
-      // Update momentum for next check on EVERY step (not just inelastic)
-      // This ensures preMomentumDir is always current for deflection calculation
-      dataManager->UpdatePionMomentum(trackID, track->GetMomentum());
+      // Update momentum, position, and time as synchronized triplet for next deflection check
+      // Store post-step values (where the track is NOW after this step completes)
+      dataManager->UpdatePionMomentum(trackID,
+                                     track->GetMomentumDirection(),
+                                     track->GetPosition(),
+                                     track->GetGlobalTime());
     }
   }
 
