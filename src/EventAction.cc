@@ -70,11 +70,17 @@ void EventAction::EndOfEventAction(const G4Event* event)
 {
   // accumulate statistics in run action
   fRunAction->AddEdep(fEdep);
-  
+
   // Notify DataManager about the end of the event
   DataManager* dataManager = DataManager::GetInstance();
   dataManager->EndEvent();
-  
+
+  // Debug pion summary
+  static G4bool debugPions = std::getenv("DEBUG_PIONS") != nullptr;
+  if (debugPions) {
+    dataManager->PrintPionSummary(event->GetEventID());
+  }
+
   // Progress reporting
   G4int eventID = event->GetEventID();
   G4int totalEvents = fRunAction->GetNumberOfEvents();

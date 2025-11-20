@@ -42,9 +42,29 @@
 #include "G4VProcess.hh"
 #include "G4SystemOfUnits.hh"
 #include "G4PhysicalConstants.hh"
+#include "G4DynamicParticle.hh"
+#include "G4SteppingManager.hh"
 
 namespace PhotonSim
 {
+
+// Simple dummy process class for custom process names (deflection handling)
+class DummyProcess : public G4VProcess {
+public:
+  DummyProcess(const G4String& name) : G4VProcess(name, fUserDefined) {}
+  virtual ~DummyProcess() {}
+
+  // Minimal required overrides (never actually called)
+  virtual G4double PostStepGetPhysicalInteractionLength(
+    const G4Track&, G4double, G4ForceCondition*) { return DBL_MAX; }
+  virtual G4VParticleChange* PostStepDoIt(const G4Track&, const G4Step&) { return nullptr; }
+  virtual G4double AlongStepGetPhysicalInteractionLength(
+    const G4Track&, G4double, G4double, G4double&, G4GPILSelection*) { return DBL_MAX; }
+  virtual G4VParticleChange* AlongStepDoIt(const G4Track&, const G4Step&) { return nullptr; }
+  virtual G4double AtRestGetPhysicalInteractionLength(
+    const G4Track&, G4ForceCondition*) { return DBL_MAX; }
+  virtual G4VParticleChange* AtRestDoIt(const G4Track&, const G4Step&) { return nullptr; }
+};
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
@@ -60,14 +80,20 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
 
   DataManager* dataManager = DataManager::GetInstance();
 
+  // Debug flag - can be enabled via environment variable
+  static G4bool debugPions = std::getenv("DEBUG_PIONS") != nullptr;
+  static G4bool debugGammas = std::getenv("DEBUG_GAMMAS") != nullptr;
+  static G4bool debugMuons = std::getenv("DEBUG_MUONS") != nullptr;
+
   // Register all new tracks (first step) with full information
   if (track->GetCurrentStepNumber() == 1) {
     G4int trackID = track->GetTrackID();
     G4String particleName = particle->GetParticleName();
     G4int parentID = track->GetParentID();
     G4ThreeVector position = track->GetVertexPosition();
-    G4ThreeVector momentum = track->GetMomentum();
-    G4double energy = track->GetKineticEnergy();
+    // Use vertex momentum for initial track info (more reliable for particles created mid-step)
+    G4ThreeVector momentum = track->GetVertexMomentumDirection() * track->GetVertexKineticEnergy();
+    G4double energy = track->GetVertexKineticEnergy();
     G4double time = track->GetGlobalTime() - step->GetDeltaTime();
     G4int pdgCode = particle->GetPDGEncoding();
 
@@ -77,10 +103,68 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
     const G4VProcess* creationProcess = track->GetCreatorProcess();
     G4String processName = creationProcess ? creationProcess->GetProcessName() : "Primary";
 
+    // DEBUG: Print all new pion creations
+    if (debugPions && (particleName == "pi+" || particleName == "pi-")) {
+      G4cout << "\n=== NEW PION CREATED ===" << G4endl;
+      G4cout << "  TrackID: " << trackID << G4endl;
+      G4cout << "  Particle: " << particleName << " (PDG: " << pdgCode << ")" << G4endl;
+      G4cout << "  ParentID: " << parentID << G4endl;
+      TrackInfo* parentInfo = dataManager->GetTrackInfo(parentID);
+      if (parentInfo) {
+        G4cout << "  Parent particle: " << parentInfo->particleName
+               << " (PDG: " << parentInfo->pdgCode << ")" << G4endl;
+        G4cout << "  Parent category: " << parentInfo->category << G4endl;
+      }
+      G4cout << "  Creation process: " << processName << G4endl;
+      G4cout << "  Energy: " << energy/MeV << " MeV" << G4endl;
+      G4cout << "  Position: (" << position.x()/cm << ", " << position.y()/cm
+             << ", " << position.z()/cm << ") cm" << G4endl;
+    }
+
+    // DEBUG: Print gamma creation from pi0 decay
+    if (debugGammas && particleName == "gamma" && processName == "Decay") {
+      TrackInfo* parentInfo = dataManager->GetTrackInfo(parentID);
+      if (parentInfo && parentInfo->particleName == "pi0") {
+        G4cout << "\n=== GAMMA FROM PI0 DECAY ===" << G4endl;
+        G4cout << "  TrackID: " << trackID << G4endl;
+        G4cout << "  ParentID: " << parentID << " (pi0)" << G4endl;
+        G4cout << "  Energy: " << energy/MeV << " MeV" << G4endl;
+        G4cout << "  Momentum: (" << momentum.x()/MeV << ", " << momentum.y()/MeV
+               << ", " << momentum.z()/MeV << ") MeV" << G4endl;
+        G4cout << "  Momentum magnitude: " << momentum.mag()/MeV << " MeV" << G4endl;
+        G4cout << "  Unit direction: (" << momentum.unit().x() << ", " << momentum.unit().y()
+               << ", " << momentum.unit().z() << ")" << G4endl;
+        G4cout << "  Position: (" << position.x()/cm << ", " << position.y()/cm
+               << ", " << position.z()/cm << ") cm" << G4endl;
+      }
+    }
+
+    // DEBUG: Print all muon creations
+    if (debugMuons && (particleName == "mu-" || particleName == "mu+")) {
+      G4cout << "\n=== NEW MUON CREATED ===" << G4endl;
+      G4cout << "  TrackID: " << trackID << G4endl;
+      G4cout << "  Particle: " << particleName << " (PDG: " << pdgCode << ")" << G4endl;
+      G4cout << "  ParentID: " << parentID << G4endl;
+      TrackInfo* parentInfo = dataManager->GetTrackInfo(parentID);
+      if (parentInfo) {
+        G4cout << "  Parent particle: " << parentInfo->particleName
+               << " (PDG: " << parentInfo->pdgCode << ")" << G4endl;
+        G4cout << "  Parent category: " << parentInfo->category << G4endl;
+      }
+      G4cout << "  Creation process: " << processName << G4endl;
+      G4cout << "  Energy: " << energy/MeV << " MeV" << G4endl;
+      G4cout << "  Position: (" << position.x()/cm << ", " << position.y()/cm
+             << ", " << position.z()/cm << ") cm" << G4endl;
+    }
+
     // 1. Primary particles (parentID == 0)
     if (parentID == 0) {
       G4int subID = dataManager->GetNextPrimaryID();
       dataManager->UpdateTrackCategory(trackID, kPrimary, subID, 0);
+
+      if (debugPions && (particleName == "pi+" || particleName == "pi-")) {
+        G4cout << "  >>> CLASSIFIED as PRIMARY (subID=" << subID << ")" << G4endl;
+      }
     }
 
     // 2. Decay electrons: electrons from Decay or muMinusCaptureAtRest process
@@ -115,41 +199,151 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
         }
       }
     }
+
+    // 4. Secondary pions: charged pions from hadronic inelastic interactions or deflections
+    else if (particleName == "pi+" || particleName == "pi-") {
+      // Check if created from inelastic hadronic process or deflection handling
+      if (processName.contains("Inelastic") || processName.contains("inelastic") ||
+          processName.contains("Deflection")) {
+        // Find the category-relevant parent
+        G4int categoryParent = parentID;
+        TrackInfo* parentInfo = dataManager->GetTrackInfo(parentID);
+        while (parentInfo && parentInfo->category < 0 && parentInfo->parentTrackID > 0) {
+          categoryParent = parentInfo->parentTrackID;
+          parentInfo = dataManager->GetTrackInfo(categoryParent);
+        }
+
+        G4int subID = dataManager->GetNextSecondaryPionID();
+        dataManager->UpdateTrackCategory(trackID, kSecondaryPion, subID, categoryParent);
+
+        if (debugPions) {
+          G4cout << "  >>> CLASSIFIED as SECONDARY PION (subID=" << subID << ")" << G4endl;
+          G4cout << "      Creation process: " << processName << G4endl;
+          G4cout << "      Category parent: " << categoryParent << G4endl;
+        }
+      } else if (debugPions) {
+        G4cout << "  >>> NOT classified as secondary (process: " << processName << ")" << G4endl;
+      }
+    }
   }
 
-  // 4. Secondary pion deflection detection: check for inelastic interactions
+  // 5. Deflection detection: kill and replace pions that deflect significantly
+  // Handles: hadronic elastic scattering (hadElastic), hadronic ionization (hIoni)
+  // Inelastic processes always kill tracks, so we don't need to handle them here
+  // This handles cases where GEANT4 continues the track instead of killing it
+  // ONLY check deflections for continuing tracks (step > 1), not newly created tracks
   G4String particleName = particle->GetParticleName();
-  if (particleName == "pi+" || particleName == "pi-") {
-    const G4VProcess* process = step->GetPostStepPoint()->GetProcessDefinedStep();
-    if (process) {
-      G4String currentProcessName = process->GetProcessName();
-      // Check for inelastic processes
-      if (currentProcessName.contains("Inelastic") || currentProcessName.contains("inelastic")) {
-        G4int trackID = track->GetTrackID();
-        TrackInfo* info = dataManager->GetTrackInfo(trackID);
-        if (info) {
-          // Compare pre-step and post-step momentum directions
-          G4ThreeVector postMomentum = track->GetMomentumDirection();
-          G4double angle = std::acos(info->preMomentumDir.dot(postMomentum));
+  if ((particleName == "pi+" || particleName == "pi-") && track->GetCurrentStepNumber() > 1) {
+    G4int trackID = track->GetTrackID();
+    TrackInfo* info = dataManager->GetTrackInfo(trackID);
 
-          // If deflection > 20 degrees, create new secondary pion instance
-          if (angle > 20.0 * deg) {
-            // Find the category-relevant parent
-            G4int categoryParent = info->parentTrackID;
-            TrackInfo* parentInfo = dataManager->GetTrackInfo(categoryParent);
-            while (parentInfo && parentInfo->category < 0 && parentInfo->parentTrackID > 0) {
-              categoryParent = parentInfo->parentTrackID;
-              parentInfo = dataManager->GetTrackInfo(categoryParent);
-            }
+    if (info) {
+      // Only check deflections for tracks that are actively continuing (fAlive)
+      // Tracks being killed or stopped are handled at creation, not deflection
+      G4TrackStatus status = track->GetTrackStatus();
+      if (status != fAlive) {
+        return; // Skip deflection detection for tracks not actively continuing
+      }
 
-            G4int subID = dataManager->GetNextSecondaryPionID();
-            dataManager->UpdateTrackCategory(trackID, kSecondaryPion, subID, categoryParent);
+      const G4VProcess* process = step->GetPostStepPoint()->GetProcessDefinedStep();
+      if (process) {
+        G4String currentProcessName = process->GetProcessName();
+
+        // Calculate deflection angle for ALL processes (for debugging)
+        G4ThreeVector postMomentum = track->GetMomentumDirection();
+        G4double angle = std::acos(info->preMomentumDir.dot(postMomentum));
+        G4double angleDeg = angle / deg;
+
+        // DEBUG: Print ALL deflections > 5 degrees to see what processes we're missing
+        if (debugPions && angleDeg > 5.0) {
+          G4cout << "\n=== PION DEFLECTION >5° DETECTED ===" << G4endl;
+          G4cout << "  TrackID: " << trackID << G4endl;
+          G4cout << "  Particle: " << particleName << " (PDG: " << info->pdgCode << ")" << G4endl;
+          G4cout << "  ParentID: " << info->parentTrackID << G4endl;
+
+          // Get parent information
+          TrackInfo* parentInfo = dataManager->GetTrackInfo(info->parentTrackID);
+          if (parentInfo) {
+            G4cout << "  Parent particle: " << parentInfo->particleName
+                   << " (PDG: " << parentInfo->pdgCode << ")" << G4endl;
+            G4cout << "  Parent category: " << parentInfo->category << G4endl;
           }
 
-          // Update momentum for next check
-          dataManager->UpdatePionMomentum(trackID, track->GetMomentum());
+          G4cout << "  Process: " << currentProcessName << G4endl;
+          G4cout << "  Deflection angle: " << angleDeg << " degrees" << G4endl;
+          G4cout << "  Category: " << info->category << G4endl;
+          G4cout << "  Track status: " << track->GetTrackStatus() << G4endl;
+          G4cout << "  Energy: " << track->GetKineticEnergy()/MeV << " MeV" << G4endl;
+          if (currentProcessName == "hadElastic" || currentProcessName == "hIoni") {
+            G4cout << "  >> This process WILL be handled" << G4endl;
+          } else {
+            G4cout << "  >> This process will NOT be handled" << G4endl;
+          }
+        }
+
+        // Check for processes that cause significant deflections: hadElastic, hIoni
+        // (Inelastic processes always kill tracks, so they never reach here)
+        if (currentProcessName == "hadElastic" || currentProcessName == "hIoni") {
+
+          // If deflection > 5 degrees, kill and replace the track
+          // (We already verified track is fAlive in the early check)
+          if (angle > 5.0 * deg) {
+            if (debugPions) {
+              G4cout << "\n--- PION DEFLECTION PROCESS (>5° - Handling) ---" << G4endl;
+              G4cout << "  TrackID: " << trackID << G4endl;
+              G4cout << "  Particle: " << particleName << G4endl;
+              G4cout << "  Process: " << currentProcessName << G4endl;
+              G4cout << "  Deflection angle: " << angleDeg << " degrees" << G4endl;
+              G4cout << "  Current category: " << info->category << G4endl;
+              G4cout << "  Track status: " << track->GetTrackStatus() << G4endl;
+              G4cout << "  >>> DEFLECTION >5°: Killing track and creating new secondary" << G4endl;
+            }
+
+            // Store current track properties before killing
+            G4ThreeVector position = track->GetPosition();
+            G4ThreeVector momentum = track->GetMomentum();
+            G4double energy = track->GetKineticEnergy();
+            G4double time = track->GetGlobalTime();
+            G4int oldTrackID = track->GetTrackID();
+
+            // Kill current track
+            track->SetTrackStatus(fStopAndKill);
+
+            // Create new dynamic particle with deflected momentum
+            G4DynamicParticle* dynParticle = new G4DynamicParticle(
+              particle,
+              momentum
+            );
+
+            // Create new track
+            G4Track* secondary = new G4Track(
+              dynParticle,
+              time,
+              position
+            );
+            secondary->SetParentID(oldTrackID);
+
+            // Set custom creator process name to identify deflection-created pions
+            G4String deflectionProcessName = "Deflection_" + currentProcessName;
+            G4VProcess* deflectionProcess = new DummyProcess(deflectionProcessName);
+            secondary->SetCreatorProcess(deflectionProcess);
+
+            // Add to secondary stack
+            fpSteppingManager->GetfSecondary()->push_back(secondary);
+
+            if (debugPions) {
+              G4cout << "      Old track ID: " << oldTrackID << " (killed)" << G4endl;
+              G4cout << "      New secondary will be created with parent ID: " << oldTrackID << G4endl;
+              G4cout << "      Energy: " << energy/MeV << " MeV" << G4endl;
+            }
+          }
+          // Note: We don't print for deflections <5° as they're too frequent (especially hIoni)
         }
       }
+
+      // Update momentum for next check on EVERY step (not just inelastic)
+      // This ensures preMomentumDir is always current for deflection calculation
+      dataManager->UpdatePionMomentum(trackID, track->GetMomentum());
     }
   }
 

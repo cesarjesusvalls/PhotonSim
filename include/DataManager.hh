@@ -122,7 +122,10 @@ class DataManager
     // Output filename control
     void SetOutputFilename(const G4String& filename) { fOutputFilename = filename; }
     G4String GetOutputFilename() const { return fOutputFilename; }
-    
+
+    // Debug output
+    void PrintPionSummary(G4int eventID);
+
   private:
     DataManager() = default;
     ~DataManager();

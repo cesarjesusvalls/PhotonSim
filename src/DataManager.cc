@@ -578,4 +578,86 @@ DataManager::~DataManager()
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
+void DataManager::PrintPionSummary(G4int eventID)
+{
+  G4cout << "\n";
+  G4cout << "╔════════════════════════════════════════════════════════════════╗" << G4endl;
+  G4cout << "║          PION SUMMARY FOR EVENT " << eventID << "                          ║" << G4endl;
+  G4cout << "╚════════════════════════════════════════════════════════════════╝" << G4endl;
+
+  // Count pions by category
+  G4int primaryPions = 0;
+  G4int secondaryPions = 0;
+  G4int uncategorizedPions = 0;
+
+  // Store pion track IDs for detailed printout
+  std::vector<G4int> primaryIDs, secondaryIDs, uncategorizedIDs;
+
+  for (const auto& entry : fTrackRegistry) {
+    const TrackInfo& info = entry.second;
+    if (info.particleName == "pi+" || info.particleName == "pi-") {
+      if (info.category == kPrimary) {
+        primaryPions++;
+        primaryIDs.push_back(info.trackID);
+      } else if (info.category == kSecondaryPion) {
+        secondaryPions++;
+        secondaryIDs.push_back(info.trackID);
+      } else {
+        uncategorizedPions++;
+        uncategorizedIDs.push_back(info.trackID);
+      }
+    }
+  }
+
+  G4cout << "\nCATEGORY COUNTS:" << G4endl;
+  G4cout << "  Primary pions:       " << primaryPions << G4endl;
+  G4cout << "  Secondary pions:     " << secondaryPions << G4endl;
+  G4cout << "  Uncategorized pions: " << uncategorizedPions << G4endl;
+  G4cout << "  TOTAL pions:         " << (primaryPions + secondaryPions + uncategorizedPions) << G4endl;
+
+  if (uncategorizedPions > 0) {
+    G4cout << "\n⚠ WARNING: Found " << uncategorizedPions << " uncategorized pion(s)!" << G4endl;
+    G4cout << "\nUNCATEGORIZED PION DETAILS:" << G4endl;
+    for (G4int trackID : uncategorizedIDs) {
+      const TrackInfo& info = fTrackRegistry[trackID];
+      G4cout << "  ─────────────────────────────────────────" << G4endl;
+      G4cout << "  TrackID: " << trackID << G4endl;
+      G4cout << "  Particle: " << info.particleName << " (PDG: " << info.pdgCode << ")" << G4endl;
+      G4cout << "  ParentID: " << info.parentTrackID << G4endl;
+
+      TrackInfo* parentInfo = GetTrackInfo(info.parentTrackID);
+      if (parentInfo) {
+        G4cout << "  Parent: " << parentInfo->particleName
+               << " (category=" << parentInfo->category << ")" << G4endl;
+      }
+
+      G4cout << "  Energy: " << info.energy << " MeV" << G4endl;
+      G4cout << "  Position: (" << info.posX << ", " << info.posY << ", " << info.posZ << ")" << G4endl;
+    }
+  }
+
+  if (secondaryPions > 0) {
+    G4cout << "\nSECONDARY PION DETAILS:" << G4endl;
+    for (G4int trackID : secondaryIDs) {
+      const TrackInfo& info = fTrackRegistry[trackID];
+      G4cout << "  ─────────────────────────────────────────" << G4endl;
+      G4cout << "  TrackID: " << trackID << " (subID: " << info.subID << ")" << G4endl;
+      G4cout << "  Particle: " << info.particleName << G4endl;
+      G4cout << "  ParentID: " << info.parentTrackID << G4endl;
+
+      TrackInfo* parentInfo = GetTrackInfo(info.parentTrackID);
+      if (parentInfo) {
+        G4cout << "  Parent: " << parentInfo->particleName
+               << " (category=" << parentInfo->category << ")" << G4endl;
+      }
+
+      G4cout << "  Energy: " << info.energy << " MeV" << G4endl;
+    }
+  }
+
+  G4cout << "\n════════════════════════════════════════════════════════════════\n" << G4endl;
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 }  // namespace PhotonSim
