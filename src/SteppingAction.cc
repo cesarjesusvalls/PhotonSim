@@ -97,6 +97,13 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
     G4double time = track->GetGlobalTime() - step->GetDeltaTime();
     G4int pdgCode = particle->GetPDGEncoding();
 
+    // Kill particles created after 10 microseconds (nuclear de-excitations, long-lived decays)
+    // These are physically correct but irrelevant for neutrino physics and contaminate timing
+    if (time > 10000.0 * ns) {
+      track->SetTrackStatus(fStopAndKill);
+      return;  // Don't register or process this track
+    }
+
     dataManager->RegisterTrack(trackID, particleName, parentID, position, momentum, energy, time, pdgCode);
 
     // Category classification logic
