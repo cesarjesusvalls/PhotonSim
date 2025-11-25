@@ -3,23 +3,31 @@
 # Copy this file to user_paths.sh and modify with your specific paths
 # DO NOT commit user_paths.sh to git
 
-# GEANT4 and ROOT installations
-# Replace with your actual installation paths
+# =============================================================================
+# Software Installations
+# =============================================================================
+# GEANT4 and ROOT installation paths
 export GEANT4_INSTALL_DIR="/path/to/your/geant4/install"
 export ROOT_INSTALL_DIR="/path/to/your/root/install"
 
-# PhotonSim output directory
-# Replace with your preferred output location
-export PHOTONSIM_OUTPUT_BASE="/path/to/your/photonsim/output"
+# =============================================================================
+# Output Paths
+# =============================================================================
+# Base directory for all PhotonSim simulation outputs
+export OUTPUT_BASE_PATH="/path/to/your/photonsim/output"
 
-# SLURM configuration
-# Update with your cluster account and preferred settings
+# LUCiD installation path (for post-processing with generate_events_with_labels.py)
+export LUCID_PATH="/path/to/your/LUCiD"
+
+# =============================================================================
+# SLURM Configuration
+# =============================================================================
 export SLURM_PARTITION="shared"
 export SLURM_ACCOUNT="your-account:your-group"
 
-# Resource defaults
-# Adjust based on your typical job requirements
+# =============================================================================
+# Resource Defaults
+# =============================================================================
 export DEFAULT_CPUS="1"
 export DEFAULT_MEMORY="4g"
 export DEFAULT_TIME="02:00:00"
-

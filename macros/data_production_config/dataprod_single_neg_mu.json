@@ -1,6 +1,5 @@
 {
   "config_number": 1,
-  "use_config_number": true,
   "name": "muon_uniform_up_to_1500MeV",
   "description": "Uniform energy distribution for muons with LUCiD processing",
 
@@ -8,17 +7,24 @@
   "output_path": "uniform_energy",
 
   "energy_distribution": "uniform",
-  "energy_min_MeV": 210,
-  "energy_max_MeV": 1500,
 
   "store_individual_photons": true,
   "run_lucid": true,
+  "disable_decays": false,
 
   "particles": [
     {
-      "type": "mu-"
+      "type": "mu-",
+      "energy_min_MeV": 210,
+      "energy_max_MeV": 1500
     }
   ],
+
+  "lucid_options": {
+    "apply_smearing": true,
+    "apply_rotation": true,
+    "apply_translation": true
+  },
 
   "n_jobs": 2,
   "n_events_per_job": 100

@@ -112,9 +112,16 @@ void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event)
         continue;
       }
 
-      // Set energy
-      fParticleGun->SetParticleEnergy(spec.energy);
-      fTrueEnergy = spec.energy;
+      // Set energy (random or fixed depending on spec)
+      G4double particleEnergy;
+      if (spec.useRandomEnergy) {
+        // Sample uniformly from [minEnergy, maxEnergy]
+        particleEnergy = spec.minEnergy + (spec.maxEnergy - spec.minEnergy) * G4UniformRand();
+      } else {
+        particleEnergy = spec.energy;
+      }
+      fParticleGun->SetParticleEnergy(particleEnergy);
+      fTrueEnergy = particleEnergy;
 
       // Set direction (random or default)
       fParticleGun->SetParticleMomentumDirection(generateRandomDirection());
@@ -192,6 +199,19 @@ void PrimaryGeneratorAction::AddPrimary(const G4String& particleName, G4double e
   PrimaryParticleSpec spec;
   spec.particleName = particleName;
   spec.energy = energy;
+  spec.useRandomEnergy = false;
+  fPrimaryList.push_back(spec);
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void PrimaryGeneratorAction::AddPrimaryWithEnergyRange(const G4String& particleName, G4double minEnergy, G4double maxEnergy)
+{
+  PrimaryParticleSpec spec;
+  spec.particleName = particleName;
+  spec.minEnergy = minEnergy;
+  spec.maxEnergy = maxEnergy;
+  spec.useRandomEnergy = true;
   fPrimaryList.push_back(spec);
 }
 

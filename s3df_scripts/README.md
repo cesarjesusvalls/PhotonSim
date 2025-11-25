@@ -1,67 +1,61 @@
 # S3DF Scripts for PhotonSim
 
-This directory contains scripts for building, running, and managing PhotonSim jobs on the S3DF cluster at SLAC.
+Scripts for building, running, and managing PhotonSim jobs on the S3DF cluster at SLAC.
 
 ## Quick Start
 
-1. **Configure your paths**:
-   ```bash
-   cp user_paths.sh.template user_paths.sh
-   # Edit user_paths.sh with your specific paths
-   ```
+```bash
+# 1. Configure your paths
+cp user_paths.sh.template user_paths.sh
+vim user_paths.sh  # Edit with your paths
 
-2. **Build PhotonSim**:
-   ```bash
-   ./utils/build_photonsim.sh
-   ```
+# 2. Build PhotonSim
+./utils/build_photonsim.sh
 
-3. **Submit a single job**:
-   ```bash
-   ./jobs/submit_photonsim_job.sh -p mu- -n 1000 -e 1000 -o /path/to/output
-   ```
+# 3. Test with one job (doesn't submit)
+./jobs/generate_jobs.sh -c ../macros/data_production_config/dataprod_single_neg_mu.json -t
 
-4. **Submit multiple jobs**:
-   ```bash
-   ./jobs/submit_photonsim_batch.sh -c jobs/example_batch_config.txt -s
-   ```
+# 4. Generate and submit all jobs
+./jobs/generate_jobs.sh -c ../macros/data_production_config/dataprod_single_neg_mu.json -s
+
+# 5. Monitor your jobs
+./jobs/monitor_jobs.sh -w
+```
 
 ## Directory Structure
 
 ```
 s3df_scripts/
-├── user_paths.sh              # User-specific configuration (DO NOT COMMIT)
+├── user_paths.sh.template     # Configuration template (copy to user_paths.sh)
 ├── utils/                     # Build and environment utilities
 │   ├── setup_environment.sh   # Environment setup
 │   ├── build_photonsim.sh     # Build script
 │   ├── clean_build.sh         # Clean build directory
-│   ├── run_photonsim.sh       # Local run script
 │   └── check_installation.sh  # Verify installation
-├── jobs/                      # Job submission and management
-│   ├── submit_photonsim_job.sh    # Submit single job
-│   ├── submit_photonsim_batch.sh  # Submit multiple jobs
-│   ├── monitor_jobs.sh             # Monitor running jobs
-│   ├── cleanup_jobs.sh             # Clean job outputs
-│   ├── example_batch_config.txt    # Example configuration
-│   └── README.md                   # Job scripts documentation
-└── README.md                  # This file
+└── jobs/                      # Job submission and management
+    ├── generate_jobs.sh       # Main job generation script
+    ├── monitor_jobs.sh        # Monitor running jobs
+    └── cleanup_jobs.sh        # Clean job outputs
 ```
 
 ## Configuration
 
 ### user_paths.sh
-This file contains all user-specific paths and should be configured for each user:
+
+Copy `user_paths.sh.template` to `user_paths.sh` and configure:
 
 ```bash
-# GEANT4 and ROOT installations
-export GEANT4_INSTALL_DIR="/path/to/geant4/build"
-export ROOT_INSTALL_DIR="/path/to/root/build"
+# Software installations
+export GEANT4_INSTALL_DIR="/path/to/geant4/install"
+export ROOT_INSTALL_DIR="/path/to/root/install"
 
-# PhotonSim output directory
-export PHOTONSIM_OUTPUT_BASE="/path/to/output"
+# Output paths
+export OUTPUT_BASE_PATH="/path/to/photonsim/output"
+export LUCID_PATH="/path/to/LUCiD"
 
 # SLURM configuration
 export SLURM_PARTITION="shared"
-export SLURM_ACCOUNT="your-account"
+export SLURM_ACCOUNT="neutrino:cider-ml"
 
 # Resource defaults
 export DEFAULT_CPUS="1"
@@ -69,194 +63,193 @@ export DEFAULT_MEMORY="4g"
 export DEFAULT_TIME="02:00:00"
 ```
 
-**Important**: Never commit `user_paths.sh` to git as it contains user-specific paths.
-
-## Utilities (utils/)
-
-### setup_environment.sh
-Sets up the environment for building and running PhotonSim:
-- Sources GEANT4 and ROOT environments
-- Sets up library paths
-- Configures environment variables
-
+On S3DF, you can use existing installations:
 ```bash
-source ./utils/setup_environment.sh
+export GEANT4_INSTALL_DIR="/sdf/data/neutrino/cjesus/software/builds/geant4"
+export ROOT_INSTALL_DIR="/sdf/data/neutrino/cjesus/software/builds/root"
 ```
 
-### build_photonsim.sh
-Builds PhotonSim with proper configuration:
-- Sources environment automatically
-- Configures CMake with correct paths
-- Builds with parallel compilation
-- Reports build status
+## Job Generation
+
+All job generation uses JSON configuration files in `macros/data_production_config/`.
+
+### generate_jobs.sh
 
 ```bash
-./utils/build_photonsim.sh
+./jobs/generate_jobs.sh -c <config_json> [-s] [-t]
 ```
 
-### check_installation.sh
-Verifies that all dependencies are properly installed:
-- Checks system tools (cmake, make, g++)
-- Verifies GEANT4 and ROOT installations
-- Validates PhotonSim source structure
-
-```bash
-./utils/check_installation.sh
-```
-
-### clean_build.sh
-Removes the build directory for fresh compilation:
-```bash
-./utils/clean_build.sh
-```
-
-### run_photonsim.sh
-Runs PhotonSim locally with a specified macro:
-```bash
-./utils/run_photonsim.sh [macro_file]
-```
-
-## Job Management (jobs/)
-
-### Single Job Submission
-```bash
-./jobs/submit_photonsim_job.sh -p <particle> -n <nevents> -e <energy> -o <output_dir> [-f <filename>]
-```
-
-Parameters:
-- `-p`: Particle type (default: mu-)
-- `-n`: Number of events (default: 1000)
-- `-e`: Energy in MeV (default: 1000)
-- `-o`: Output directory (required)
-- `-f`: Output filename (default: output.root)
-
-### Batch Job Submission
-```bash
-./jobs/submit_photonsim_batch.sh -c <config_file> [-s] [-t]
-```
-
-Options:
-- `-c`: Configuration file (required)
+**Options:**
+- `-c`: Path to JSON configuration file (required)
 - `-s`: Submit jobs to SLURM (default: prepare only)
 - `-t`: Test mode - create only one job
 
-### Job Monitoring
+### JSON Configuration Format
+
+```json
+{
+  "config_number": 1,
+  "name": "muon_uniform_up_to_1500MeV",
+  "description": "Uniform energy muons with LUCiD processing",
+  "material": "water",
+  "output_path": "uniform_energy",
+  "energy_distribution": "uniform",
+  "store_individual_photons": true,
+  "run_lucid": true,
+  "disable_decays": false,
+  "particles": [
+    {
+      "type": "mu-",
+      "energy_min_MeV": 210,
+      "energy_max_MeV": 1500
+    }
+  ],
+  "lucid_options": {
+    "apply_smearing": true,
+    "apply_rotation": true,
+    "apply_translation": true
+  },
+  "n_jobs": 100,
+  "n_events_per_job": 1000
+}
+```
+
+### Configuration Fields
+
+| Field                 | Type    | Description                                       |
+|-----------------------|---------|---------------------------------------------------|
+| `config_number`       | integer | Unique ID (used in output folder: `config_XXXXXX`)|
+| `name`                | string  | Human-readable name                               |
+| `material`            | string  | "water" (other materials coming soon)             |
+| `output_path`         | string  | Subdirectory for output                           |
+| `energy_distribution` | string  | "uniform" or "monoenergetic"                      |
+| `particles`           | array   | List of particles with energy ranges              |
+| `disable_decays`      | boolean | Disable decay processes (for lookup tables)       |
+| `lucid_options`       | object  | LUCiD processing flags                            |
+| `n_jobs`              | integer | Number of SLURM jobs                              |
+| `n_events_per_job`    | integer | Events per job                                    |
+
+### Multi-Particle Events
+
+For events with multiple primaries, specify per-particle energy ranges:
+
+```json
+{
+  "particles": [
+    {"type": "mu-", "energy_min_MeV": 105, "energy_max_MeV": 1500},
+    {"type": "pi+", "energy_min_MeV": 122, "energy_max_MeV": 1500}
+  ]
+}
+```
+
+## Output Structure
+
+All data production jobs use a consistent output structure:
+
+```
+OUTPUT_BASE_PATH/
+└── water/
+    └── uniform_energy/
+        ├── config_000001/          # mu- single particle
+        │   ├── job_000001.mac
+        │   ├── run_job_000001.sh
+        │   ├── submit_job_000001.sbatch
+        │   ├── output_job_000001.root
+        │   └── events_job_000001.h5  (if run_lucid: true)
+        ├── config_000002/          # pi+ single particle
+        └── config_000004/          # mu- + pi+ multi-particle
+```
+
+## Job Management
+
+### Monitor Jobs
+
 ```bash
 ./jobs/monitor_jobs.sh [-a] [-w] [-o output_dir]
 ```
 
-Options:
 - `-a`: Show all jobs (default: only PhotonSim jobs)
 - `-w`: Watch mode - refresh every 30 seconds
-- `-o`: Check specific output directory for results
+- `-o`: Check specific output directory
 
-### Job Cleanup
+### Cleanup Jobs
+
 ```bash
 ./jobs/cleanup_jobs.sh -o <output_dir> [-l] [-m] [-s] [-a]
 ```
 
-Options:
-- `-o`: Output directory to clean (required)
-- `-l`: Clean log files (job-*.out, job-*.err)
+- `-l`: Clean log files (*.out, *.err)
 - `-m`: Clean macro files (*.mac)
 - `-s`: Clean script files (*.sh, *.sbatch)
-- `-a`: Clean all (logs, macros, and scripts)
+- `-a`: Clean all temporary files
 
-**Note**: Runs in dry-run mode by default. ROOT files are always preserved.
+**Note**: Runs in dry-run mode by default. ROOT and HDF5 files are always preserved.
 
-## Output Organization
+## Utilities
 
-Jobs create outputs following this structure:
+### Build PhotonSim
+
+```bash
+./utils/build_photonsim.sh
 ```
-output_directory/
-├── particle_type/
-│   ├── energyMeV/
-│   │   ├── output.root              # Simulation data
-│   │   ├── run_*.mac               # GEANT4 macro
-│   │   ├── run_photonsim.sh       # Job execution script
-│   │   ├── submit_job.sbatch      # SLURM submission script
-│   │   ├── job-*.out              # SLURM output log
-│   │   └── job-*.err              # SLURM error log
+
+### Check Installation
+
+```bash
+./utils/check_installation.sh
+```
+
+### Clean Build
+
+```bash
+./utils/clean_build.sh
 ```
 
 ## Example Workflows
 
-### 1. First-time Setup
+### 1. Single Particle Dataset
+
 ```bash
-# Configure paths
-cp user_paths.sh.template user_paths.sh
-vim user_paths.sh
-
-# Verify installation
-./utils/check_installation.sh
-
-# Build PhotonSim
-./utils/build_photonsim.sh
+# Generate muon dataset with uniform energy 210-1500 MeV
+./jobs/generate_jobs.sh -c ../macros/data_production_config/dataprod_single_neg_mu.json -s
 ```
 
-### 2. Single Job Test
-```bash
-# Submit single job
-./jobs/submit_photonsim_job.sh -p mu- -n 100 -e 500 -o /path/to/output
+### 2. Multi-Particle Dataset
 
-# Monitor
-./jobs/monitor_jobs.sh -w
+```bash
+# Generate mu- + pi+ mixed events
+./jobs/generate_jobs.sh -c ../macros/data_production_config/dataprod_neg_mu_pos_pion.json -s
 ```
 
-### 3. Batch Production
+### 3. Test Before Production
+
 ```bash
-# Create configuration
-cat > my_batch.txt << EOF
-mu- 1000 500 /path/to/output
-mu- 1000 1000 /path/to/output
-mu- 1000 2000 /path/to/output
-EOF
+# Test mode creates only one job
+./jobs/generate_jobs.sh -c ../macros/data_production_config/dataprod_single_neg_mu.json -t
 
-# Submit all jobs
-./jobs/submit_photonsim_batch.sh -c my_batch.txt -s
+# Check the generated files
+ls -la $OUTPUT_BASE_PATH/water/uniform_energy/config_000001/
 
-# Monitor progress
-./jobs/monitor_jobs.sh -w -o /path/to/output
+# If looks good, submit all
+./jobs/generate_jobs.sh -c ../macros/data_production_config/dataprod_single_neg_mu.json -s
 ```
-
-### 4. Cleanup After Production
-```bash
-# Remove temporary files, keep ROOT data
-./jobs/cleanup_jobs.sh -o /path/to/output -a
-```
-
-## SLURM Configuration
-
-Default job settings (configurable in `user_paths.sh`):
-- **Partition**: shared
-- **Account**: neutrino:cider-ml
-- **CPUs**: 1
-- **Memory**: 4GB per CPU
-- **Time limit**: 2 hours
 
 ## Troubleshooting
 
 ### Environment Issues
+
 1. Check `user_paths.sh` configuration
 2. Verify GEANT4 and ROOT installations
 3. Run `./utils/check_installation.sh`
 
 ### Build Failures
-1. Clean build directory: `./utils/clean_build.sh`
+
+1. Clean build: `./utils/clean_build.sh`
 2. Check environment: `source ./utils/setup_environment.sh`
 3. Rebuild: `./utils/build_photonsim.sh`
 
 ### Job Failures
-1. Check SLURM logs: `job-*.out` and `job-*.err`
-2. Test locally: run the generated `run_photonsim.sh` script
-3. Verify output directory permissions
 
-### Path Resolution
-All scripts automatically resolve their locations and find the PhotonSim root directory. No manual path configuration needed in the scripts themselves.
-
-## Notes
-
-- All scripts are designed to work from any directory
-- User-specific configuration is centralized in `user_paths.sh`
-- Scripts include comprehensive error checking and user feedback
-- Dry-run modes are available for testing before execution
+1. Check SLURM logs: `cat config_XXXXXX/job_*-*.out`
+2. Check error logs: `cat config_XXXXXX/job_*-*.err`
+3. Test locally by running the generated `run_job_*.sh` script

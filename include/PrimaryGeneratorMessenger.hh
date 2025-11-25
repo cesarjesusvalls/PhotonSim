@@ -61,6 +61,7 @@ class PrimaryGeneratorAction;
 /// - /gun/randomDirection [true/false]
 /// - /gun/numberOfPrimaries [int]
 /// - /gun/addPrimary [particleName] [energy] [unit]
+/// - /gun/addPrimaryWithEnergyRange [particleName] [minEnergy] [maxEnergy] [unit]
 /// - /gun/clearPrimaries
 
 class PrimaryGeneratorMessenger: public G4UImessenger
@@ -85,6 +86,7 @@ class PrimaryGeneratorMessenger: public G4UImessenger
     G4UIcmdWithABool*              fRandomDirectionCmd = nullptr;
     G4UIcmdWithAnInteger*          fNumberOfPrimariesCmd = nullptr;
     G4UIcommand*                   fAddPrimaryCmd = nullptr;
+    G4UIcommand*                   fAddPrimaryWithEnergyRangeCmd = nullptr;
     G4UIcmdWithoutParameter*       fClearPrimariesCmd = nullptr;
 };
 

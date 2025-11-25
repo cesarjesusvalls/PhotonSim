@@ -47,7 +47,10 @@ class PrimaryGeneratorMessenger;
 /// Specification for an individual primary particle
 struct PrimaryParticleSpec {
   G4String particleName;
-  G4double energy;
+  G4double energy;           // Fixed energy (used when useRandomEnergy is false)
+  G4double minEnergy = 0.0;  // Minimum energy for random sampling
+  G4double maxEnergy = 0.0;  // Maximum energy for random sampling
+  G4bool useRandomEnergy = false;  // If true, sample uniformly from [minEnergy, maxEnergy]
 };
 
 /// The primary generator action class with configurable particle gun.
@@ -75,6 +78,7 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
 
     // methods for heterogeneous primary particle list
     void AddPrimary(const G4String& particleName, G4double energy);
+    void AddPrimaryWithEnergyRange(const G4String& particleName, G4double minEnergy, G4double maxEnergy);
     void ClearPrimaries() { fPrimaryList.clear(); }
 
     // method to access particle gun
