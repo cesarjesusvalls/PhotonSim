@@ -483,9 +483,9 @@ fi
 echo ""
 echo "=== Step 2: Setting up LUCiD environment ==="
 export SINGULARITY_IMAGE_PATH=/sdf/group/neutrino/images/develop.sif
-export JAX_PLATFORMS=cpu
+export JAX_PLATFORMS=cuda,cpu
 function spython() {
-    singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch \${SINGULARITY_IMAGE_PATH} python "\$@"
+    singularity exec --nv -B /sdf,/fs,/sdf/scratch,/lscratch \${SINGULARITY_IMAGE_PATH} python "\$@"
 }
 
 # Create output folder for LUCiD
@@ -594,9 +594,11 @@ create_slurm_script() {
 #SBATCH --output=${output_dir}/job_${job_id}-%j.out
 #SBATCH --error=${output_dir}/job_${job_id}-%j.err
 #
+#SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=${DEFAULT_CPUS}
-#SBATCH --mem-per-cpu=${DEFAULT_MEMORY}
+#SBATCH --gpus=${DEFAULT_GPUS}
+#SBATCH --mem=${DEFAULT_MEMORY}
 #
 #SBATCH --time=${DEFAULT_TIME}
 

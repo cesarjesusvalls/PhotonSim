@@ -22,12 +22,14 @@ export LUCID_PATH="/path/to/your/LUCiD"
 # =============================================================================
 # SLURM Configuration
 # =============================================================================
-export SLURM_PARTITION="shared"
+# Use a GPU partition for LUCiD processing (e.g., ampere at SLAC S3DF)
+export SLURM_PARTITION="ampere"
 export SLURM_ACCOUNT="your-account:your-group"
 
 # =============================================================================
-# Resource Defaults
+# Resource Defaults (GPU-enabled for LUCiD)
 # =============================================================================
 export DEFAULT_CPUS="1"
-export DEFAULT_MEMORY="4g"
-export DEFAULT_TIME="02:00:00"
+export DEFAULT_MEMORY="39936"  # Memory in MB for GPU nodes
+export DEFAULT_GPUS="1"        # Number of GPUs per job
+export DEFAULT_TIME="23:00:00"
