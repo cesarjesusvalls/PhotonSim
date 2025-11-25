@@ -220,12 +220,9 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
                                       parentInfo->category >= 0);
 
       if (isFromInelastic || isFromDeflection || isFromCategorizedPion) {
-        // TEMPORARY: Threshold set to 0 for debugging (TODO: restore to 250 MeV/c)
-        // Skip classification for low-momentum secondary pions (<250 MeV/c)
-        // They don't produce Cherenkov photons, so their photons should use parent's genealogy
         G4double pionMomentum = track->GetMomentum().mag();
-        if (pionMomentum >= 160 * MeV) {  // TEMPORARY: was 250 * MeV
-          // Only classify pions above Cherenkov threshold
+        if (pionMomentum >= 195 * MeV) {
+          // Only classify pions producing a meaningful amount of Cherenkov light
 
           // Find the category-relevant parent
           G4int categoryParent = parentID;
