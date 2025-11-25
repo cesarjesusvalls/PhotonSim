@@ -53,14 +53,15 @@ export ROOT_INSTALL_DIR="/path/to/root/install"
 export OUTPUT_BASE_PATH="/path/to/photonsim/output"
 export LUCID_PATH="/path/to/LUCiD"
 
-# SLURM configuration
-export SLURM_PARTITION="shared"
-export SLURM_ACCOUNT="neutrino:cider-ml"
+# SLURM configuration (use GPU partition for LUCiD processing)
+export SLURM_PARTITION="ampere"
+export SLURM_ACCOUNT="your-account:your-group"
 
-# Resource defaults
+# Resource defaults (GPU-enabled for LUCiD)
 export DEFAULT_CPUS="1"
-export DEFAULT_MEMORY="4g"
-export DEFAULT_TIME="02:00:00"
+export DEFAULT_MEMORY="39936"  # Memory in MB for GPU nodes
+export DEFAULT_GPUS="1"        # Number of GPUs per job
+export DEFAULT_TIME="23:00:00"
 ```
 
 On S3DF, you can use existing installations:
@@ -142,6 +143,22 @@ For events with multiple primaries, specify per-particle energy ranges:
 }
 ```
 
+## Available Configurations
+
+Pre-defined configurations in `macros/data_production_config/`:
+
+| Config # | File | Particles | Energy Range |
+|----------|------|-----------|--------------|
+| 1 | `dataprod_single_neg_mu.json` | mu- | 210-1500 MeV |
+| 2 | `dataprod_single_pos_pi.json` | pi+ | 210-1500 MeV |
+| 3 | `dataprod_single_neg_e.json` | e- | 10-1500 MeV |
+| 4 | `dataprod_neg_mu_pos_pion.json` | mu- + pi+ | 105-1500 MeV |
+| 5 | `dataprod_neg_e_pos_pion.json` | e- + pi+ | 100-1500 MeV |
+| 6 | `dataprod_single_neg_pi.json` | pi- | 100-1500 MeV |
+| 7 | `dataprod_low_energy_e.json` | e- (low energy) | 1-20 MeV |
+| 8 | `dataprod_neg_mu_2pos_pion.json` | mu- + pi+ + pi+ | 100-1500 MeV |
+| 9 | `dataprod_neg_mu_pos_neg_pion.json` | mu- + pi+ + pi- | 100-1500 MeV |
+
 ## Output Structure
 
 All data production jobs use a consistent output structure:
@@ -157,7 +174,8 @@ OUTPUT_BASE_PATH/
         │   ├── output_job_000001.root
         │   └── events_job_000001.h5  (if run_lucid: true)
         ├── config_000002/          # pi+ single particle
-        └── config_000004/          # mu- + pi+ multi-particle
+        ├── ...
+        └── config_000009/          # mu- + pi+ + pi- multi-particle
 ```
 
 ## Job Management
@@ -253,3 +271,52 @@ ls -la $OUTPUT_BASE_PATH/water/uniform_energy/config_000001/
 1. Check SLURM logs: `cat config_XXXXXX/job_*-*.out`
 2. Check error logs: `cat config_XXXXXX/job_*-*.err`
 3. Test locally by running the generated `run_job_*.sh` script
+
+## Output Validation with LUCiD Visualization
+
+After jobs complete, you can generate interactive HTML visualizations to validate the output using LUCiD's `visualize_by_label.py` script.
+
+### Generate Validation HTML
+
+```bash
+# Using singularity on S3DF
+singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch \
+  /sdf/group/neutrino/images/develop.sif python \
+  $LUCID_PATH/tools/production/visualize_by_label.py \
+  <hdf5_file> \
+  $LUCID_PATH/config/SK_geom_config.json \
+  --event <event_index> \
+  --output-dir <output_directory>
+```
+
+### Example
+
+```bash
+# Visualize event 0 from config_000001 job 1
+singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch \
+  /sdf/group/neutrino/images/develop.sif python \
+  $LUCID_PATH/tools/production/visualize_by_label.py \
+  $OUTPUT_BASE_PATH/water/uniform_energy/config_000001/events_job_000001.h5 \
+  $LUCID_PATH/config/SK_geom_config.json \
+  --event 0 \
+  --output-dir $LUCID_PATH/validation_html
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--event N` | Event index to visualize (default: 0) |
+| `--min-charge X` | Minimum charge threshold in PE (default: 1.0) |
+| `--output-dir DIR` | Output directory for HTML file (default: current directory) |
+
+### Output
+
+The script generates an interactive HTML file with:
+- 3D visualization of sensor hits colored by charge or label
+- Track arrows showing particle directions
+- Slider to switch between views (Arrows, By Label, All, individual labels)
+- Event genealogy information showing particle hierarchy
+- Light containment metrics
+
+The HTML file can be opened in any web browser for interactive exploration.
