@@ -1,41 +1,56 @@
 #!/bin/bash
 # Script to submit multiple JSON configurations
-# Usage: ./submit_all_configs.sh [-p pattern] [-s] [-t] [-d]
+# Usage: ./submit_all_configs.sh [-p pattern] [-s] [-t] [-d] [-n n_jobs] [-e events] [-g] [-P partition]
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 CONFIG_DIR="${SCRIPT_DIR}/../../macros/data_production_config"
 
 # Default values
-PATTERN="*.json"
+PATTERN="dataprod*.json"
 SUBMIT_JOBS=false
 TEST_MODE=false
 DRY_RUN=false
+N_JOBS_OVERRIDE=""
+N_EVENTS_OVERRIDE=""
+USE_GPU=false
+PARTITION_OVERRIDE=""
+OUTPUT_OVERRIDE=""
 
 # Parse command line arguments
-while getopts "p:stdh" opt; do
+while getopts "p:stdn:e:gP:o:h" opt; do
     case $opt in
         p) PATTERN="$OPTARG";;
         s) SUBMIT_JOBS=true;;
         t) TEST_MODE=true;;
         d) DRY_RUN=true;;
-        h) echo "Usage: $0 [-p pattern] [-s] [-t] [-d]"
-           echo "  -p: Pattern to match config files (default: *.json)"
+        n) N_JOBS_OVERRIDE="$OPTARG";;
+        e) N_EVENTS_OVERRIDE="$OPTARG";;
+        g) USE_GPU=true;;
+        P) PARTITION_OVERRIDE="$OPTARG";;
+        o) OUTPUT_OVERRIDE="$OPTARG";;
+        h) echo "Usage: $0 [-p pattern] [-s] [-t] [-d] [-n n_jobs] [-e events] [-g] [-P partition] [-o output_base]"
+           echo "  -p: Pattern to match config files (default: dataprod*.json)"
            echo "  -s: Submit jobs to SLURM (default: prepare only)"
            echo "  -t: Test mode - create only one job per config"
            echo "  -d: Dry run - show what would be submitted without doing it"
+           echo "  -n: Override number of jobs per config"
+           echo "  -e: Override events per job"
+           echo "  -g: Enable GPU mode (request 1 GPU per job)"
+           echo "  -P: SLURM partition override"
+           echo "  -o: Output base path override"
            echo ""
            echo "Examples:"
            echo "  # Dry run to see all configs"
            echo "  $0 -d"
            echo ""
-           echo "  # Submit all uniform energy configs"
-           echo "  $0 -p 'uniform*.json' -s"
+           echo "  # Submit all configs with 2 jobs, 100 events, GPU mode"
+           echo "  $0 -n 2 -e 100 -g -P ampere -s"
            echo ""
-           echo "  # Test all monoenergetic configs"
-           echo "  $0 -p 'monoenergetic*.json' -t"
+           echo "  # Test all configs (1 job each, no submit)"
+           echo "  $0 -t"
            echo ""
-           echo "  # Submit all configs (prepare and submit)"
-           echo "  $0 -s"
+           echo "  # Submit to specific output directory"
+           echo "  $0 -n 10 -e 100 -P roma -o /path/to/output -s"
            exit 0;;
         \?) echo "Invalid option -$OPTARG" >&2; exit 1;;
     esac
@@ -62,6 +77,24 @@ echo "Pattern: $PATTERN"
 echo "Found ${#CONFIG_FILES[@]} configuration file(s)"
 echo ""
 
+# Show override settings
+if [ -n "$N_JOBS_OVERRIDE" ]; then
+    echo "Jobs per config override: $N_JOBS_OVERRIDE"
+fi
+if [ -n "$N_EVENTS_OVERRIDE" ]; then
+    echo "Events per job override: $N_EVENTS_OVERRIDE"
+fi
+if [ "$USE_GPU" = true ]; then
+    echo "GPU mode: enabled"
+fi
+if [ -n "$PARTITION_OVERRIDE" ]; then
+    echo "Partition override: $PARTITION_OVERRIDE"
+fi
+if [ -n "$OUTPUT_OVERRIDE" ]; then
+    echo "Output base override: $OUTPUT_OVERRIDE"
+fi
+echo ""
+
 # Show what will be processed
 echo "Configurations to process:"
 for config_file in "${CONFIG_FILES[@]}"; do
@@ -71,7 +104,7 @@ for config_file in "${CONFIG_FILES[@]}"; do
 done
 echo ""
 
-# Build command arguments
+# Build command arguments for generate_jobs.sh
 CMD_ARGS=""
 if [ "$SUBMIT_JOBS" = true ]; then
     CMD_ARGS="$CMD_ARGS -s"
@@ -84,12 +117,36 @@ if [ "$TEST_MODE" = true ]; then
     CMD_ARGS="$CMD_ARGS -t"
     echo "Test mode: Only 1 job per configuration"
 fi
+
+if [ "$USE_GPU" = true ]; then
+    CMD_ARGS="$CMD_ARGS -g"
+fi
+
+if [ -n "$PARTITION_OVERRIDE" ]; then
+    CMD_ARGS="$CMD_ARGS -P $PARTITION_OVERRIDE"
+fi
+
+if [ -n "$OUTPUT_OVERRIDE" ]; then
+    CMD_ARGS="$CMD_ARGS -o $OUTPUT_OVERRIDE"
+fi
 echo ""
+
+# Create temporary directory for modified configs if needed
+TEMP_DIR=""
+if [ -n "$N_JOBS_OVERRIDE" ] || [ -n "$N_EVENTS_OVERRIDE" ]; then
+    TEMP_DIR=$(mktemp -d)
+    trap "rm -rf $TEMP_DIR" EXIT
+    echo "Creating temporary configs with overridden values..."
+fi
 
 if [ "$DRY_RUN" = true ]; then
     echo "DRY RUN - Would execute the following:"
     for config_file in "${CONFIG_FILES[@]}"; do
-        echo "  ${SCRIPT_DIR}/generate_jobs.sh -c $config_file $CMD_ARGS"
+        config_to_use="$config_file"
+        if [ -n "$TEMP_DIR" ]; then
+            config_to_use="${TEMP_DIR}/$(basename "$config_file")"
+        fi
+        echo "  ${SCRIPT_DIR}/generate_jobs.sh -c $config_to_use $CMD_ARGS"
     done
     echo ""
     echo "Run without -d flag to actually execute"
@@ -119,8 +176,31 @@ for config_file in "${CONFIG_FILES[@]}"; do
     echo "Processing: $config_name"
     echo "=========================================="
 
+    # Determine which config file to use
+    config_to_use="$config_file"
+
+    # Create modified config if overrides are specified
+    if [ -n "$TEMP_DIR" ]; then
+        temp_config="${TEMP_DIR}/${config_name}"
+
+        # Start with original config
+        cp "$config_file" "$temp_config"
+
+        # Apply n_jobs override
+        if [ -n "$N_JOBS_OVERRIDE" ]; then
+            jq --argjson njobs "$N_JOBS_OVERRIDE" '.n_jobs = $njobs' "$temp_config" > "${temp_config}.tmp" && mv "${temp_config}.tmp" "$temp_config"
+        fi
+
+        # Apply n_events_per_job override
+        if [ -n "$N_EVENTS_OVERRIDE" ]; then
+            jq --argjson nevents "$N_EVENTS_OVERRIDE" '.n_events_per_job = $nevents' "$temp_config" > "${temp_config}.tmp" && mv "${temp_config}.tmp" "$temp_config"
+        fi
+
+        config_to_use="$temp_config"
+    fi
+
     # Execute generate_jobs.sh
-    if ${SCRIPT_DIR}/generate_jobs.sh -c "$config_file" $CMD_ARGS; then
+    if ${SCRIPT_DIR}/generate_jobs.sh -c "$config_to_use" $CMD_ARGS; then
         SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
         echo "✓ Success: $config_name"
     else

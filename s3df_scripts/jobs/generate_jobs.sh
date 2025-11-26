@@ -24,17 +24,26 @@ fi
 CONFIG_FILE=""
 SUBMIT_JOBS=false
 TEST_MODE=false
+USE_GPU=false
+PARTITION_OVERRIDE=""
+OUTPUT_OVERRIDE=""
 
 # Parse command line arguments
-while getopts "c:sth" opt; do
+while getopts "c:stgP:o:h" opt; do
     case $opt in
         c) CONFIG_FILE="$OPTARG";;
         s) SUBMIT_JOBS=true;;
         t) TEST_MODE=true;;
-        h) echo "Usage: $0 -c <config_json> [-s] [-t]"
+        g) USE_GPU=true;;
+        P) PARTITION_OVERRIDE="$OPTARG";;
+        o) OUTPUT_OVERRIDE="$OPTARG";;
+        h) echo "Usage: $0 -c <config_json> [-s] [-t] [-g] [-P partition] [-o output_base]"
            echo "  -c: Path to JSON configuration file (required)"
            echo "  -s: Submit jobs to SLURM (default: prepare only)"
            echo "  -t: Test mode - create only one job"
+           echo "  -g: Enable GPU mode (request 1 GPU per job)"
+           echo "  -P: SLURM partition (default: from user_paths.sh)"
+           echo "  -o: Output base path override (default: from user_paths.sh)"
            echo ""
            echo "See macros/data_production_config/ for example configurations"
            exit 0;;
@@ -88,7 +97,13 @@ if [ "$CONFIG_NUMBER" == "null" ] || [ "$CONFIG_NUMBER" == "-1" ]; then
 fi
 
 # Build output directory - always use config_XXXXXX format
-OUTPUT_BASE_DIR="${OUTPUT_BASE_PATH}/${MATERIAL}/${OUTPUT_PATH}"
+# Use override if specified, otherwise use default from user_paths.sh
+if [ -n "$OUTPUT_OVERRIDE" ]; then
+    EFFECTIVE_OUTPUT_BASE="$OUTPUT_OVERRIDE"
+else
+    EFFECTIVE_OUTPUT_BASE="$OUTPUT_BASE_PATH"
+fi
+OUTPUT_BASE_DIR="${EFFECTIVE_OUTPUT_BASE}/${MATERIAL}/${OUTPUT_PATH}"
 CONFIG_DIR="${OUTPUT_BASE_DIR}/config_$(printf "%06d" $CONFIG_NUMBER)"
 
 # Validate parsed values
@@ -120,6 +135,19 @@ if [ "$RUN_LUCID" == "true" ]; then
     fi
 fi
 
+# Determine partition and GPU settings
+if [ -n "$PARTITION_OVERRIDE" ]; then
+    EFFECTIVE_PARTITION="$PARTITION_OVERRIDE"
+else
+    EFFECTIVE_PARTITION="$SLURM_PARTITION"
+fi
+
+if [ "$USE_GPU" = true ]; then
+    EFFECTIVE_GPUS="1"
+else
+    EFFECTIVE_GPUS="0"
+fi
+
 # Print configuration summary
 echo "Configuration: $CONFIG_NAME (config_$(printf "%06d" $CONFIG_NUMBER))"
 echo "Description: $CONFIG_DESC"
@@ -135,6 +163,8 @@ fi
 echo "Number of particles per event: $N_PARTICLES"
 echo "Number of jobs: $N_JOBS"
 echo "Events per job: $N_EVENTS"
+echo "SLURM partition: $EFFECTIVE_PARTITION"
+echo "GPU mode: $USE_GPU (GPUs: $EFFECTIVE_GPUS)"
 echo "Output directory: $CONFIG_DIR"
 echo ""
 
@@ -585,9 +615,15 @@ create_slurm_script() {
     local job_id="$4"
     local job_name="$5"
 
+    # Build GPU line conditionally
+    local gpu_line=""
+    if [ "$EFFECTIVE_GPUS" != "0" ]; then
+        gpu_line="#SBATCH --gpus=${EFFECTIVE_GPUS}"
+    fi
+
     cat > "$slurm_script" << EOFSLURM
 #!/bin/bash
-#SBATCH --partition=${SLURM_PARTITION}
+#SBATCH --partition=${EFFECTIVE_PARTITION}
 #SBATCH --account=${SLURM_ACCOUNT}
 #
 #SBATCH --job-name=${job_name}
@@ -597,7 +633,7 @@ create_slurm_script() {
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=${DEFAULT_CPUS}
-#SBATCH --gpus=${DEFAULT_GPUS}
+${gpu_line}
 #SBATCH --mem=${DEFAULT_MEMORY}
 #
 #SBATCH --time=${DEFAULT_TIME}
@@ -605,6 +641,7 @@ create_slurm_script() {
 echo "SLURM Job ID: \${SLURM_JOB_ID}"
 echo "Job started at: \$(date)"
 echo "Running on node: \$(hostname)"
+echo "GPU mode: ${USE_GPU}"
 
 # Execute the job script
 ${job_script}
