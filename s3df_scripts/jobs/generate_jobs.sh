@@ -89,6 +89,7 @@ DISABLE_DECAYS=$(jq -r '.disable_decays // false' "$CONFIG_FILE")
 APPLY_SMEARING=$(jq -r '.lucid_options.apply_smearing // true' "$CONFIG_FILE")
 APPLY_ROTATION=$(jq -r '.lucid_options.apply_rotation // true' "$CONFIG_FILE")
 APPLY_TRANSLATION=$(jq -r '.lucid_options.apply_translation // true' "$CONFIG_FILE")
+CLEANUP_ROOT_FILES=$(jq -r '.cleanup_root_files // false' "$CONFIG_FILE")
 
 # Validate config_number (required for unified output structure)
 if [ "$CONFIG_NUMBER" == "null" ] || [ "$CONFIG_NUMBER" == "-1" ]; then
@@ -159,6 +160,7 @@ if [ "$RUN_LUCID" == "true" ]; then
     echo "  - Apply smearing: $APPLY_SMEARING"
     echo "  - Apply rotation: $APPLY_ROTATION"
     echo "  - Apply translation: $APPLY_TRANSLATION"
+    echo "  - Cleanup ROOT files: $CLEANUP_ROOT_FILES"
 fi
 echo "Number of particles per event: $N_PARTICLES"
 echo "Number of jobs: $N_JOBS"
@@ -558,10 +560,28 @@ ls -lh "\${FINAL_H5_PATH}"
 # Remove the temporary folder
 rmdir "\${LUCID_OUTPUT_FOLDER}" 2>/dev/null && echo "Removed temporary folder: \${LUCID_OUTPUT_FOLDER}" || echo "Folder not empty, keeping: \${LUCID_OUTPUT_FOLDER}"
 
+# Step 5: Cleanup ROOT file if requested
+CLEANUP_ROOT=${CLEANUP_ROOT_FILES}
+if [ "\${CLEANUP_ROOT}" == "true" ]; then
+    echo ""
+    echo "=== Step 5: Cleaning up ROOT file ==="
+    if [ -f "\${FINAL_H5_PATH}" ]; then
+        rm -f "${output_dir}/${output_file}"
+        echo "Removed intermediate ROOT file: ${output_dir}/${output_file}"
+    else
+        echo "Warning: HDF5 output not found, keeping ROOT file for safety"
+    fi
+fi
+
 echo ""
 echo "=== Job completed successfully ==="
-echo "PhotonSim output: ${output_dir}/${output_file}"
-echo "LUCiD output: \${FINAL_H5_PATH}"
+if [ "\${CLEANUP_ROOT}" == "true" ]; then
+    echo "LUCiD output: \${FINAL_H5_PATH}"
+    echo "(ROOT file was cleaned up)"
+else
+    echo "PhotonSim output: ${output_dir}/${output_file}"
+    echo "LUCiD output: \${FINAL_H5_PATH}"
+fi
 EOFJOBSCRIPT
     else
         # Job script without LUCiD

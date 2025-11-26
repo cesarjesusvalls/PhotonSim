@@ -2,16 +2,12 @@
   "config_number": 8,
   "name": "mu_2pi_mixed_up_to_1500MeV",
   "description": "Multi-particle events with muon and two positive pions with LUCiD processing",
-
   "material": "water",
   "output_path": "uniform_energy",
-
   "energy_distribution": "uniform",
-
   "store_individual_photons": true,
   "run_lucid": true,
   "disable_decays": false,
-
   "particles": [
     {
       "type": "mu-",
@@ -29,13 +25,12 @@
       "energy_max_MeV": 1500
     }
   ],
-
   "lucid_options": {
     "apply_smearing": true,
     "apply_rotation": true,
     "apply_translation": true
   },
-
   "n_jobs": 2,
-  "n_events_per_job": 100
+  "n_events_per_job": 100,
+  "cleanup_root_files": true
 }
