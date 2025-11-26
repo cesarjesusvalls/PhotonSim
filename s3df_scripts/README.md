@@ -213,12 +213,78 @@ OUTPUT_BASE_PATH/
         │   ├── job_000001.mac
         │   ├── run_job_000001.sh
         │   ├── submit_job_000001.sbatch
-        │   ├── output_job_000001.root
+        │   ├── output_job_000001.root  (deleted if cleanup_root_files: true)
         │   └── events_job_000001.h5  (if run_lucid: true)
         ├── config_000002/          # pi+ single particle
         ├── ...
         └── config_000009/          # mu- + pi+ + pi- multi-particle
 ```
+
+### HDF5 Output Format
+
+Each `events_job_XXXXXX.h5` file contains one group per event (`event_0`, `event_1`, etc.) with the following datasets:
+
+#### Event Metadata
+
+| Dataset | Shape | Dtype | Description |
+|---------|-------|-------|-------------|
+| `event_number` | () | int32 | Event index in the file |
+| `n_labels` | () | int32 | Number of distinct particle labels in this event |
+| `primary_energy` | () | float64 | Total primary particle energy (MeV) |
+| `apply_smearing` | () | bool | Whether PMT smearing was applied |
+
+#### Reconstructed Sensor Data
+
+| Dataset | Shape | Dtype | Description |
+|---------|-------|-------|-------------|
+| `Q_reco` | (N_sensors,) | float32 | Reconstructed charge per sensor (PE) — sum over all labels |
+| `T_reco` | (N_sensors,) | float32 | Reconstructed time per sensor (ns) — earliest hit time |
+| `Q_true` | (N_sensors,) | float32 | True charge per sensor (PE) — no smearing |
+| `T_true` | (N_sensors,) | float32 | True time per sensor (ns) — no smearing |
+
+#### Per-Label Sensor Data
+
+| Dataset | Shape | Dtype | Description |
+|---------|-------|-------|-------------|
+| `Q_per_label` | (n_labels, N_sensors) | float32 | Charge per sensor for each label separately |
+| `T_per_label` | (n_labels, N_sensors) | float32 | First hit time per sensor for each label |
+
+#### Label Metadata
+
+| Dataset | Shape | Dtype | Description |
+|---------|-------|-------|-------------|
+| `Label_Category` | (n_labels,) | int32 | Category ID (0=Primary, 1=DecayElectron, 2=GammaShower, 3=SecondaryPion) |
+| `Label_CategoryName` | (n_labels,) | string | Category name: "Primary", "DecayElectron", "GammaShower", or "SecondaryPion" |
+| `Label_Genealogy` | (n_labels,) | int32 array | Track ID ancestry chain (e.g., `[2, 144734, 282049]` → descended from primary track 2 through tracks 144734 → 282049) |
+
+#### Track Information (per label)
+
+| Dataset | Shape | Dtype | Description |
+|---------|-------|-------|-------------|
+| `Track_PDG` | (n_labels,) | int32 | PDG code of the particle |
+| `Track_Energy` | (n_labels,) | float64 | Kinetic energy of the track (MeV) |
+| `Track_Position` | (n_labels, 3) | float64 | Start position (x, y, z) in meters |
+| `Track_Direction` | (n_labels, 3) | float64 | Initial direction unit vector (dx, dy, dz) |
+| `Track_Time` | (n_labels,) | float64 | Start time of the track (ns) |
+| `Track_ParentID` | (n_labels,) | int32 | Parent track ID (0 = primary) |
+
+#### Containment Metrics
+
+| Dataset | Shape | Dtype | Description |
+|---------|-------|-------|-------------|
+| `light_containment_by_label` | (n_labels,) | float64 | Fraction of light contained in detector per label |
+| `overall_light_containment` | () | float64 | Overall light containment for the event |
+
+### Label Categories
+
+Photons are grouped into labels based on the particle that produced them:
+
+| Label | Condition | Description |
+|-------|-----------|-------------|
+| `kPrimary` (0) | `parentID == 0` | Primary particle from the gun |
+| `kDecayElectron` (1) | e± from μ/π decay, KE > 1 MeV | Michel electrons from muon decay; electrons from pion decay |
+| `kGammaShower` (2) | γ from π⁰ decay | Electromagnetic showers from neutral pion decay |
+| `kSecondaryPion` (3) | π± from inelastic scatter or deflection > 5°, p ≥ 195 MeV/c | Charged pions from hadronic interactions or large-angle elastic scatters |
 
 ## Job Management
 
