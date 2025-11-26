@@ -205,8 +205,10 @@ def plot_histograms(results, output_file=None):
         color = colors[i % len(colors)]
 
         # Create histogram with auto-scaled bins
-        n, bins, patches = ax.hist(times, bins=15, color=color, edgecolor='white',
-                                    alpha=0.8, linewidth=0.5)
+        # Use range parameter to set bin edges, which ensures proper bin distribution
+        p99 = np.percentile(times, 99)
+        n, bins, patches = ax.hist(times, bins=15, color=color,
+                                    edgecolor='white', alpha=0.8, linewidth=0.5)
 
         # Color the bars
         for patch in patches:
@@ -236,9 +238,8 @@ def plot_histograms(results, output_file=None):
                 fontsize=7, verticalalignment='top', horizontalalignment='right',
                 bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='gray'))
 
-        # Set reasonable x-axis limits (exclude extreme outliers from view)
-        p99 = np.percentile(times, 99)
-        ax.set_xlim(0, min(result['max'], p99 * 1.1))
+        # x-axis limits match histogram range
+        # ax.set_xlim(0, p99)
 
     # Hide unused subplots
     for i in range(n_configs, len(axes)):

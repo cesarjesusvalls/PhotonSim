@@ -33,9 +33,11 @@ s3df_scripts/
 │   ├── clean_build.sh         # Clean build directory
 │   └── check_installation.sh  # Verify installation
 └── jobs/                      # Job submission and management
-    ├── generate_jobs.sh       # Main job generation script
+    ├── generate_jobs.sh       # Generate jobs for a single config
+    ├── submit_all_configs.sh  # Submit jobs for all configs at once
     ├── monitor_jobs.sh        # Monitor running jobs
-    └── cleanup_jobs.sh        # Clean job outputs
+    ├── cleanup_jobs.sh        # Clean job outputs
+    └── report_time_performance.py  # Generate timing statistics and plots
 ```
 
 ## Configuration
@@ -143,6 +145,46 @@ For events with multiple primaries, specify per-particle energy ranges:
 }
 ```
 
+### submit_all_configs.sh
+
+Submit jobs for multiple configurations at once with custom settings.
+
+```bash
+./jobs/submit_all_configs.sh [-p pattern] [-s] [-t] [-d] [-n n_jobs] [-e events] [-g] [-P partition] [-o output_base]
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `-p` | Pattern to match config files (default: `dataprod*.json`) |
+| `-s` | Submit jobs to SLURM (default: prepare only) |
+| `-t` | Test mode - create only one job per config |
+| `-d` | Dry run - show what would be submitted without doing it |
+| `-n` | Override number of jobs per config |
+| `-e` | Override events per job |
+| `-g` | Enable GPU mode (request 1 GPU per job) |
+| `-P` | SLURM partition override (e.g., `ampere`, `roma`, `milano`) |
+| `-o` | Output base path override |
+
+**Examples:**
+
+```bash
+# Dry run to see all configs that would be processed
+./jobs/submit_all_configs.sh -d
+
+# Submit all configs with GPU mode on ampere partition
+./jobs/submit_all_configs.sh -n 10 -e 100 -g -P ampere -s
+
+# Submit all configs on CPU partition (roma)
+./jobs/submit_all_configs.sh -n 10 -e 100 -P roma -s
+
+# Submit to custom output directory
+./jobs/submit_all_configs.sh -n 5 -e 50 -P milano -o /path/to/custom/output -s
+
+# Test all configs (1 job each, no submission)
+./jobs/submit_all_configs.sh -t
+```
+
 ## Available Configurations
 
 Pre-defined configurations in `macros/data_production_config/`:
@@ -202,6 +244,62 @@ OUTPUT_BASE_PATH/
 - `-a`: Clean all temporary files
 
 **Note**: Runs in dry-run mode by default. ROOT and HDF5 files are always preserved.
+
+### Performance Timing Report
+
+Generate statistics and histograms of LUCiD per-event processing times from job outputs.
+
+```bash
+python ./jobs/report_time_performance.py --all --base-dir <path_to_configs> [--output report.png]
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--config-dir` | Analyze a specific config directory |
+| `--all` | Analyze all configs in base directory |
+| `--base-dir` | Base directory containing `config_XXXXXX` folders |
+| `--output` | Output file for histogram (PNG) |
+| `--no-plot` | Skip plot generation, only print statistics |
+
+**Examples:**
+
+```bash
+# Analyze all configs and generate histogram
+python ./jobs/report_time_performance.py --all \
+  --base-dir /path/to/water/uniform_energy \
+  --output timing_report.png
+
+# Analyze a single config
+python ./jobs/report_time_performance.py \
+  --config-dir /path/to/water/uniform_energy/config_000001
+
+# Print statistics only (no plot)
+python ./jobs/report_time_performance.py --all \
+  --base-dir /path/to/water/uniform_energy \
+  --no-plot
+```
+
+The script parses SLURM job output files to extract per-event LUCiD processing times and generates:
+- Per-config statistics (min, max, mean, median, percentiles)
+- Summary table comparing all configurations
+- Histogram plots showing time distributions
+
+### LUCiD Processing Time Benchmarks
+
+Median LUCiD processing times (seconds/event) across different S3DF partitions. PhotonSim adds ~2s per event regardless of partition.
+
+| Config | Description    | Ampere (GPU) | Roma (CPU) | Milano (CPU) |
+|--------|----------------|--------------|------------|--------------|
+| 000001 | muon           | 0.51s        | 6.79s      | 9.04s        |
+| 000002 | charged pion   | 0.28s        | 7.54s      | 8.93s        |
+| 000003 | electron       | 0.46s        | 2.26s      | 5.94s        |
+| 000004 | mu + pi mixed  | 0.83s        | 26.22s     | 21.59s       |
+| 000005 | e + pi mixed   | 0.74s        | 16.31s     | 19.14s       |
+| 000006 | neg pion       | 0.26s        | 5.70s      | 10.12s       |
+| 000007 | low-e electron | 0.06s        | 0.06s      | 0.08s        |
+| 000008 | mu + 2pi mixed | 1.17s        | 34.24s     | 26.69s       |
+| 000009 | mu + pi+ + pi- | 1.06s        | 32.71s     | 28.65s       |
 
 ## Utilities
 
