@@ -1,7 +1,7 @@
 {
-  "config_number": 3,
-  "name": "electron_uniform_up_to_1500MeV",
-  "description": "Uniform energy distribution for electrons with LUCiD processing",
+  "config_number": 4,
+  "name": "pi_minus_100_to_1500MeV",
+  "description": "Single negative pion with LUCiD processing",
   "material": "water",
   "output_path": "uniform_energy",
   "energy_distribution": "uniform",
@@ -10,8 +10,8 @@
   "disable_decays": false,
   "particles": [
     {
-      "type": "e-",
-      "energy_min_MeV": 10,
+      "type": "pi-",
+      "energy_min_MeV": 100,
       "energy_max_MeV": 1500
     }
   ],

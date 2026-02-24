@@ -166,6 +166,11 @@ Submit jobs for multiple configurations at once with custom settings.
 | `-P` | SLURM partition override (e.g., `ampere`, `roma`, `milano`) |
 | `-o` | Output base path override |
 
+**Note:** When using `-s` to submit jobs, the script will prompt for confirmation before submitting. Pipe `echo "y"` to bypass:
+```bash
+echo "y" | ./jobs/submit_all_configs.sh -n 10 -e 100 -s
+```
+
 **Examples:**
 
 ```bash
@@ -191,15 +196,18 @@ Pre-defined configurations in `macros/data_production_config/`:
 
 | Config # | File | Particles | Energy Range |
 |----------|------|-----------|--------------|
-| 1 | `dataprod_single_neg_mu.json` | mu- | 210-1500 MeV |
-| 2 | `dataprod_single_pos_pi.json` | pi+ | 210-1500 MeV |
-| 3 | `dataprod_single_neg_e.json` | e- | 10-1500 MeV |
-| 4 | `dataprod_neg_mu_pos_pion.json` | mu- + pi+ | 105-1500 MeV |
-| 5 | `dataprod_neg_e_pos_pion.json` | e- + pi+ | 100-1500 MeV |
-| 6 | `dataprod_single_neg_pi.json` | pi- | 100-1500 MeV |
-| 7 | `dataprod_low_energy_e.json` | e- (low energy) | 1-20 MeV |
-| 8 | `dataprod_neg_mu_2pos_pion.json` | mu- + pi+ + pi+ | 100-1500 MeV |
-| 9 | `dataprod_neg_mu_pos_neg_pion.json` | mu- + pi+ + pi- | 100-1500 MeV |
+| 1 | `dataprod_01_mu.json` | mu- | 210-1500 MeV |
+| 2 | `dataprod_02_pi_plus.json` | pi+ | 210-1500 MeV |
+| 3 | `dataprod_03_e.json` | e- | 10-1500 MeV |
+| 4 | `dataprod_04_pi_minus.json` | pi- | 100-1500 MeV |
+| 5 | `dataprod_05_pi0.json` | pi0 | 100-1500 MeV |
+| 6 | `dataprod_06_e_low_energy.json` | e- (low energy) | 1-20 MeV |
+| 7 | `dataprod_07_mu_pi_plus.json` | mu- + pi+ | 105-1500 MeV |
+| 8 | `dataprod_08_e_pi_plus.json` | e- + pi+ | 100-1500 MeV |
+| 9 | `dataprod_09_e_pi0.json` | e- + pi0 | 100-1500 MeV |
+| 10 | `dataprod_10_mu_pi_plus_pi0.json` | mu- + pi+ + pi0 | 100-1500 MeV |
+| 11 | `dataprod_11_mu_pi_plus_pi_minus.json` | mu- + pi+ + pi- | 100-1500 MeV |
+| 12 | `dataprod_12_e_pi_plus_pi0.json` | e- + pi+ + pi0 | 100-1500 MeV |
 
 ## Output Structure
 

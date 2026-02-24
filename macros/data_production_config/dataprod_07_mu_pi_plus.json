@@ -1,7 +1,7 @@
 {
-  "config_number": 6,
-  "name": "neg_pion_uniform_up_to_1500MeV",
-  "description": "Uniform energy distribution for negative pions with LUCiD processing",
+  "config_number": 7,
+  "name": "mu_pi_plus_105_to_1500MeV",
+  "description": "Multi-particle events with muon and positive pion with LUCiD processing",
   "material": "water",
   "output_path": "uniform_energy",
   "energy_distribution": "uniform",
@@ -10,8 +10,13 @@
   "disable_decays": false,
   "particles": [
     {
-      "type": "pi-",
-      "energy_min_MeV": 100,
+      "type": "mu-",
+      "energy_min_MeV": 105,
+      "energy_max_MeV": 1500
+    },
+    {
+      "type": "pi+",
+      "energy_min_MeV": 105,
       "energy_max_MeV": 1500
     }
   ],

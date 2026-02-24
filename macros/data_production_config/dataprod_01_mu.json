@@ -1,7 +1,7 @@
 {
-  "config_number": 7,
-  "name": "electron_low_energy_1_to_20MeV",
-  "description": "Low energy electrons (1-20 MeV) with LUCiD processing",
+  "config_number": 1,
+  "name": "muon_210_to_1500MeV",
+  "description": "Single muon with LUCiD processing",
   "material": "water",
   "output_path": "uniform_energy",
   "energy_distribution": "uniform",
@@ -10,9 +10,9 @@
   "disable_decays": false,
   "particles": [
     {
-      "type": "e-",
-      "energy_min_MeV": 1,
-      "energy_max_MeV": 20
+      "type": "mu-",
+      "energy_min_MeV": 210,
+      "energy_max_MeV": 1500
     }
   ],
   "lucid_options": {

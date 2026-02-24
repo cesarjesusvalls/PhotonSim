@@ -1,7 +1,7 @@
 {
-  "config_number": 2,
-  "name": "charged_pion_uniform_up_to_1500MeV",
-  "description": "Uniform energy distribution for charged pions with LUCiD processing",
+  "config_number": 6,
+  "name": "electron_low_energy_1_to_20MeV",
+  "description": "Low energy electrons with LUCiD processing",
   "material": "water",
   "output_path": "uniform_energy",
   "energy_distribution": "uniform",
@@ -10,9 +10,9 @@
   "disable_decays": false,
   "particles": [
     {
-      "type": "pi+",
-      "energy_min_MeV": 210,
-      "energy_max_MeV": 1500
+      "type": "e-",
+      "energy_min_MeV": 1,
+      "energy_max_MeV": 20
     }
   ],
   "lucid_options": {

@@ -1,7 +1,7 @@
 {
-  "config_number": 8,
-  "name": "mu_2pi_mixed_up_to_1500MeV",
-  "description": "Multi-particle events with muon and two positive pions with LUCiD processing",
+  "config_number": 10,
+  "name": "mu_pi_plus_pi0_100_to_1500MeV",
+  "description": "Multi-particle events with muon, positive pion and neutral pion with LUCiD processing",
   "material": "water",
   "output_path": "uniform_energy",
   "energy_distribution": "uniform",
@@ -20,7 +20,7 @@
       "energy_max_MeV": 1500
     },
     {
-      "type": "pi+",
+      "type": "pi0",
       "energy_min_MeV": 100,
       "energy_max_MeV": 1500
     }

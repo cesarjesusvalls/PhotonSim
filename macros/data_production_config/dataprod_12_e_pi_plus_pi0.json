@@ -1,7 +1,7 @@
 {
-  "config_number": 10,
-  "name": "neutral_pion_uniform_up_to_1500MeV",
-  "description": "Uniform energy distribution for neutral pions with LUCiD processing",
+  "config_number": 12,
+  "name": "e_pi_plus_pi0_mixed_100_to_1500MeV",
+  "description": "Multi-particle events with electron, positive pion and neutral pion with LUCiD processing",
   "material": "water",
   "output_path": "uniform_energy",
   "energy_distribution": "uniform",
@@ -9,6 +9,16 @@
   "run_lucid": true,
   "disable_decays": false,
   "particles": [
+    {
+      "type": "e-",
+      "energy_min_MeV": 100,
+      "energy_max_MeV": 1500
+    },
+    {
+      "type": "pi+",
+      "energy_min_MeV": 100,
+      "energy_max_MeV": 1500
+    },
     {
       "type": "pi0",
       "energy_min_MeV": 100,
