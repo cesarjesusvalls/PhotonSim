@@ -109,7 +109,6 @@ All job generation uses JSON configuration files in `macros/data_production_conf
   ],
   "lucid_options": {
     "apply_smearing": true,
-    "apply_rotation": true,
     "apply_translation": true
   },
   "n_jobs": 100,
@@ -293,6 +292,32 @@ Photons are grouped into labels based on the particle that produced them:
 | `kDecayElectron` (1) | e± from μ/π decay, KE > 1 MeV | Michel electrons from muon decay; electrons from pion decay |
 | `kGammaShower` (2) | γ from π⁰ decay | Electromagnetic showers from neutral pion decay |
 | `kSecondaryPion` (3) | π± from inelastic scatter or deflection > 5°, p ≥ 195 MeV/c | Charged pions from hadronic interactions or large-angle elastic scatters |
+
+### Meaningful Tracks and Segments (ROOT output)
+
+The ROOT output includes detailed trajectory information for "meaningful" tracks—those that produced Cherenkov photons or have descendants that did.
+
+**Per-label extended genealogy:**
+- `Label_ExtGenealogySize`, `Label_ExtGenealogyData` — list of meaningful track IDs contributing to each label (flattened; use size to split)
+
+**Meaningful Track branches:**
+- `MTrack_TrackID`, `MTrack_ParentID`, `MTrack_PDG`, `MTrack_ParticleName`, `MTrack_InitialEnergy`
+- `MTrack_NCherenkov` — number of Cherenkov photons produced
+- `MTrack_SegmentOffset`, `MTrack_NSegments` — index into segment arrays
+
+**Segment branches** (merged steps for each meaningful track):
+- `Segment_Start{X,Y,Z}`, `Segment_End{X,Y,Z}` — position (mm)
+- `Segment_Dir{X,Y,Z}` — direction at segment start
+- `Segment_Edep` — energy deposited (MeV)
+- `Segment_Time` — time at segment start (ns)
+
+**Segment merging criteria:**
+| Track Energy | Merge Condition |
+|--------------|-----------------|
+| ≥ 10 MeV | Save when length ≥ 10mm OR direction change > 2° |
+| < 10 MeV | Save when cumulative Edep ≥ 1 MeV |
+
+This reduces storage while preserving trajectory detail for reconstruction.
 
 ## Job Management
 

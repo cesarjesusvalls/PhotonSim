@@ -77,6 +77,26 @@ struct TrackInfo {
   G4double relabelingTime = 0.0;
 };
 
+/// Structure to hold a single track segment (one G4 step)
+struct TrackSegment {
+  G4double startX, startY, startZ;  // Pre-step position
+  G4double endX, endY, endZ;        // Post-step position
+  G4double dirX, dirY, dirZ;        // Direction at pre-step
+  G4double edep;                    // Energy deposited in this step
+  G4double time;                    // Time at pre-step
+};
+
+/// Structure to hold all segment info for a track during event processing
+struct TrackSegmentInfo {
+  G4int trackID;
+  G4int parentID;
+  G4int pdgCode;
+  G4double initialEnergy;           // Kinetic energy at creation
+  G4String particleName;
+  G4int cherenkovCount = 0;         // Number of Cherenkov photons produced
+  std::vector<TrackSegment> segments;
+};
+
 /// Singleton class to manage ROOT data output for optical photons
 
 class DataManager
@@ -120,6 +140,16 @@ class DataManager
 
     // Photon relabeling for deflection handling
     void RelabelPhotonsForDeflection(G4int newTrackID, G4int oldTrackID, G4double deflectionTime);
+
+    // Track segment system for meaningful tracks
+    void AddTrackSegment(G4int trackID, G4int parentID, G4int pdgCode,
+                        const G4String& particleName, G4double initialEnergy,
+                        G4double startX, G4double startY, G4double startZ,
+                        G4double endX, G4double endY, G4double endZ,
+                        G4double dirX, G4double dirY, G4double dirZ,
+                        G4double edep, G4double time);
+    void IncrementCherenkovCount(G4int trackID);
+    std::vector<G4int> BuildExtendedGenealogy(G4int trackID);
 
     // Get next SubID for a category
     G4int GetNextPrimaryID() { return fNPrimaries++; }
@@ -182,6 +212,38 @@ class DataManager
 
     // Internal map for building labels during event
     std::map<std::vector<G4int>, std::vector<G4int>> fGenealogyToPhotonIDs;
+
+    // Extended genealogy per label (all meaningful track IDs in ancestry)
+    std::vector<G4int> fLabel_ExtGenealogySize;
+    std::vector<G4int> fLabel_ExtGenealogyData;
+
+    // Temporary storage for track segments during event (all tracks)
+    std::map<G4int, TrackSegmentInfo> fAllTrackSegments;
+
+    // Output: Meaningful tracks table (tracks contributing to Cherenkov emission)
+    G4int fNMeaningfulTracks = 0;
+    std::vector<G4int> fMTrack_TrackID;
+    std::vector<G4int> fMTrack_ParentID;
+    std::vector<G4int> fMTrack_PDG;
+    std::vector<G4double> fMTrack_InitialEnergy;
+    std::vector<std::string> fMTrack_ParticleName;
+    std::vector<G4int> fMTrack_NCherenkov;       // Number of Cherenkov photons produced
+    std::vector<G4int> fMTrack_SegmentOffset;    // Offset into segment arrays
+    std::vector<G4int> fMTrack_NSegments;        // Number of segments for this track
+
+    // Output: Segments table (all steps for meaningful tracks)
+    G4int fNSegments = 0;
+    std::vector<G4double> fSegment_StartX;
+    std::vector<G4double> fSegment_StartY;
+    std::vector<G4double> fSegment_StartZ;
+    std::vector<G4double> fSegment_EndX;
+    std::vector<G4double> fSegment_EndY;
+    std::vector<G4double> fSegment_EndZ;
+    std::vector<G4double> fSegment_DirX;
+    std::vector<G4double> fSegment_DirY;
+    std::vector<G4double> fSegment_DirZ;
+    std::vector<G4double> fSegment_Edep;
+    std::vector<G4double> fSegment_Time;
     
     // Energy deposit data (vectors for multiple deposits per event)
     std::vector<G4double> fEdepPosX;

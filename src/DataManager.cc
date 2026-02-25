@@ -106,6 +106,33 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("Label_GenealogyData", &fLabel_GenealogyData);
   fTree->Branch("Label_PhotonIDsSize", &fLabel_PhotonIDsSize);
   fTree->Branch("Label_PhotonIDsData", &fLabel_PhotonIDsData);
+  fTree->Branch("Label_ExtGenealogySize", &fLabel_ExtGenealogySize);
+  fTree->Branch("Label_ExtGenealogyData", &fLabel_ExtGenealogyData);
+
+  // Meaningful tracks table (tracks contributing to Cherenkov emission)
+  fTree->Branch("NMeaningfulTracks", &fNMeaningfulTracks, "NMeaningfulTracks/I");
+  fTree->Branch("MTrack_TrackID", &fMTrack_TrackID);
+  fTree->Branch("MTrack_ParentID", &fMTrack_ParentID);
+  fTree->Branch("MTrack_PDG", &fMTrack_PDG);
+  fTree->Branch("MTrack_InitialEnergy", &fMTrack_InitialEnergy);
+  fTree->Branch("MTrack_ParticleName", &fMTrack_ParticleName);
+  fTree->Branch("MTrack_NCherenkov", &fMTrack_NCherenkov);
+  fTree->Branch("MTrack_SegmentOffset", &fMTrack_SegmentOffset);
+  fTree->Branch("MTrack_NSegments", &fMTrack_NSegments);
+
+  // Segments table (all steps for meaningful tracks)
+  fTree->Branch("NSegments", &fNSegments, "NSegments/I");
+  fTree->Branch("Segment_StartX", &fSegment_StartX);
+  fTree->Branch("Segment_StartY", &fSegment_StartY);
+  fTree->Branch("Segment_StartZ", &fSegment_StartZ);
+  fTree->Branch("Segment_EndX", &fSegment_EndX);
+  fTree->Branch("Segment_EndY", &fSegment_EndY);
+  fTree->Branch("Segment_EndZ", &fSegment_EndZ);
+  fTree->Branch("Segment_DirX", &fSegment_DirX);
+  fTree->Branch("Segment_DirY", &fSegment_DirY);
+  fTree->Branch("Segment_DirZ", &fSegment_DirZ);
+  fTree->Branch("Segment_Edep", &fSegment_Edep);
+  fTree->Branch("Segment_Time", &fSegment_Time);
 
   // Event-level track information branches
   fTree->Branch("TrackInfo_TrackID", &fTrackInfo_TrackID);
@@ -263,14 +290,134 @@ void DataManager::EndEvent()
   fNOpticalPhotons = fPhotonPosX.size();
   fNEnergyDeposits = fEdepEnergy.size();
 
-  // Convert genealogy map to label arrays
+  // === Step 1: Identify meaningful tracks ===
+  // A track is meaningful if it produced Cherenkov photons OR has a descendant that did
+  std::set<G4int> meaningfulTrackIDs;
+
+  // First pass: find all tracks that directly produced Cherenkov photons
+  for (const auto& pair : fAllTrackSegments) {
+    if (pair.second.cherenkovCount > 0) {
+      meaningfulTrackIDs.insert(pair.first);
+    }
+  }
+
+  // Second pass: walk up ancestry to mark all ancestors as meaningful
+  std::set<G4int> ancestorsToAdd;
+  for (G4int trackID : meaningfulTrackIDs) {
+    G4int currentID = trackID;
+    while (currentID > 0) {
+      auto it = fAllTrackSegments.find(currentID);
+      if (it == fAllTrackSegments.end()) break;
+      ancestorsToAdd.insert(currentID);
+      currentID = it->second.parentID;
+    }
+  }
+  meaningfulTrackIDs.insert(ancestorsToAdd.begin(), ancestorsToAdd.end());
+
+  // === Step 2: Output meaningful tracks and their merged segments ===
+  // Merging criteria:
+  //   - For tracks >= 10 MeV: minimum 10mm length OR direction change > 2 degrees
+  //   - For tracks < 10 MeV: merge until energy loss >= 1 MeV (regardless of length/angle)
+  const G4double minSegmentLength = 10.0;  // mm
+  const G4double maxAngleForMerge = 2.0 * M_PI / 180.0;  // 2 degrees in radians
+  const G4double lowEnergyThreshold = 10.0;  // MeV - tracks below this use edep-based merging
+  const G4double minEdepForLowEnergy = 1.0;  // MeV - minimum edep before saving segment for low-E tracks
+
+  fNMeaningfulTracks = meaningfulTrackIDs.size();
+  G4int segmentOffset = 0;
+
+  for (G4int trackID : meaningfulTrackIDs) {
+    auto it = fAllTrackSegments.find(trackID);
+    if (it == fAllTrackSegments.end()) continue;
+
+    const TrackSegmentInfo& info = it->second;
+    bool isLowEnergy = (info.initialEnergy / MeV) < lowEnergyThreshold;
+
+    // Merge segments for this track
+    std::vector<TrackSegment> mergedSegments;
+
+    if (!info.segments.empty()) {
+      TrackSegment current = info.segments[0];
+
+      for (size_t i = 1; i < info.segments.size(); i++) {
+        const TrackSegment& next = info.segments[i];
+
+        bool shouldSave = false;
+
+        if (isLowEnergy) {
+          // Low energy track: merge until edep >= 1 MeV
+          shouldSave = (current.edep >= minEdepForLowEnergy);
+        } else {
+          // Normal track: use length and angle criteria
+          // Calculate current merged segment length
+          G4double dx = current.endX - current.startX;
+          G4double dy = current.endY - current.startY;
+          G4double dz = current.endZ - current.startZ;
+          G4double currentLength = std::sqrt(dx*dx + dy*dy + dz*dz);
+
+          // Calculate direction change (angle between current direction and next direction)
+          G4double dot = current.dirX * next.dirX + current.dirY * next.dirY + current.dirZ * next.dirZ;
+          dot = std::max(-1.0, std::min(1.0, dot));  // Clamp for numerical stability
+          G4double angle = std::acos(dot);
+
+          bool significantDeflection = (angle > maxAngleForMerge);
+          bool reachedMinLength = (currentLength >= minSegmentLength);
+          shouldSave = (significantDeflection || reachedMinLength);
+        }
+
+        if (shouldSave) {
+          // Save current merged segment
+          mergedSegments.push_back(current);
+          // Start new segment
+          current = next;
+        } else {
+          // Merge: extend end position, accumulate edep, keep original start and direction
+          current.endX = next.endX;
+          current.endY = next.endY;
+          current.endZ = next.endZ;
+          current.edep += next.edep;
+        }
+      }
+      // Don't forget the last segment
+      mergedSegments.push_back(current);
+    }
+
+    fMTrack_TrackID.push_back(info.trackID);
+    fMTrack_ParentID.push_back(info.parentID);
+    fMTrack_PDG.push_back(info.pdgCode);
+    fMTrack_InitialEnergy.push_back(info.initialEnergy / MeV);
+    fMTrack_ParticleName.push_back(std::string(info.particleName));
+    fMTrack_NCherenkov.push_back(info.cherenkovCount);
+    fMTrack_SegmentOffset.push_back(segmentOffset);
+    fMTrack_NSegments.push_back(mergedSegments.size());
+
+    // Output merged segments for this track
+    for (const TrackSegment& seg : mergedSegments) {
+      fSegment_StartX.push_back(seg.startX);
+      fSegment_StartY.push_back(seg.startY);
+      fSegment_StartZ.push_back(seg.startZ);
+      fSegment_EndX.push_back(seg.endX);
+      fSegment_EndY.push_back(seg.endY);
+      fSegment_EndZ.push_back(seg.endZ);
+      fSegment_DirX.push_back(seg.dirX);
+      fSegment_DirY.push_back(seg.dirY);
+      fSegment_DirZ.push_back(seg.dirZ);
+      fSegment_Edep.push_back(seg.edep);
+      fSegment_Time.push_back(seg.time);
+    }
+
+    segmentOffset += mergedSegments.size();
+  }
+  fNSegments = segmentOffset;
+
+  // === Step 3: Convert genealogy map to label arrays with extended genealogy ===
   fNLabels = fGenealogyToPhotonIDs.size();
 
   for (const auto& pair : fGenealogyToPhotonIDs) {
     const std::vector<G4int>& genealogy = pair.first;
     const std::vector<G4int>& photonIDs = pair.second;
 
-    // Store genealogy
+    // Store genealogy (categorized track IDs only)
     fLabel_GenealogySize.push_back(genealogy.size());
     for (G4int trackID : genealogy) {
       fLabel_GenealogyData.push_back(trackID);
@@ -280,6 +427,28 @@ void DataManager::EndEvent()
     fLabel_PhotonIDsSize.push_back(photonIDs.size());
     for (G4int photonID : photonIDs) {
       fLabel_PhotonIDsData.push_back(photonID);
+    }
+
+    // Build and store extended genealogy (all meaningful track IDs in ancestry)
+    // Use the last track in genealogy as the starting point
+    std::set<G4int> extGenealogySet;
+    if (!genealogy.empty()) {
+      G4int leafTrackID = genealogy.back();
+      std::vector<G4int> extGen = BuildExtendedGenealogy(leafTrackID);
+      // Filter to only include meaningful tracks
+      for (G4int tid : extGen) {
+        if (meaningfulTrackIDs.count(tid) > 0) {
+          extGenealogySet.insert(tid);
+        }
+      }
+    }
+    // Convert set to vector maintaining order
+    std::vector<G4int> extGenealogyVec(extGenealogySet.begin(), extGenealogySet.end());
+    std::sort(extGenealogyVec.begin(), extGenealogyVec.end());
+
+    fLabel_ExtGenealogySize.push_back(extGenealogyVec.size());
+    for (G4int tid : extGenealogyVec) {
+      fLabel_ExtGenealogyData.push_back(tid);
     }
   }
 
@@ -508,6 +677,79 @@ void DataManager::ClearTrackRegistry()
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
+void DataManager::AddTrackSegment(G4int trackID, G4int parentID, G4int pdgCode,
+                                  const G4String& particleName, G4double initialEnergy,
+                                  G4double startX, G4double startY, G4double startZ,
+                                  G4double endX, G4double endY, G4double endZ,
+                                  G4double dirX, G4double dirY, G4double dirZ,
+                                  G4double edep, G4double time)
+{
+  // Get or create track segment info
+  auto it = fAllTrackSegments.find(trackID);
+  if (it == fAllTrackSegments.end()) {
+    // First segment for this track - create entry
+    TrackSegmentInfo info;
+    info.trackID = trackID;
+    info.parentID = parentID;
+    info.pdgCode = pdgCode;
+    info.particleName = particleName;
+    info.initialEnergy = initialEnergy;
+    info.cherenkovCount = 0;
+    fAllTrackSegments[trackID] = info;
+    it = fAllTrackSegments.find(trackID);
+  }
+
+  // Add segment
+  TrackSegment seg;
+  seg.startX = startX / mm;
+  seg.startY = startY / mm;
+  seg.startZ = startZ / mm;
+  seg.endX = endX / mm;
+  seg.endY = endY / mm;
+  seg.endZ = endZ / mm;
+  seg.dirX = dirX;
+  seg.dirY = dirY;
+  seg.dirZ = dirZ;
+  seg.edep = edep / MeV;
+  seg.time = time / ns;
+
+  it->second.segments.push_back(seg);
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void DataManager::IncrementCherenkovCount(G4int trackID)
+{
+  auto it = fAllTrackSegments.find(trackID);
+  if (it != fAllTrackSegments.end()) {
+    it->second.cherenkovCount++;
+  }
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+std::vector<G4int> DataManager::BuildExtendedGenealogy(G4int trackID)
+{
+  std::vector<G4int> extGenealogy;
+
+  // Walk up the ancestry using fAllTrackSegments (which has parent info)
+  G4int currentTrackID = trackID;
+  while (currentTrackID > 0) {
+    auto it = fAllTrackSegments.find(currentTrackID);
+    if (it == fAllTrackSegments.end()) break;
+
+    // Add this track to the genealogy (at front to maintain root->leaf order)
+    extGenealogy.insert(extGenealogy.begin(), currentTrackID);
+
+    // Move to parent
+    currentTrackID = it->second.parentID;
+  }
+
+  return extGenealogy;
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DataManager::RelabelPhotonsForDeflection(G4int newTrackID, G4int oldTrackID, G4double deflectionTime)
 {
   // Build the new genealogy for the deflected track
@@ -575,7 +817,37 @@ void DataManager::ClearEventData()
   fLabel_GenealogyData.clear();
   fLabel_PhotonIDsSize.clear();
   fLabel_PhotonIDsData.clear();
+  fLabel_ExtGenealogySize.clear();
+  fLabel_ExtGenealogyData.clear();
   fGenealogyToPhotonIDs.clear();
+
+  // Clear temporary track segment storage
+  fAllTrackSegments.clear();
+
+  // Clear meaningful tracks output
+  fNMeaningfulTracks = 0;
+  fMTrack_TrackID.clear();
+  fMTrack_ParentID.clear();
+  fMTrack_PDG.clear();
+  fMTrack_InitialEnergy.clear();
+  fMTrack_ParticleName.clear();
+  fMTrack_NCherenkov.clear();
+  fMTrack_SegmentOffset.clear();
+  fMTrack_NSegments.clear();
+
+  // Clear segments output
+  fNSegments = 0;
+  fSegment_StartX.clear();
+  fSegment_StartY.clear();
+  fSegment_StartZ.clear();
+  fSegment_EndX.clear();
+  fSegment_EndY.clear();
+  fSegment_EndZ.clear();
+  fSegment_DirX.clear();
+  fSegment_DirY.clear();
+  fSegment_DirZ.clear();
+  fSegment_Edep.clear();
+  fSegment_Time.clear();
 
   // Clear energy deposit data
   fEdepPosX.clear();

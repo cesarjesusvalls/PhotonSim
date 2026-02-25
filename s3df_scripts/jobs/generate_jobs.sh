@@ -87,7 +87,8 @@ N_PARTICLES=$(jq '.particles | length' "$CONFIG_FILE")
 # Parse new fields with defaults
 DISABLE_DECAYS=$(jq -r '.disable_decays // false' "$CONFIG_FILE")
 APPLY_SMEARING=$(jq -r '.lucid_options.apply_smearing // true' "$CONFIG_FILE")
-APPLY_ROTATION=$(jq -r '.lucid_options.apply_rotation // true' "$CONFIG_FILE")
+# Note: apply_rotation is not used because PhotonSim already generates primaries with
+# random isotropic directions (/gun/randomDirection true), making rotation in LUCiD redundant.
 APPLY_TRANSLATION=$(jq -r '.lucid_options.apply_translation // true' "$CONFIG_FILE")
 CLEANUP_ROOT_FILES=$(jq -r '.cleanup_root_files // false' "$CONFIG_FILE")
 
@@ -158,7 +159,6 @@ echo "Disable decays: $DISABLE_DECAYS"
 echo "Run LUCiD: $RUN_LUCID"
 if [ "$RUN_LUCID" == "true" ]; then
     echo "  - Apply smearing: $APPLY_SMEARING"
-    echo "  - Apply rotation: $APPLY_ROTATION"
     echo "  - Apply translation: $APPLY_TRANSLATION"
     echo "  - Cleanup ROOT files: $CLEANUP_ROOT_FILES"
 fi
@@ -472,9 +472,10 @@ create_job_script() {
 
     if [ "$RUN_LUCID" == "true" ]; then
         # Build LUCiD flags
+        # Note: --apply-rotation is not used because PhotonSim already generates primaries
+        # with random isotropic directions, making rotation in LUCiD redundant.
         LUCID_FLAGS=""
         [ "$APPLY_SMEARING" == "true" ] && LUCID_FLAGS="$LUCID_FLAGS --apply-smearing"
-        [ "$APPLY_ROTATION" == "true" ] && LUCID_FLAGS="$LUCID_FLAGS --apply-rotation"
         [ "$APPLY_TRANSLATION" == "true" ] && LUCID_FLAGS="$LUCID_FLAGS --apply-translation"
 
         cat > "$job_script" << EOFJOBSCRIPT
@@ -699,7 +700,6 @@ EOF
     if [ "$RUN_LUCID" == "true" ]; then
         cat >> "$readme_file" << EOF
   - Apply smearing: $APPLY_SMEARING
-  - Apply rotation: $APPLY_ROTATION
   - Apply translation: $APPLY_TRANSLATION
 EOF
     fi

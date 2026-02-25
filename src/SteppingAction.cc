@@ -427,6 +427,11 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
                                    polarization.x(), polarization.y(), polarization.z(),
                                    processName,
                                    genealogy);
+
+      // If this is a Cerenkov photon, increment the count for the parent track
+      if (processName == "Cerenkov") {
+        dataManager->IncrementCherenkovCount(parentID);
+      }
     }
     return; // Don't process further for optical photons
   }
@@ -448,7 +453,7 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
   if (volume == fDetectorVolume) {
     G4double edepStep = step->GetTotalEnergyDeposit();
     fEventAction->AddEdep(edepStep);
-    
+
     // Store detailed energy deposit information for scintillation analysis
     if (edepStep > 0.0) {
       G4ThreeVector stepPos = step->GetPostStepPoint()->GetPosition();
@@ -456,13 +461,37 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
       G4String particleName = particle->GetParticleName();
       G4int trackID = track->GetTrackID();
       G4int parentID = track->GetParentID();
-      
+
       dataManager->AddEnergyDeposit(stepPos.x(), stepPos.y(), stepPos.z(),
                                    edepStep, stepTime, particleName,
                                    trackID, parentID);
-      
+
       // Debug prints removed
     }
+  }
+
+  // Record track segment for all non-optical photon tracks
+  // This is used for the meaningful tracks system
+  {
+    G4int trackID = track->GetTrackID();
+    G4int parentID = track->GetParentID();
+    G4int pdgCode = particle->GetPDGEncoding();
+    G4String particleName = particle->GetParticleName();
+    G4double initialEnergy = track->GetVertexKineticEnergy();
+
+    // Get step positions and direction
+    G4ThreeVector prePos = step->GetPreStepPoint()->GetPosition();
+    G4ThreeVector postPos = step->GetPostStepPoint()->GetPosition();
+    G4ThreeVector preDir = step->GetPreStepPoint()->GetMomentumDirection();
+    G4double edep = step->GetTotalEnergyDeposit();
+    G4double preTime = step->GetPreStepPoint()->GetGlobalTime();
+
+    dataManager->AddTrackSegment(trackID, parentID, pdgCode,
+                                particleName, initialEnergy,
+                                prePos.x(), prePos.y(), prePos.z(),
+                                postPos.x(), postPos.y(), postPos.z(),
+                                preDir.x(), preDir.y(), preDir.z(),
+                                edep, preTime);
   }
 }
 
