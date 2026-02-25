@@ -97,6 +97,7 @@ class DataManager
     void AddOpticalPhoton(G4double x, G4double y, G4double z,
                          G4double dx, G4double dy, G4double dz,
                          G4double time, G4double wavelength,
+                         G4double polX, G4double polY, G4double polZ,
                          const G4String& process,
                          const std::vector<G4int>& genealogy);
 
@@ -167,6 +168,9 @@ class DataManager
     std::vector<G4double> fPhotonDirZ;
     std::vector<G4double> fPhotonTime;
     std::vector<G4double> fPhotonWavelength;
+    std::vector<G4double> fPhotonPolX;
+    std::vector<G4double> fPhotonPolY;
+    std::vector<G4double> fPhotonPolZ;
     std::vector<std::string> fPhotonProcess;
 
     // Label system: unique genealogies and their photons

@@ -413,6 +413,9 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
       G4ThreeVector direction = track->GetVertexMomentumDirection();
       G4double time = track->GetGlobalTime() - step->GetDeltaTime();
 
+      // Get polarization vector
+      G4ThreeVector polarization = track->GetPolarization();
+
       // Calculate wavelength from photon energy
       G4double photonEnergy = track->GetKineticEnergy();
       G4double wavelength = (h_Planck * c_light) / photonEnergy;
@@ -420,7 +423,9 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
       // Record this optical photon with genealogy
       dataManager->AddOpticalPhoton(position.x(), position.y(), position.z(),
                                    direction.x(), direction.y(), direction.z(),
-                                   time, wavelength, processName,
+                                   time, wavelength,
+                                   polarization.x(), polarization.y(), polarization.z(),
+                                   processName,
                                    genealogy);
     }
     return; // Don't process further for optical photons

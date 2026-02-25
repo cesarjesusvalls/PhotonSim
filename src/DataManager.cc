@@ -95,6 +95,9 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("PhotonDirZ", &fPhotonDirZ);
   fTree->Branch("PhotonTime", &fPhotonTime);
   fTree->Branch("PhotonWavelength", &fPhotonWavelength);
+  fTree->Branch("PhotonPolX", &fPhotonPolX);
+  fTree->Branch("PhotonPolY", &fPhotonPolY);
+  fTree->Branch("PhotonPolZ", &fPhotonPolZ);
   fTree->Branch("PhotonProcess", &fPhotonProcess);
 
   // Label system branches
@@ -326,6 +329,7 @@ void DataManager::EndEvent()
 void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
                                   G4double dx, G4double dy, G4double dz,
                                   G4double time, G4double wavelength,
+                                  G4double polX, G4double polY, G4double polZ,
                                   const G4String& process,
                                   const std::vector<G4int>& genealogy)
 {
@@ -363,6 +367,9 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
     fPhotonDirZ.push_back(dz);
     fPhotonTime.push_back(time / ns); // Store in ns
     fPhotonWavelength.push_back(wavelength / nm); // Store in nm
+    fPhotonPolX.push_back(polX);     // Store polarization (unit vector)
+    fPhotonPolY.push_back(polY);
+    fPhotonPolZ.push_back(polZ);
     fPhotonProcess.push_back(std::string(process));
 
     // Track this photon's genealogy (photon index is current size - 1)
@@ -557,6 +564,9 @@ void DataManager::ClearEventData()
   fPhotonDirZ.clear();
   fPhotonTime.clear();
   fPhotonWavelength.clear();
+  fPhotonPolX.clear();
+  fPhotonPolY.clear();
+  fPhotonPolZ.clear();
   fPhotonProcess.clear();
 
   // Clear label system
