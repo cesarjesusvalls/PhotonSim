@@ -109,7 +109,8 @@ All job generation uses JSON configuration files in `macros/data_production_conf
   ],
   "lucid_options": {
     "apply_smearing": true,
-    "apply_translation": true
+    "apply_translation": true,
+    "include_track_segments": true
   },
   "n_jobs": 100,
   "n_events_per_job": 1000
@@ -127,9 +128,17 @@ All job generation uses JSON configuration files in `macros/data_production_conf
 | `energy_distribution` | string  | "uniform" or "monoenergetic"                      |
 | `particles`           | array   | List of particles with energy ranges              |
 | `disable_decays`      | boolean | Disable decay processes (for lookup tables)       |
-| `lucid_options`       | object  | LUCiD processing flags                            |
+| `lucid_options`       | object  | LUCiD processing flags (see below)                |
 | `n_jobs`              | integer | Number of SLURM jobs                              |
 | `n_events_per_job`    | integer | Events per job                                    |
+
+#### LUCiD Options
+
+| Field                   | Type    | Default | Description                                                   |
+|-------------------------|---------|---------|---------------------------------------------------------------|
+| `apply_smearing`        | boolean | true    | Apply PMT charge and timing smearing                          |
+| `apply_translation`     | boolean | true    | Apply random translation to place vertex within detector      |
+| `include_track_segments`| boolean | false   | Include MeaningfulTracks and Segments groups in HDF5 output   |
 
 ### Multi-Particle Events
 
@@ -293,25 +302,48 @@ Photons are grouped into labels based on the particle that produced them:
 | `kGammaShower` (2) | γ from π⁰ decay | Electromagnetic showers from neutral pion decay |
 | `kSecondaryPion` (3) | π± from inelastic scatter or deflection > 5°, p ≥ 195 MeV/c | Charged pions from hadronic interactions or large-angle elastic scatters |
 
-### Meaningful Tracks and Segments (ROOT output)
+### Meaningful Tracks and Segments (HDF5 output)
 
-The ROOT output includes detailed trajectory information for "meaningful" tracks—those that produced Cherenkov photons or have descendants that did.
+When `include_track_segments: true` is set in `lucid_options`, the HDF5 output includes detailed trajectory information for "meaningful" tracks—those that produced Cherenkov photons or have descendants that did.
 
-**Per-label extended genealogy:**
-- `Label_ExtGenealogySize`, `Label_ExtGenealogyData` — list of meaningful track IDs contributing to each label (flattened; use size to split)
+#### Extended Genealogy (per label)
 
-**Meaningful Track branches:**
-- `MTrack_TrackID`, `MTrack_ParentID`, `MTrack_PDG`, `MTrack_ParticleName`, `MTrack_InitialEnergy`
-- `MTrack_NCherenkov` — number of Cherenkov photons produced
-- `MTrack_SegmentOffset`, `MTrack_NSegments` — index into segment arrays
+| Dataset | Shape | Dtype | Description |
+|---------|-------|-------|-------------|
+| `Label_ExtendedGenealogy` | (n_labels,) | int32[] | All meaningful track IDs in ancestry chain per label |
 
-**Segment branches** (merged steps for each meaningful track):
-- `Segment_Start{X,Y,Z}`, `Segment_End{X,Y,Z}` — position (mm)
-- `Segment_Dir{X,Y,Z}` — direction at segment start
-- `Segment_Edep` — energy deposited (MeV)
-- `Segment_Time` — time at segment start (ns)
+#### MeaningfulTracks Group (`/event_N/MeaningfulTracks/`)
 
-**Segment merging criteria:**
+N_m = number of meaningful tracks in the event
+
+| Dataset | Shape | Dtype | Description |
+|---------|-------|-------|-------------|
+| `TrackID` | (N_m,) | int32 | Track identifier |
+| `ParentID` | (N_m,) | int32 | Parent track ID (0 = primary) |
+| `PDG` | (N_m,) | int32 | PDG particle code |
+| `InitialEnergy` | (N_m,) | float32 | Initial kinetic energy (MeV) |
+| `NCherenkov` | (N_m,) | int32 | Number of Cherenkov photons produced |
+| `SegmentOffset` | (N_m,) | int32 | Starting index in Segments arrays |
+| `NSegments` | (N_m,) | int32 | Number of segments for this track |
+| `ParticleName` | (N_m,) | string | Particle name (e.g., "mu-", "e-") |
+
+**Group attribute:** `n_tracks` (int32)
+
+#### Segments Group (`/event_N/Segments/`)
+
+N_seg = total number of segments across all meaningful tracks. Positions are in cm.
+
+| Dataset | Shape | Dtype | Description |
+|---------|-------|-------|-------------|
+| `StartX/Y/Z` | (N_seg,) | float32 | Segment start position (cm) |
+| `EndX/Y/Z` | (N_seg,) | float32 | Segment end position (cm) |
+| `DirX/Y/Z` | (N_seg,) | float32 | Direction at segment start |
+| `Edep` | (N_seg,) | float32 | Energy deposited (MeV) |
+| `Time` | (N_seg,) | float32 | Time at segment start (ns) |
+
+**Group attribute:** `n_segments` (int32)
+
+**Segment merging criteria (in PhotonSim):**
 | Track Energy | Merge Condition |
 |--------------|-----------------|
 | ≥ 10 MeV | Save when length ≥ 10mm OR direction change > 2° |
@@ -517,3 +549,17 @@ The script generates an interactive HTML file with:
 - Light containment metrics
 
 The HTML file can be opened in any web browser for interactive exploration.
+
+### Automated Validation Script
+
+For quick local validation without SLURM jobs:
+
+```bash
+$LUCID_PATH/tools/production/generate_validation_htmls.sh [-c CONFIG] [-n EVENTS] [-o OUTPUT]
+```
+
+- `-c`: Dataprod config number (default: 07)
+- `-n`: Number of events (default: 5)
+- `-o`: Output path (default: `validation_html/track_segments_test`)
+
+Output goes to `<output>/config<NUM>/`. Includes "Track Segments" slider showing particle trajectories.
