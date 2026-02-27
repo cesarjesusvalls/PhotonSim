@@ -102,8 +102,8 @@ def analyze_root_file(filename):
                 print(f"        Pos=({t['pos'][0]:.2f}, {t['pos'][1]:.2f}, {t['pos'][2]:.2f}) mm")
                 print(f"        Dir=({t['dir'][0]:.4f}, {t['dir'][1]:.4f}, {t['dir'][2]:.4f})")
 
-        # Parse label-centric structure
-        print(f"  Number of labels: {tree.NLabels}")
+        # Parse particle-centric structure
+        print(f"  Number of particles: {tree.NParticles}")
 
         # Unflatten genealogy and photon ID data
         gen_idx = 0
@@ -111,19 +111,19 @@ def analyze_root_file(filename):
 
         cat_counts = {0: 0, 1: 0, 2: 0, 3: 0}
 
-        for label_i in range(tree.NLabels):
-            # Extract genealogy for this label
-            gen_size = tree.Label_GenealogySize[label_i]
+        for particle_i in range(tree.NParticles):
+            # Extract genealogy for this particle
+            gen_size = tree.Particle_GenealogySize[particle_i]
             genealogy = []
             for j in range(gen_size):
-                genealogy.append(tree.Label_GenealogyData[gen_idx + j])
+                genealogy.append(tree.Particle_GenealogyData[gen_idx + j])
             gen_idx += gen_size
 
-            # Extract photon IDs for this label
-            photon_ids_size = tree.Label_PhotonIDsSize[label_i]
+            # Extract photon IDs for this particle
+            photon_ids_size = tree.Particle_PhotonIDsSize[particle_i]
             photon_ids = []
             for j in range(photon_ids_size):
-                photon_ids.append(tree.Label_PhotonIDsData[photon_idx + j])
+                photon_ids.append(tree.Particle_PhotonIDsData[photon_idx + j])
             photon_idx += photon_ids_size
 
             # Derive category and subID from last track in genealogy
@@ -143,8 +143,8 @@ def analyze_root_file(filename):
             if category in cat_counts:
                 cat_counts[category] += len(photon_ids)
 
-            # Print label information
-            print(f"    Label {label_i}: Category={category_names.get(category, category)}, SubID={subID}")
+            # Print particle information
+            print(f"    Particle {particle_i}: Category={category_names.get(category, category)}, SubID={subID}")
             print(f"      Genealogy: {genealogy}")
             print(f"      Number of photons: {len(photon_ids)}")
 
@@ -184,18 +184,18 @@ def analyze_root_file(filename):
     # Data integrity check
     print(f"\nData integrity check:")
     tree.GetEntry(0)
-    total_gen_size = sum([tree.Label_GenealogySize[i]
-                          for i in range(len(tree.Label_GenealogySize))])
-    genealogy_ok = (total_gen_size == len(tree.Label_GenealogyData))
+    total_gen_size = sum([tree.Particle_GenealogySize[i]
+                          for i in range(len(tree.Particle_GenealogySize))])
+    genealogy_ok = (total_gen_size == len(tree.Particle_GenealogyData))
     print(f"  Genealogy structure: {'OK' if genealogy_ok else 'ERROR'}")
     print(f"  Expected genealogy entries: {total_gen_size}")
-    print(f"  Actual genealogy entries: {len(tree.Label_GenealogyData)}")
+    print(f"  Actual genealogy entries: {len(tree.Particle_GenealogyData)}")
 
-    total_photon_ids_size = sum([tree.Label_PhotonIDsSize[i]
-                                 for i in range(len(tree.Label_PhotonIDsSize))])
+    total_photon_ids_size = sum([tree.Particle_PhotonIDsSize[i]
+                                 for i in range(len(tree.Particle_PhotonIDsSize))])
     photon_ids_ok = (total_photon_ids_size == tree.NOpticalPhotons)
     print(f"  Photon IDs structure: {'OK' if photon_ids_ok else 'ERROR'}")
-    print(f"  Sum of label photon counts: {total_photon_ids_size}")
+    print(f"  Sum of particle photon counts: {total_photon_ids_size}")
     print(f"  Total optical photons: {tree.NOpticalPhotons}")
 
     f.Close()

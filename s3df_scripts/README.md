@@ -138,7 +138,7 @@ All job generation uses JSON configuration files in `macros/data_production_conf
 |-------------------------|---------|---------|---------------------------------------------------------------|
 | `apply_smearing`        | boolean | true    | Apply PMT charge and timing smearing                          |
 | `apply_translation`     | boolean | true    | Apply random translation to place vertex within detector      |
-| `include_track_segments`| boolean | false   | Include MeaningfulTracks and Segments groups in HDF5 output   |
+| `include_track_segments`| boolean | false   | Include TrackInformation and Segments data in HDF5 output     |
 
 ### Multi-Particle Events
 
@@ -245,74 +245,59 @@ Each `events_job_XXXXXX.h5` file contains one group per event (`event_0`, `event
 | Dataset | Shape | Dtype | Description |
 |---------|-------|-------|-------------|
 | `event_number` | () | int32 | Event index in the file |
-| `n_labels` | () | int32 | Number of distinct particle labels in this event |
-| `primary_energy` | () | float64 | Total primary particle energy (MeV) |
-| `apply_smearing` | () | bool | Whether PMT smearing was applied |
+| `n_particles` | () | int32 | Number of categorized particles in this event |
+| `t0` | () | float32 | Event time offset (ns), sampled from U(-15, 15) |
 
 #### Reconstructed Sensor Data
 
 | Dataset | Shape | Dtype | Description |
 |---------|-------|-------|-------------|
-| `Q_reco` | (N_sensors,) | float32 | Reconstructed charge per sensor (PE) — sum over all labels |
-| `T_reco` | (N_sensors,) | float32 | Reconstructed time per sensor (ns) — earliest hit time |
-| `Q_true` | (N_sensors,) | float32 | True charge per sensor (PE) — no smearing |
-| `T_true` | (N_sensors,) | float32 | True time per sensor (ns) — no smearing |
+| `PE` | (N_sensors,) | float32 | Observed photoelectrons per sensor (with smearing) |
+| `T` | (N_sensors,) | float32 | Observed first-hit time per sensor (ns, with smearing) |
 
-#### Per-Label Sensor Data
+#### Per-Particle Sensor Data
 
 | Dataset | Shape | Dtype | Description |
 |---------|-------|-------|-------------|
-| `Q_per_label` | (n_labels, N_sensors) | float32 | Charge per sensor for each label separately |
-| `T_per_label` | (n_labels, N_sensors) | float32 | First hit time per sensor for each label |
+| `PE_per_particle` | (n_particles, N_sensors) | float32 | True PE per sensor for each categorized particle |
+| `T_per_particle` | (n_particles, N_sensors) | float32 | True first-hit time per sensor for each particle |
 
-#### Label Metadata
-
-| Dataset | Shape | Dtype | Description |
-|---------|-------|-------|-------------|
-| `Label_Category` | (n_labels,) | int32 | Category ID (0=Primary, 1=DecayElectron, 2=GammaShower, 3=SecondaryPion) |
-| `Label_CategoryName` | (n_labels,) | string | Category name: "Primary", "DecayElectron", "GammaShower", or "SecondaryPion" |
-| `Label_Genealogy` | (n_labels,) | int32 array | Track ID ancestry chain (e.g., `[2, 144734, 282049]` → descended from primary track 2 through tracks 144734 → 282049) |
-
-#### Track Information (per label)
+#### Categorized Particle Metadata
 
 | Dataset | Shape | Dtype | Description |
 |---------|-------|-------|-------------|
-| `Track_PDG` | (n_labels,) | int32 | PDG code of the particle |
-| `Track_Energy` | (n_labels,) | float64 | Kinetic energy of the track (MeV) |
-| `Track_Position` | (n_labels, 3) | float64 | Start position (x, y, z) in meters |
-| `Track_Direction` | (n_labels, 3) | float64 | Initial direction unit vector (dx, dy, dz) |
-| `Track_Time` | (n_labels,) | float64 | Start time of the track (ns) |
-| `Track_ParentID` | (n_labels,) | int32 | Parent track ID (0 = primary) |
+| `Particle_Category` | (n_particles,) | int32 | Category ID (0=Primary, 1=DecayElectron, 2=GammaShower, 3=SecondaryPion) |
+| `Particle_CategorizedGenealogy` | (n_particles,) | int32[] | Ancestry chain of categorized particle indices |
 
 #### Containment Metrics
 
 | Dataset | Shape | Dtype | Description |
 |---------|-------|-------|-------------|
-| `light_containment_by_label` | (n_labels,) | float64 | Fraction of light contained in detector per label |
+| `light_containment_by_particle` | (n_particles,) | float64 | Fraction of light contained in detector per particle |
 | `overall_light_containment` | () | float64 | Overall light containment for the event |
 
-### Label Categories
+### Particle Categories
 
-Photons are grouped into labels based on the particle that produced them:
+Photons are grouped into categorized particles based on the track that produced them:
 
-| Label | Condition | Description |
-|-------|-----------|-------------|
-| `kPrimary` (0) | `parentID == 0` | Primary particle from the gun |
-| `kDecayElectron` (1) | e± from μ/π decay, KE > 1 MeV | Michel electrons from muon decay; electrons from pion decay |
-| `kGammaShower` (2) | γ from π⁰ decay | Electromagnetic showers from neutral pion decay |
-| `kSecondaryPion` (3) | π± from inelastic scatter or deflection > 5°, p ≥ 195 MeV/c | Charged pions from hadronic interactions or large-angle elastic scatters |
+| Category | Code | Condition | Description |
+|----------|------|-----------|-------------|
+| Primary | 0 | `parentID == 0` | Primary particle from the gun |
+| DecayElectron | 1 | e± from μ/π decay, KE > 1 MeV | Michel electrons from muon decay; electrons from pion decay |
+| GammaShower | 2 | γ from π⁰ decay | Electromagnetic showers from neutral pion decay |
+| SecondaryPion | 3 | π± from inelastic scatter or deflection > 5°, p ≥ 195 MeV/c | Charged pions from hadronic interactions or large-angle elastic scatters |
 
-### Meaningful Tracks and Segments (HDF5 output)
+### Track Information and Segments (HDF5 output)
 
 When `include_track_segments: true` is set in `lucid_options`, the HDF5 output includes detailed trajectory information for "meaningful" tracks—those that produced Cherenkov photons or have descendants that did.
 
-#### Extended Genealogy (per label)
+#### Track Genealogy (per particle)
 
 | Dataset | Shape | Dtype | Description |
 |---------|-------|-------|-------------|
-| `Label_ExtendedGenealogy` | (n_labels,) | int32[] | All meaningful track IDs in ancestry chain per label |
+| `Particle_TrackGenealogy` | (n_particles,) | int32[] | All meaningful G4 track IDs in ancestry chain per particle |
 
-#### MeaningfulTracks Group (`/event_N/MeaningfulTracks/`)
+#### TrackInformation Group (`/event_N/TrackInformation/`)
 
 N_m = number of meaningful tracks in the event
 
@@ -325,7 +310,6 @@ N_m = number of meaningful tracks in the event
 | `NCherenkov` | (N_m,) | int32 | Number of Cherenkov photons produced |
 | `SegmentOffset` | (N_m,) | int32 | Starting index in Segments arrays |
 | `NSegments` | (N_m,) | int32 | Number of segments for this track |
-| `ParticleName` | (N_m,) | string | Particle name (e.g., "mu-", "e-") |
 
 **Group attribute:** `n_tracks` (int32)
 
@@ -503,7 +487,7 @@ ls -la $OUTPUT_BASE_PATH/water/uniform_energy/config_000001/
 
 ## Output Validation with LUCiD Visualization
 
-After jobs complete, you can generate interactive HTML visualizations to validate the output using LUCiD's `visualize_by_label.py` script.
+After jobs complete, you can generate interactive HTML visualizations to validate the output using LUCiD's `visualize_labeled_events.py` script.
 
 ### Generate Validation HTML
 
@@ -511,7 +495,7 @@ After jobs complete, you can generate interactive HTML visualizations to validat
 # Using singularity on S3DF
 singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch \
   /sdf/group/neutrino/images/develop.sif python \
-  $LUCID_PATH/tools/production/visualize_by_label.py \
+  $LUCID_PATH/tools/production/visualize_labeled_events.py \
   <hdf5_file> \
   $LUCID_PATH/config/SK_geom_config.json \
   --event <event_index> \
@@ -524,7 +508,7 @@ singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch \
 # Visualize event 0 from config_000001 job 1
 singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch \
   /sdf/group/neutrino/images/develop.sif python \
-  $LUCID_PATH/tools/production/visualize_by_label.py \
+  $LUCID_PATH/tools/production/visualize_labeled_events.py \
   $OUTPUT_BASE_PATH/water/uniform_energy/config_000001/events_job_000001.h5 \
   $LUCID_PATH/config/SK_geom_config.json \
   --event 0 \
@@ -542,11 +526,10 @@ singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch \
 ### Output
 
 The script generates an interactive HTML file with:
-- 3D visualization of sensor hits colored by charge or label
-- Track arrows showing particle directions
-- Slider to switch between views (Arrows, By Label, All, individual labels)
-- Event genealogy information showing particle hierarchy
-- Light containment metrics
+- 3D visualization of sensor hits colored by charge or categorized particle
+- Slider to switch between views (Track Segments, Voxels, By Particle, All, individual particles)
+- Event genealogy information showing categorized particle hierarchy
+- Light containment metrics per particle
 
 The HTML file can be opened in any web browser for interactive exploration.
 

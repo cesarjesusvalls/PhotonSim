@@ -100,14 +100,14 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("PhotonPolZ", &fPhotonPolZ);
   fTree->Branch("PhotonProcess", &fPhotonProcess);
 
-  // Label system branches
-  fTree->Branch("NLabels", &fNLabels, "NLabels/I");
-  fTree->Branch("Label_GenealogySize", &fLabel_GenealogySize);
-  fTree->Branch("Label_GenealogyData", &fLabel_GenealogyData);
-  fTree->Branch("Label_PhotonIDsSize", &fLabel_PhotonIDsSize);
-  fTree->Branch("Label_PhotonIDsData", &fLabel_PhotonIDsData);
-  fTree->Branch("Label_ExtGenealogySize", &fLabel_ExtGenealogySize);
-  fTree->Branch("Label_ExtGenealogyData", &fLabel_ExtGenealogyData);
+  // Particle system branches (categorized particles based on genealogy)
+  fTree->Branch("NParticles", &fNParticles, "NParticles/I");
+  fTree->Branch("Particle_GenealogySize", &fParticle_GenealogySize);
+  fTree->Branch("Particle_GenealogyData", &fParticle_GenealogyData);
+  fTree->Branch("Particle_PhotonIDsSize", &fParticle_PhotonIDsSize);
+  fTree->Branch("Particle_PhotonIDsData", &fParticle_PhotonIDsData);
+  fTree->Branch("Particle_ExtGenealogySize", &fParticle_ExtGenealogySize);
+  fTree->Branch("Particle_ExtGenealogyData", &fParticle_ExtGenealogyData);
 
   // Meaningful tracks table (tracks contributing to Cherenkov emission)
   fTree->Branch("NMeaningfulTracks", &fNMeaningfulTracks, "NMeaningfulTracks/I");
@@ -410,23 +410,23 @@ void DataManager::EndEvent()
   }
   fNSegments = segmentOffset;
 
-  // === Step 3: Convert genealogy map to label arrays with extended genealogy ===
-  fNLabels = fGenealogyToPhotonIDs.size();
+  // === Step 3: Convert genealogy map to particle arrays with extended genealogy ===
+  fNParticles = fGenealogyToPhotonIDs.size();
 
   for (const auto& pair : fGenealogyToPhotonIDs) {
     const std::vector<G4int>& genealogy = pair.first;
     const std::vector<G4int>& photonIDs = pair.second;
 
     // Store genealogy (categorized track IDs only)
-    fLabel_GenealogySize.push_back(genealogy.size());
+    fParticle_GenealogySize.push_back(genealogy.size());
     for (G4int trackID : genealogy) {
-      fLabel_GenealogyData.push_back(trackID);
+      fParticle_GenealogyData.push_back(trackID);
     }
 
-    // Store photon IDs for this label
-    fLabel_PhotonIDsSize.push_back(photonIDs.size());
+    // Store photon IDs for this particle
+    fParticle_PhotonIDsSize.push_back(photonIDs.size());
     for (G4int photonID : photonIDs) {
-      fLabel_PhotonIDsData.push_back(photonID);
+      fParticle_PhotonIDsData.push_back(photonID);
     }
 
     // Build and store extended genealogy (all meaningful track IDs in ancestry)
@@ -446,9 +446,9 @@ void DataManager::EndEvent()
     std::vector<G4int> extGenealogyVec(extGenealogySet.begin(), extGenealogySet.end());
     std::sort(extGenealogyVec.begin(), extGenealogyVec.end());
 
-    fLabel_ExtGenealogySize.push_back(extGenealogyVec.size());
+    fParticle_ExtGenealogySize.push_back(extGenealogyVec.size());
     for (G4int tid : extGenealogyVec) {
-      fLabel_ExtGenealogyData.push_back(tid);
+      fParticle_ExtGenealogyData.push_back(tid);
     }
   }
 
@@ -811,14 +811,14 @@ void DataManager::ClearEventData()
   fPhotonPolZ.clear();
   fPhotonProcess.clear();
 
-  // Clear label system
-  fNLabels = 0;
-  fLabel_GenealogySize.clear();
-  fLabel_GenealogyData.clear();
-  fLabel_PhotonIDsSize.clear();
-  fLabel_PhotonIDsData.clear();
-  fLabel_ExtGenealogySize.clear();
-  fLabel_ExtGenealogyData.clear();
+  // Clear particle system
+  fNParticles = 0;
+  fParticle_GenealogySize.clear();
+  fParticle_GenealogyData.clear();
+  fParticle_PhotonIDsSize.clear();
+  fParticle_PhotonIDsData.clear();
+  fParticle_ExtGenealogySize.clear();
+  fParticle_ExtGenealogyData.clear();
   fGenealogyToPhotonIDs.clear();
 
   // Clear temporary track segment storage

@@ -203,19 +203,19 @@ class DataManager
     std::vector<G4double> fPhotonPolZ;
     std::vector<std::string> fPhotonProcess;
 
-    // Label system: unique genealogies and their photons
-    G4int fNLabels = 0;
-    std::vector<G4int> fLabel_GenealogySize;
-    std::vector<G4int> fLabel_GenealogyData;
-    std::vector<G4int> fLabel_PhotonIDsSize;
-    std::vector<G4int> fLabel_PhotonIDsData;
+    // Particle system: unique genealogies and their photons
+    G4int fNParticles = 0;
+    std::vector<G4int> fParticle_GenealogySize;
+    std::vector<G4int> fParticle_GenealogyData;
+    std::vector<G4int> fParticle_PhotonIDsSize;
+    std::vector<G4int> fParticle_PhotonIDsData;
 
-    // Internal map for building labels during event
+    // Internal map for building particles during event
     std::map<std::vector<G4int>, std::vector<G4int>> fGenealogyToPhotonIDs;
 
-    // Extended genealogy per label (all meaningful track IDs in ancestry)
-    std::vector<G4int> fLabel_ExtGenealogySize;
-    std::vector<G4int> fLabel_ExtGenealogyData;
+    // Extended genealogy per particle (all meaningful track IDs in ancestry)
+    std::vector<G4int> fParticle_ExtGenealogySize;
+    std::vector<G4int> fParticle_ExtGenealogyData;
 
     // Temporary storage for track segments during event (all tracks)
     std::map<G4int, TrackSegmentInfo> fAllTrackSegments;
