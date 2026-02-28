@@ -91,6 +91,7 @@ APPLY_SMEARING=$(jq -r '.lucid_options.apply_smearing // true' "$CONFIG_FILE")
 # random isotropic directions (/gun/randomDirection true), making rotation in LUCiD redundant.
 APPLY_TRANSLATION=$(jq -r '.lucid_options.apply_translation // true' "$CONFIG_FILE")
 INCLUDE_TRACK_SEGMENTS=$(jq -r '.lucid_options.include_track_segments // false' "$CONFIG_FILE")
+INCLUDE_VOXELS=$(jq -r '.lucid_options.include_voxels // false' "$CONFIG_FILE")
 CLEANUP_ROOT_FILES=$(jq -r '.cleanup_root_files // false' "$CONFIG_FILE")
 
 # Validate config_number (required for unified output structure)
@@ -480,6 +481,7 @@ create_job_script() {
         [ "$APPLY_SMEARING" == "true" ] && LUCID_FLAGS="$LUCID_FLAGS --apply-smearing"
         [ "$APPLY_TRANSLATION" == "true" ] && LUCID_FLAGS="$LUCID_FLAGS --apply-translation"
         [ "$INCLUDE_TRACK_SEGMENTS" == "true" ] && LUCID_FLAGS="$LUCID_FLAGS --include-track-segments"
+        [ "$INCLUDE_VOXELS" == "true" ] && LUCID_FLAGS="$LUCID_FLAGS --include-voxels"
 
         cat > "$job_script" << EOFJOBSCRIPT
 #!/bin/bash
