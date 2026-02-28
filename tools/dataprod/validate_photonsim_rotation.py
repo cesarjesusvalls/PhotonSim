@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generic validation script for PhotonSim label-based rotation logic.
+Generic validation script for PhotonSim particle-based rotation logic.
 Shows photons and tracks before and after rotation.
 Creates interactive HTML plots for visual inspection.
 
@@ -14,7 +14,7 @@ import jax
 import jax.numpy as jnp
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from tools.generate import read_label_data_from_photonsim
+from tools.generate import read_particle_data_from_photonsim
 from tools.simulation import jax_rotate_vector
 import argparse
 
@@ -86,10 +86,10 @@ def create_cylinder(start, end, radius, n_segments=16):
     return x, y, z, i, j, k
 
 # Parse command line arguments
-parser = argparse.ArgumentParser(description='Validate PhotonSim rotation with label classification')
+parser = argparse.ArgumentParser(description='Validate PhotonSim rotation with particle classification')
 parser.add_argument('root_file', type=str, help='Input ROOT file from PhotonSim')
 parser.add_argument('--events', type=int, nargs='+', default=[0, 1, 2], help='Event indices to validate (default: 0 1 2)')
-parser.add_argument('--photons', type=int, default=500, help='Number of photons to sample per label (default: 500)')
+parser.add_argument('--photons', type=int, default=500, help='Number of photons to sample per particle (default: 500)')
 parser.add_argument('--seed', type=int, default=42, help='Random seed for photon sampling (default: 42)')
 args = parser.parse_args()
 
@@ -103,13 +103,13 @@ print("PHOTONSIM ROTATION VALIDATION")
 print("="*70)
 print(f"Input file: {root_file}")
 print(f"Events to validate: {events_to_validate}")
-print(f"Photons to sample per label: {n_photons_to_sample}")
+print(f"Photons to sample per particle: {n_photons_to_sample}")
 print()
 
 # Define colors for labels
 colors_palette = ['red', 'blue', 'green', 'orange', 'purple', 'cyan', 'magenta', 'yellow',
                   'brown', 'pink', 'olive', 'navy', 'teal', 'maroon']
-category_names = {0: 'Primary', 1: 'DecayElectron', 2: 'SecondaryPion', 3: 'GammaShower'}
+category_names = {0: 'Primary', 1: 'DecayElectron', 2: 'SecondaryPion', 3: 'Gamma'}
 
 # PDG code to particle name mapping
 pdg_to_name = {
@@ -132,41 +132,41 @@ def process_event(event_idx):
     print(f"EVENT {event_idx}")
     print(f"{'='*70}")
 
-    # Read label data
-    label_data = read_label_data_from_photonsim(root_file, event_idx)
+    # Read particle data
+    particle_data = read_particle_data_from_photonsim(root_file, event_idx)
 
-    n_labels = label_data['n_labels']
-    labels = label_data['labels']
-    all_photon_origins = label_data['photon_origins']
-    all_photon_directions = label_data['photon_directions']
+    n_particles = particle_data['n_particles']
+    particles = particle_data['particles']
+    all_photon_origins = particle_data['photon_origins']
+    all_photon_directions = particle_data['photon_directions']
 
-    print(f"Event has {n_labels} labels")
+    print(f"Event has {n_particles} particles")
     print()
 
-    # Sample photons for each label
+    # Sample photons for each particle
     sampled_photons_before = []
     sampled_directions_before = []
     track_positions_before = []
     track_directions_before = []
-    label_colors = []
-    label_names = []
+    particle_colors = []
+    particle_names = []
 
     print("BEFORE ROTATION:")
     print("-"*70)
-    for label_idx, label in enumerate(labels):
-        photon_indices = label['photon_indices']
-        track_info = label['track_info']
+    for particle_idx, particle in enumerate(particles):
+        photon_indices = particle['photon_indices']
+        track_info = particle['track_info']
 
         if track_info is None:
             continue
 
         cat_name = category_names.get(track_info['category'], f"Unknown_{track_info['category']}")
-        particle_name = pdg_to_name.get(track_info['pdg'], f"PDG{track_info['pdg']}")
-        color = colors_palette[label_idx % len(colors_palette)]
+        pdg_name = pdg_to_name.get(track_info['pdg'], f"PDG{track_info['pdg']}")
+        color = colors_palette[particle_idx % len(colors_palette)]
         kinetic_energy = track_info['energy']
 
-        print(f"Label {label_idx} ({cat_name}):")
-        print(f"  Particle: {particle_name} (PDG: {track_info['pdg']})")
+        print(f"Particle {particle_idx} ({cat_name}):")
+        print(f"  Particle: {pdg_name} (PDG: {track_info['pdg']})")
         print(f"  Kinetic Energy: {kinetic_energy:.2f} MeV")
         print(f"  Color: {color}")
         print(f"  Track position: {track_info['position']}")
@@ -174,14 +174,14 @@ def process_event(event_idx):
         print(f"  Total photons: {len(photon_indices)}")
 
         if len(photon_indices) == 0:
-            print(f"  WARNING: No photons for this label")
+            print(f"  WARNING: No photons for this particle")
             print()
             continue
 
         # Sample photons
         photon_indices_array = np.array(photon_indices, dtype=np.int32)
         n_to_sample = min(n_photons_to_sample, len(photon_indices))
-        np.random.seed(master_seed + label_idx + event_idx * 100)
+        np.random.seed(master_seed + particle_idx + event_idx * 100)
         sampled_indices = np.random.choice(len(photon_indices), size=n_to_sample, replace=False)
         selected_photon_indices = photon_indices_array[sampled_indices]
 
@@ -192,8 +192,8 @@ def process_event(event_idx):
         sampled_directions_before.append(photon_dirs)
         track_positions_before.append(track_info['position'])
         track_directions_before.append(track_info['direction'])
-        label_colors.append(color)
-        label_names.append(f"Label {label_idx} ({cat_name} - {particle_name}, {kinetic_energy:.1f} MeV)")
+        particle_colors.append(color)
+        particle_names.append(f"Particle {particle_idx} ({cat_name} - {pdg_name}, {kinetic_energy:.1f} MeV)")
 
         print(f"  Sampled {n_to_sample} photons")
         print()
@@ -204,24 +204,24 @@ def process_event(event_idx):
     print("GENERATING ROTATIONS PER PRIMARY:")
     print("-"*70)
 
-    # Group labels by primary
+    # Group particles by primary
     primary_groups = {}
-    for label_idx, label in enumerate(labels):
-        genealogy = label['genealogy']
+    for particle_idx, particle in enumerate(particles):
+        genealogy = particle['genealogy']
         if len(genealogy) > 0:
             primary_track_id = genealogy[0]
             if primary_track_id not in primary_groups:
                 primary_groups[primary_track_id] = []
-            primary_groups[primary_track_id].append(label_idx)
+            primary_groups[primary_track_id].append(particle_idx)
 
-    rotation_per_label = {}
+    rotation_per_particle = {}
     master_key = jax.random.PRNGKey(master_seed + event_idx * 1000)
 
-    for primary_track_id, label_indices in primary_groups.items():
-        print(f"Primary Track ID {primary_track_id}: Labels {label_indices}")
+    for primary_track_id, particle_indices in primary_groups.items():
+        print(f"Primary Track ID {primary_track_id}: Particles {particle_indices}")
 
         # Get primary's true direction
-        primary_track_info = label_data['track_info_dict'].get(primary_track_id)
+        primary_track_info = particle_data['track_info_dict'].get(primary_track_id)
         if primary_track_info is not None:
             source_direction = jnp.array(primary_track_info['direction'])
             print(f"  Source direction: {source_direction}")
@@ -271,8 +271,8 @@ def process_event(event_idx):
             ])
             rotation_matrix = jnp.eye(3) + jnp.sin(angle) * K + (1 - jnp.cos(angle)) * (K @ K)
 
-        for label_idx in label_indices:
-            rotation_per_label[label_idx] = rotation_matrix
+        for particle_idx in particle_indices:
+            rotation_per_particle[particle_idx] = rotation_matrix
 
         print()
 
@@ -284,16 +284,16 @@ def process_event(event_idx):
     track_positions_after = []
     track_directions_after = []
 
-    for i, label_idx in enumerate(range(len(sampled_photons_before))):
-        if label_idx not in rotation_per_label:
-            print(f"WARNING: No rotation for label {label_idx}")
+    for i, particle_idx in enumerate(range(len(sampled_photons_before))):
+        if particle_idx not in rotation_per_particle:
+            print(f"WARNING: No rotation for particle {particle_idx}")
             sampled_photons_after.append(sampled_photons_before[i])
             sampled_directions_after.append(sampled_directions_before[i])
             track_positions_after.append(track_positions_before[i])
             track_directions_after.append(track_directions_before[i])
             continue
 
-        rotation_matrix = rotation_per_label[label_idx]
+        rotation_matrix = rotation_per_particle[particle_idx]
 
         # Rotate photons (positions and directions)
         photons_before = jnp.array(sampled_photons_before[i])
@@ -314,7 +314,7 @@ def process_event(event_idx):
         track_positions_after.append(np.array(track_pos_after))
         track_directions_after.append(np.array(track_dir_after))
 
-        print(f"Label {label_idx}:")
+        print(f"Particle {particle_idx}:")
         print(f"  Track position after: {track_pos_after}")
         print(f"  Track direction after: {track_dir_after}")
         print()
@@ -323,7 +323,7 @@ def process_event(event_idx):
 
     return {
         'event_idx': event_idx,
-        'n_labels': len(sampled_photons_before),
+        'n_particles': len(sampled_photons_before),
         'photons_before': sampled_photons_before,
         'photons_after': sampled_photons_after,
         'directions_before': sampled_directions_before,
@@ -332,8 +332,8 @@ def process_event(event_idx):
         'track_positions_after': track_positions_after,
         'track_directions_before': track_directions_before,
         'track_directions_after': track_directions_after,
-        'label_colors': label_colors,
-        'label_names': label_names
+        'particle_colors': particle_colors,
+        'particle_names': particle_names
     }
 
 # Process all events
@@ -369,16 +369,16 @@ for event_data in events_to_plot:
         specs=[[{'type': 'scatter3d'}, {'type': 'scatter3d'}]]
     )
 
-    # Plot each label in both before/after
-    for i in range(event_data['n_labels']):
+    # Plot each particle in both before/after
+    for i in range(event_data['n_particles']):
         photons_before = event_data['photons_before'][i]
         photons_after = event_data['photons_after'][i]
         track_pos_before = event_data['track_positions_before'][i]
         track_pos_after = event_data['track_positions_after'][i]
         track_dir_before = event_data['track_directions_before'][i]
         track_dir_after = event_data['track_directions_after'][i]
-        color = event_data['label_colors'][i]
-        label_name = event_data['label_names'][i]
+        color = event_data['particle_colors'][i]
+        particle_name = event_data['particle_names'][i]
 
         # Before rotation (left panel)
         fig.add_trace(
@@ -386,8 +386,8 @@ for event_data in events_to_plot:
                 x=photons_before[:, 0], y=photons_before[:, 1], z=photons_before[:, 2],
                 mode='markers',
                 marker=dict(size=2, color=color, opacity=0.3),
-                name=label_name,
-                legendgroup=f'label{i}',
+                name=particle_name,
+                legendgroup=f'particle{i}',
                 showlegend=True
             ),
             row=1, col=1
@@ -399,8 +399,8 @@ for event_data in events_to_plot:
                 x=photons_after[:, 0], y=photons_after[:, 1], z=photons_after[:, 2],
                 mode='markers',
                 marker=dict(size=2, color=color, opacity=0.3),
-                name=label_name,
-                legendgroup=f'label{i}',
+                name=particle_name,
+                legendgroup=f'particle{i}',
                 showlegend=False
             ),
             row=1, col=2
@@ -503,7 +503,7 @@ for event_data in events_to_plot:
         )
 
     # Create visibility arrays for toggle button
-    # Each label has 6 traces: photons_before, photons_after, cylinder_before, cone_before, cylinder_after, cone_after
+    # Each particle has 6 traces: photons_before, photons_after, cylinder_before, cone_before, cylinder_after, cone_after
     n_traces = len(fig.data)
 
     # Show arrows: keep photons visible, show arrows

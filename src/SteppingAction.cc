@@ -201,8 +201,8 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
         TrackInfo* parentInfo = dataManager->GetTrackInfo(parentID);
         if (parentInfo && parentInfo->particleName == "pi0") {
           // Assign new gamma shower SubID
-          G4int subID = dataManager->GetNextGammaShowerID();
-          dataManager->UpdateTrackCategory(trackID, kGammaShower, subID, parentID);
+          G4int subID = dataManager->GetNextGammaID();
+          dataManager->UpdateTrackCategory(trackID, kGamma, subID, parentID);
         }
       }
     }

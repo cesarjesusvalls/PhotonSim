@@ -33,7 +33,7 @@ def analyze_root_file(filename):
         0: "Primary",
         1: "DecayElectron",
         2: "SecondaryPion",
-        3: "GammaShower"
+        3: "Gamma"
     }
 
     print(f"{'='*60}")

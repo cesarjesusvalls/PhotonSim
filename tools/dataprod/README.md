@@ -1,14 +1,14 @@
-# Label-Based Data Production and Validation Tools
+# Particle-Based Data Production and Validation Tools
 
-This directory contains tools for validating PhotonSim's label-based photon classification system.
+This directory contains tools for validating PhotonSim's particle-based photon classification system.
 
 ## Overview
 
-PhotonSim uses a label-based genealogy system to track photons by their origin. Each label represents a distinct physics category:
+PhotonSim uses a particle-based genealogy system to track photons by their origin. Each particle category represents a distinct physics source:
 - **Primary (0)**: Primary beam particles
 - **DecayElectron (1)**: Electrons from muon/pion decay
 - **SecondaryPion (2)**: Secondary pions from hadronic interactions (above Cherenkov threshold)
-- **GammaShower (3)**: Gamma showers from pi0 decay
+- **Gamma (3)**: Gamma showers from pi0 decay
 
 ## Files
 
@@ -23,7 +23,7 @@ Standard test configurations for different particle types (1 GeV, 20 events each
 
 ### Validation Scripts
 
-- `validate_photonsim_classification.py` - Validates label classification for any particle type
+- `validate_photonsim_classification.py` - Validates particle classification for any particle type
 - `validate_photonsim_rotation.py` - Validates rotation invariance for any particle type
 - `run_all_validation_tests.sh` - Master script to run all validation tests
 
@@ -36,7 +36,7 @@ Standard test configurations for different particle types (1 GeV, 20 events each
 
 From the PhotonSim root directory:
 ```bash
-cd tools/dataprod_labels
+cd tools/dataprod
 ./run_all_validation_tests.sh
 ```
 
@@ -51,13 +51,13 @@ This will:
 #### 1. Generate simulation data
 ```bash
 cd build
-./PhotonSim ../tools/dataprod_labels/test_macros/test_pi_minus.mac
+./PhotonSim ../tools/dataprod/test_macros/test_pi_minus.mac
 ```
 
 #### 2. Run validation
 ```bash
 # From build directory
-python3 ../tools/dataprod_labels/validate_photonsim_classification.py test_pi_minus.root --events 20
+python3 ../tools/dataprod/validate_photonsim_classification.py test_pi_minus.root --events 20
 ```
 
 #### 3. View results
@@ -77,7 +77,7 @@ Required:
 
 Optional:
   --events N             Number of events to validate (default: 50)
-  --photons N            Photons to sample per label (default: 500)
+  --photons N            Photons to sample per particle (default: 500)
   --seed N               Random seed for sampling (default: 42)
 ```
 
@@ -90,7 +90,7 @@ Required:
 
 Optional:
   --events N1 N2 N3      Event indices to validate (default: 0 1 2)
-  --photons N            Photons to sample per label (default: 500)
+  --photons N            Photons to sample per particle (default: 500)
   --seed N               Random seed for sampling (default: 42)
 ```
 
@@ -98,7 +98,7 @@ Optional:
 
 ### HTML Visualizations
 Interactive 3D plots showing:
-- Photon clouds color-coded by label
+- Photon clouds color-coded by particle
 - Track positions and directions (toggle-able)
 - Category and particle information in legend
 
@@ -129,13 +129,13 @@ python3 validate_photonsim_rotation.py test_pi_minus.root --events 5 10 15
 
 When validating the classification system, check:
 
-1. **Primary particles** - Correctly labeled as category 0
-2. **Decay electrons** - Electrons from muon/pion decay labeled as category 1
-3. **Secondary pions** - Pions above threshold from interactions labeled as category 2
-4. **Gamma showers** - Gammas from pi0 decay labeled as category 3
-5. **Deflection detection** - Kinks >5° properly split into separate labels
+1. **Primary particles** - Correctly classified as category 0
+2. **Decay electrons** - Electrons from muon/pion decay classified as category 1
+3. **Secondary pions** - Pions above threshold from interactions classified as category 2
+4. **Gamma showers** - Gammas from pi0 decay classified as category 3
+5. **Deflection detection** - Kinks >5° properly split into separate particles
 6. **Photon-track alignment** - Photon clouds aligned with track directions
-7. **Rotation invariance** - Labels maintain structure after rotation
+7. **Rotation invariance** - Particle classifications maintain structure after rotation
 
 ## Troubleshooting
 

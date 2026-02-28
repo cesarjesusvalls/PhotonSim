@@ -266,7 +266,7 @@ Each `events_job_XXXXXX.h5` file contains one group per event (`event_0`, `event
 
 | Dataset | Shape | Dtype | Description |
 |---------|-------|-------|-------------|
-| `Particle_Category` | (n_particles,) | int32 | Category ID (0=Primary, 1=DecayElectron, 2=GammaShower, 3=SecondaryPion) |
+| `Particle_Category` | (n_particles,) | int32 | Category ID (0=Primary, 1=DecayElectron, 2=Gamma, 3=SecondaryPion) |
 | `Particle_CategorizedGenealogy` | (n_particles,) | int32[] | Ancestry chain of categorized particle indices |
 
 #### Containment Metrics
@@ -284,7 +284,7 @@ Photons are grouped into categorized particles based on the track that produced 
 |----------|------|-----------|-------------|
 | Primary | 0 | `parentID == 0` | Primary particle from the gun |
 | DecayElectron | 1 | e± from μ/π decay, KE > 1 MeV | Michel electrons from muon decay; electrons from pion decay |
-| GammaShower | 2 | γ from π⁰ decay | Electromagnetic showers from neutral pion decay |
+| Gamma | 2 | γ from π⁰ decay | Electromagnetic showers from neutral pion decay |
 | SecondaryPion | 3 | π± from inelastic scatter or deflection > 5°, p ≥ 195 MeV/c | Charged pions from hadronic interactions or large-angle elastic scatters |
 
 ### Track Information and Segments (HDF5 output)
@@ -487,7 +487,7 @@ ls -la $OUTPUT_BASE_PATH/water/uniform_energy/config_000001/
 
 ## Output Validation with LUCiD Visualization
 
-After jobs complete, you can generate interactive HTML visualizations to validate the output using LUCiD's `visualize_labeled_events.py` script.
+After jobs complete, you can generate interactive HTML visualizations to validate the output using LUCiD's `visualize_particle_events.py` script.
 
 ### Generate Validation HTML
 
@@ -495,7 +495,7 @@ After jobs complete, you can generate interactive HTML visualizations to validat
 # Using singularity on S3DF
 singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch \
   /sdf/group/neutrino/images/develop.sif python \
-  $LUCID_PATH/tools/production/visualize_labeled_events.py \
+  $LUCID_PATH/tools/production/visualize_particle_events.py \
   <hdf5_file> \
   $LUCID_PATH/config/SK_geom_config.json \
   --event <event_index> \
@@ -508,7 +508,7 @@ singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch \
 # Visualize event 0 from config_000001 job 1
 singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch \
   /sdf/group/neutrino/images/develop.sif python \
-  $LUCID_PATH/tools/production/visualize_labeled_events.py \
+  $LUCID_PATH/tools/production/visualize_particle_events.py \
   $OUTPUT_BASE_PATH/water/uniform_energy/config_000001/events_job_000001.h5 \
   $LUCID_PATH/config/SK_geom_config.json \
   --event 0 \

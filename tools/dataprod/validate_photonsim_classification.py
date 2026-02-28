@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Generic validation script for PhotonSim label classification (no rotation).
-Shows photons and tracks for each label in un-rotated events.
+Generic validation script for PhotonSim particle classification (no rotation).
+Shows photons and tracks for each particle in un-rotated events.
 Creates interactive HTML plots for visual inspection.
 
 Works with any particle type and any number of primaries.
@@ -13,7 +13,7 @@ import os
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from tools.generate import read_label_data_from_photonsim
+from tools.generate import read_particle_data_from_photonsim
 import argparse
 
 def create_cylinder(start, end, radius, n_segments=16):
@@ -84,10 +84,10 @@ def create_cylinder(start, end, radius, n_segments=16):
     return x, y, z, i, j, k
 
 # Parse command line arguments
-parser = argparse.ArgumentParser(description='Validate PhotonSim label classification')
+parser = argparse.ArgumentParser(description='Validate PhotonSim particle classification')
 parser.add_argument('root_file', type=str, help='Input ROOT file from PhotonSim')
 parser.add_argument('--events', type=int, default=50, help='Number of events to validate (default: 50)')
-parser.add_argument('--photons', type=int, default=500, help='Number of photons to sample per label (default: 500)')
+parser.add_argument('--photons', type=int, default=500, help='Number of photons to sample per particle (default: 500)')
 parser.add_argument('--seed', type=int, default=42, help='Random seed for photon sampling (default: 42)')
 args = parser.parse_args()
 
@@ -97,17 +97,17 @@ n_photons_to_sample = args.photons
 master_seed = args.seed
 
 print("="*70)
-print(f"PHOTONSIM LABEL CLASSIFICATION VALIDATION")
+print(f"PHOTONSIM PARTICLE CLASSIFICATION VALIDATION")
 print("="*70)
 print(f"Input file: {root_file}")
 print(f"Events to validate: {args.events}")
-print(f"Photons to sample per label: {n_photons_to_sample}")
+print(f"Photons to sample per particle: {n_photons_to_sample}")
 print()
 
 # Define colors for labels
 colors_palette = ['red', 'blue', 'green', 'orange', 'purple', 'cyan', 'magenta', 'yellow',
                   'brown', 'pink', 'olive', 'navy', 'teal', 'maroon']
-category_names = {0: 'Primary', 1: 'DecayElectron', 2: 'SecondaryPion', 3: 'GammaShower'}
+category_names = {0: 'Primary', 1: 'DecayElectron', 2: 'SecondaryPion', 3: 'Gamma'}
 
 # PDG code to particle name mapping
 pdg_to_name = {
@@ -126,7 +126,7 @@ pdg_to_name = {
 
 # Statistics tracking by category
 total_events = 0
-category_counts = {0: 0, 1: 0, 2: 0, 3: 0}  # Primary, DecayElectron, SecondaryPion, GammaShower
+category_counts = {0: 0, 1: 0, 2: 0, 3: 0}  # Primary, DecayElectron, SecondaryPion, Gamma
 events_with_category = {0: 0, 1: 0, 2: 0, 3: 0}
 primary_particles = set()  # Track unique primary particle types
 
@@ -140,38 +140,38 @@ def process_event(event_idx):
     print(f"EVENT {event_idx}")
     print(f"{'='*70}")
 
-    # Read label data
-    label_data = read_label_data_from_photonsim(root_file, event_idx)
+    # Read particle data
+    particle_data = read_particle_data_from_photonsim(root_file, event_idx)
 
-    n_labels = label_data['n_labels']
-    labels = label_data['labels']
-    all_photon_origins = label_data['photon_origins']
-    all_photon_directions = label_data['photon_directions']
+    n_particles = particle_data['n_particles']
+    particles = particle_data['particles']
+    all_photon_origins = particle_data['photon_origins']
+    all_photon_directions = particle_data['photon_directions']
 
-    print(f"Event has {n_labels} labels")
+    print(f"Event has {n_particles} particles")
     print()
 
-    # Sample photons for each label
+    # Sample photons for each particle
     sampled_photons = []
     sampled_directions = []
     track_positions = []
     track_directions = []
-    label_colors = []
-    label_names = []
-    label_categories = []
+    particle_colors = []
+    particle_names = []
+    particle_categories = []
 
     local_category_counts = {0: 0, 1: 0, 2: 0, 3: 0}
 
-    for label_idx, label in enumerate(labels):
-        photon_indices = label['photon_indices']
-        track_info = label['track_info']
+    for particle_idx, particle in enumerate(particles):
+        photon_indices = particle['photon_indices']
+        track_info = particle['track_info']
 
         if track_info is None:
             continue
 
         cat_name = category_names.get(track_info['category'], f"Unknown_{track_info['category']}")
-        particle_name = pdg_to_name.get(track_info['pdg'], f"PDG{track_info['pdg']}")
-        color = colors_palette[label_idx % len(colors_palette)]
+        pdg_name = pdg_to_name.get(track_info['pdg'], f"PDG{track_info['pdg']}")
+        color = colors_palette[particle_idx % len(colors_palette)]
 
         # Get kinetic energy (works for all particles)
         kinetic_energy = track_info['energy']  # MeV
@@ -184,10 +184,10 @@ def process_event(event_idx):
 
         # Track primary particle types
         if category == 0:  # Primary
-            primary_particles.add(particle_name)
+            primary_particles.add(pdg_name)
 
-        print(f"Label {label_idx} ({cat_name}):")
-        print(f"  Particle: {particle_name} (PDG: {track_info['pdg']})")
+        print(f"Particle {particle_idx} ({cat_name}):")
+        print(f"  Particle: {pdg_name} (PDG: {track_info['pdg']})")
         print(f"  Kinetic Energy: {kinetic_energy:.2f} MeV")
         print(f"  Color: {color}")
         print(f"  Track position: {track_info['position']}")
@@ -195,14 +195,14 @@ def process_event(event_idx):
         print(f"  Total photons: {len(photon_indices)}")
 
         if len(photon_indices) == 0:
-            print(f"  WARNING: No photons for this label")
+            print(f"  WARNING: No photons for this particle")
             print()
             continue
 
         # Sample photons
         photon_indices_array = np.array(photon_indices, dtype=np.int32)
         n_to_sample = min(n_photons_to_sample, len(photon_indices))
-        np.random.seed(master_seed + label_idx + event_idx * 100)
+        np.random.seed(master_seed + particle_idx + event_idx * 100)
         sampled_indices = np.random.choice(len(photon_indices), size=n_to_sample, replace=False)
         selected_photon_indices = photon_indices_array[sampled_indices]
 
@@ -213,12 +213,12 @@ def process_event(event_idx):
         sampled_directions.append(photon_dirs)
         track_positions.append(track_info['position'])
         track_directions.append(track_info['direction'])
-        label_colors.append(color)
+        particle_colors.append(color)
 
-        # Create label name with kinetic energy
-        label_name = f"Label {label_idx} ({cat_name} - {particle_name}, {kinetic_energy:.1f} MeV)"
-        label_names.append(label_name)
-        label_categories.append(track_info['category'])
+        # Create particle name with kinetic energy
+        display_name = f"Particle {particle_idx} ({cat_name} - {pdg_name}, {kinetic_energy:.1f} MeV)"
+        particle_names.append(display_name)
+        particle_categories.append(track_info['category'])
 
         print(f"  Sampled {n_to_sample} photons")
         print()
@@ -232,13 +232,13 @@ def process_event(event_idx):
 
     return {
         'event_idx': event_idx,
-        'n_labels': len(sampled_photons),
+        'n_particles': len(sampled_photons),
         'sampled_photons': sampled_photons,
         'track_positions': track_positions,
         'track_directions': track_directions,
-        'label_colors': label_colors,
-        'label_names': label_names,
-        'label_categories': label_categories
+        'particle_colors': particle_colors,
+        'particle_names': particle_names,
+        'particle_categories': particle_categories
     }
 
 # Process all events
@@ -290,14 +290,14 @@ for event_data in events_to_plot:
     # Create single plot
     fig = go.Figure()
 
-    # Plot each label
-    for i in range(event_data['n_labels']):
+    # Plot each particle
+    for i in range(event_data['n_particles']):
         photons = event_data['sampled_photons'][i]
         track_pos = event_data['track_positions'][i]
         track_dir = event_data['track_directions'][i]
-        color = event_data['label_colors'][i]
-        label_name = event_data['label_names'][i]
-        category = event_data['label_categories'][i]
+        color = event_data['particle_colors'][i]
+        particle_name = event_data['particle_names'][i]
+        category = event_data['particle_categories'][i]
 
         # Plot photons
         fig.add_trace(
@@ -305,8 +305,8 @@ for event_data in events_to_plot:
                 x=photons[:, 0], y=photons[:, 1], z=photons[:, 2],
                 mode='markers',
                 marker=dict(size=2, color=color, opacity=0.3),
-                name=label_name,
-                legendgroup=f'label{i}',
+                name=particle_name,
+                legendgroup=f'particle{i}',
                 showlegend=True
             )
         )
@@ -331,8 +331,8 @@ for event_data in events_to_plot:
                 k=cyl_k,
                 color=color,
                 opacity=1.0,
-                name=f'{label_name} track',
-                legendgroup=f'label{i}',
+                name=f'{particle_name} track',
+                legendgroup=f'particle{i}',
                 showlegend=False,
                 visible=False,  # Hidden by default
                 lighting=dict(ambient=0.8, diffuse=0.8, specular=0.2),
@@ -357,15 +357,15 @@ for event_data in events_to_plot:
                 sizemode="absolute",
                 sizeref=20,
                 showscale=False,
-                name=f'{label_name} direction',
-                legendgroup=f'label{i}',
+                name=f'{particle_name} direction',
+                legendgroup=f'particle{i}',
                 showlegend=False,
                 visible=False  # Hidden by default
             )
         )
 
     # Create visibility arrays for toggle button
-    # Each label has 3 traces: photons, arrow line, arrow cone
+    # Each particle has 3 traces: photons, arrow line, arrow cone
     n_traces = len(fig.data)
 
     # Show arrows: keep photons visible, show arrows

@@ -16,7 +16,7 @@ export ROOT_INSTALL_DIR="/path/to/your/root/install"
 # Base directory for all PhotonSim simulation outputs
 export OUTPUT_BASE_PATH="/path/to/your/photonsim/output"
 
-# LUCiD installation path (for post-processing with generate_events_with_labels.py)
+# LUCiD installation path (for post-processing with generate_events_with_particles.py)
 export LUCID_PATH="/path/to/your/LUCiD"
 
 # =============================================================================

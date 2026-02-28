@@ -878,7 +878,7 @@ void DataManager::ClearEventData()
   fNPrimaries = 0;
   fNDecayElectrons = 0;
   fNSecondaryPions = 0;
-  fNGammaShowers = 0;
+  fNGammas = 0;
 
   // Clear track registry for new event
   ClearTrackRegistry();

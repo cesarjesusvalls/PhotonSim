@@ -529,14 +529,14 @@ LUCID_OUTPUT_FOLDER="${output_dir}/folder_job_${job_id}"
 mkdir -p "\${LUCID_OUTPUT_FOLDER}"
 echo "Created LUCiD output folder: \${LUCID_OUTPUT_FOLDER}"
 
-# Step 3: Run LUCiD with label-based workflow
+# Step 3: Run LUCiD with particle-based workflow
 echo ""
-echo "=== Step 3: Running LUCiD (generate_events_with_labels.py) ==="
+echo "=== Step 3: Running LUCiD (generate_events_with_particles.py) ==="
 echo "Input: ${output_dir}/${output_file}"
 echo "Output folder: \${LUCID_OUTPUT_FOLDER}"
 echo "LUCiD flags:${LUCID_FLAGS}"
 
-spython ${LUCID_PATH}/tools/production/generate_events_with_labels.py \\
+spython ${LUCID_PATH}/tools/production/generate_events_with_particles.py \\
     --root-file ${output_dir}/${output_file} \\
     --output "\${LUCID_OUTPUT_FOLDER}" \\
     ${LUCID_FLAGS}
@@ -752,8 +752,8 @@ EOF
 
     if [ "$RUN_LUCID" == "true" ]; then
         cat >> "$readme_file" << EOF
-5. LUCiD processes the single ROOT file using \`generate_events_with_labels.py\`
-6. Label-based output preserves genealogy information for each primary
+5. LUCiD processes the single ROOT file using \`generate_events_with_particles.py\`
+6. Particle-based output preserves genealogy information for each primary
 EOF
     fi
 }

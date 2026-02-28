@@ -50,7 +50,7 @@ enum PhotonCategory {
   kPrimary = 0,
   kDecayElectron = 1,
   kSecondaryPion = 2,
-  kGammaShower = 3
+  kGamma = 3
 };
 
 /// Structure to hold track information for categorized particles
@@ -155,7 +155,7 @@ class DataManager
     G4int GetNextPrimaryID() { return fNPrimaries++; }
     G4int GetNextDecayElectronID() { return fNDecayElectrons++; }
     G4int GetNextSecondaryPionID() { return fNSecondaryPions++; }
-    G4int GetNextGammaShowerID() { return fNGammaShowers++; }
+    G4int GetNextGammaID() { return fNGammas++; }
     
     // Control methods for individual data storage
     void SetStoreIndividualPhotons(bool store) { fStoreIndividualPhotons = store; }
@@ -264,7 +264,7 @@ class DataManager
     G4int fNPrimaries = 0;
     G4int fNDecayElectrons = 0;
     G4int fNSecondaryPions = 0;
-    G4int fNGammaShowers = 0;
+    G4int fNGammas = 0;
 
     // Event-level track information (parallel arrays for categorized tracks)
     std::vector<G4int> fTrackInfo_TrackID;
