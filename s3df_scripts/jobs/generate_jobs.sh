@@ -85,6 +85,8 @@ N_EVENTS=$(jq -r '.n_events_per_job' "$CONFIG_FILE")
 N_PARTICLES=$(jq '.particles | length' "$CONFIG_FILE")
 
 # Parse new fields with defaults
+# Note: Use 'if has() then .field else default' pattern for booleans since '//' treats false as falsy
+USE_CONFIG_NUMBER=$(jq -r 'if has("use_config_number") then .use_config_number else true end' "$CONFIG_FILE")
 DISABLE_DECAYS=$(jq -r '.disable_decays // false' "$CONFIG_FILE")
 APPLY_SMEARING=$(jq -r '.lucid_options.apply_smearing // true' "$CONFIG_FILE")
 # Note: apply_rotation is not used because PhotonSim already generates primaries with
@@ -94,13 +96,15 @@ INCLUDE_TRACK_SEGMENTS=$(jq -r '.lucid_options.include_track_segments // false' 
 INCLUDE_VOXELS=$(jq -r '.lucid_options.include_voxels // false' "$CONFIG_FILE")
 CLEANUP_ROOT_FILES=$(jq -r '.cleanup_root_files // false' "$CONFIG_FILE")
 
-# Validate config_number (required for unified output structure)
-if [ "$CONFIG_NUMBER" == "null" ] || [ "$CONFIG_NUMBER" == "-1" ]; then
-    echo "Error: config_number is required for data production configs"
-    exit 1
+# Validate config_number (required only when use_config_number is true)
+if [ "$USE_CONFIG_NUMBER" == "true" ]; then
+    if [ "$CONFIG_NUMBER" == "null" ] || [ "$CONFIG_NUMBER" == "-1" ]; then
+        echo "Error: config_number is required when use_config_number is true"
+        exit 1
+    fi
 fi
 
-# Build output directory - always use config_XXXXXX format
+# Build output directory
 # Use override if specified, otherwise use default from user_paths.sh
 if [ -n "$OUTPUT_OVERRIDE" ]; then
     EFFECTIVE_OUTPUT_BASE="$OUTPUT_OVERRIDE"
@@ -108,7 +112,13 @@ else
     EFFECTIVE_OUTPUT_BASE="$OUTPUT_BASE_PATH"
 fi
 OUTPUT_BASE_DIR="${EFFECTIVE_OUTPUT_BASE}/${MATERIAL}/${OUTPUT_PATH}"
-CONFIG_DIR="${OUTPUT_BASE_DIR}/config_$(printf "%06d" $CONFIG_NUMBER)"
+
+# Create config subfolder only when use_config_number is true
+if [ "$USE_CONFIG_NUMBER" == "true" ]; then
+    CONFIG_DIR="${OUTPUT_BASE_DIR}/config_$(printf "%06d" $CONFIG_NUMBER)"
+else
+    CONFIG_DIR="${OUTPUT_BASE_DIR}"
+fi
 
 # Validate parsed values
 if [ "$CONFIG_NAME" == "null" ]; then
@@ -153,7 +163,11 @@ else
 fi
 
 # Print configuration summary
-echo "Configuration: $CONFIG_NAME (config_$(printf "%06d" $CONFIG_NUMBER))"
+if [ "$USE_CONFIG_NUMBER" == "true" ]; then
+    echo "Configuration: $CONFIG_NAME (config_$(printf "%06d" $CONFIG_NUMBER))"
+else
+    echo "Configuration: $CONFIG_NAME (no config subfolder)"
+fi
 echo "Description: $CONFIG_DESC"
 echo "Energy distribution: $ENERGY_DIST"
 echo "Store individual photons: $STORE_INDIVIDUAL"
@@ -386,7 +400,11 @@ EOFMACRO
 
             # Create SLURM script
             SLURM_SCRIPT="${ENERGY_DIR}/submit_job_${JOB_ID}.sbatch"
-            JOB_NAME="photonsim_config$(printf "%06d" $CONFIG_NUMBER)_${energy_int}MeV_${JOB_ID}"
+            if [ "$USE_CONFIG_NUMBER" == "true" ]; then
+                JOB_NAME="photonsim_config$(printf "%06d" $CONFIG_NUMBER)_${energy_int}MeV_${JOB_ID}"
+            else
+                JOB_NAME="photonsim_${CONFIG_NAME}_${energy_int}MeV_${JOB_ID}"
+            fi
             create_slurm_script "$SLURM_SCRIPT" "$JOB_SCRIPT" "$ENERGY_DIR" "$JOB_ID" "$JOB_NAME"
 
             # Submit if requested
@@ -447,7 +465,11 @@ handle_uniform() {
 
         # Create SLURM script
         SLURM_SCRIPT="${CONFIG_DIR}/submit_job_${JOB_ID}.sbatch"
-        JOB_NAME="photonsim_config$(printf "%06d" $CONFIG_NUMBER)_${JOB_ID}"
+        if [ "$USE_CONFIG_NUMBER" == "true" ]; then
+            JOB_NAME="photonsim_config$(printf "%06d" $CONFIG_NUMBER)_${JOB_ID}"
+        else
+            JOB_NAME="photonsim_${CONFIG_NAME}_${JOB_ID}"
+        fi
         create_slurm_script "$SLURM_SCRIPT" "$JOB_SCRIPT" "$CONFIG_DIR" "$JOB_ID" "$JOB_NAME"
 
         # Submit if requested
@@ -682,10 +704,16 @@ EOFSLURM
 create_readme() {
     local readme_file="${CONFIG_DIR}/README.md"
 
+    if [ "$USE_CONFIG_NUMBER" == "true" ]; then
+        local config_id="$(printf "%06d" $CONFIG_NUMBER)"
+    else
+        local config_id="N/A (use_config_number: false)"
+    fi
+
     cat > "$readme_file" << EOF
 # Dataset Configuration
 
-**Configuration Number**: $(printf "%06d" $CONFIG_NUMBER)
+**Configuration Number**: $config_id
 **Configuration Name**: $CONFIG_NAME
 **Description**: $CONFIG_DESC
 **Generated**: $(date)
