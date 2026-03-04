@@ -290,6 +290,15 @@ void DataManager::EndEvent()
   fNOpticalPhotons = fPhotonPosX.size();
   fNEnergyDeposits = fEdepEnergy.size();
 
+  // Skip track segment processing when individual photon storage is disabled
+  // (used for lookup table generation where only histograms are needed)
+  if (!fStoreIndividualPhotons) {
+    if (fTree) {
+      fTree->Fill();
+    }
+    return;
+  }
+
   // === Step 1: Identify meaningful tracks ===
   // A track is meaningful if it produced Cherenkov photons OR has a descendant that did
   std::set<G4int> meaningfulTrackIDs;

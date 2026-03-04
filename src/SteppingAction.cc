@@ -472,7 +472,8 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
 
   // Record track segment for all non-optical photon tracks
   // This is used for the meaningful tracks system
-  {
+  // Only collect when individual photon storage is enabled (needed for per-particle data)
+  if (dataManager->GetStoreIndividualPhotons()) {
     G4int trackID = track->GetTrackID();
     G4int parentID = track->GetParentID();
     G4int pdgCode = particle->GetPDGEncoding();
