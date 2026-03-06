@@ -9,7 +9,7 @@
 
   "energy_distribution": "monoenergetic",
   "energy_scan": {
-    "start_MeV": 100,
+    "start_MeV": 10,
     "stop_MeV": 2000,
     "step_MeV": 10
   },

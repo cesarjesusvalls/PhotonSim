@@ -457,13 +457,14 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
     // Store detailed energy deposit information for scintillation analysis
     if (edepStep > 0.0) {
       G4ThreeVector stepPos = step->GetPostStepPoint()->GetPosition();
+      G4double stepLength = step->GetStepLength();
       G4double stepTime = step->GetPostStepPoint()->GetGlobalTime();
       G4String particleName = particle->GetParticleName();
       G4int trackID = track->GetTrackID();
       G4int parentID = track->GetParentID();
 
       dataManager->AddEnergyDeposit(stepPos.x(), stepPos.y(), stepPos.z(),
-                                   edepStep, stepTime, particleName,
+                                   edepStep, stepLength, stepTime, particleName,
                                    trackID, parentID);
 
       // Debug prints removed

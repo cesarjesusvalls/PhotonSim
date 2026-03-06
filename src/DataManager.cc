@@ -166,12 +166,12 @@ void DataManager::Initialize(const G4String& filename)
                                       500, 0.0, M_PI,           // 0 to π radians (all possible angles)
                                       500, 0.0, 10000.0);       // 0 to 10 meters in mm
   
-  // Energy deposit histogram: Distance (0-10 m) vs Energy (0-? keV, to be determined)
-  // Start with 0-1000 keV range, can be adjusted based on data
-  fEdepHist_DistanceEnergy = new TH2D("EdepHist_DistanceEnergy",
-                                     "Energy Deposit vs Distance from Origin;Distance (mm);Energy Deposit (keV)",
-                                     500, 0.0, 10000.0,        // 0 to 10 meters in mm
-                                     500, 0.0, 1000.0);        // 0 to 1000 keV (adjustable)
+  // dE/dx histogram: dE/dx (0-1000 keV/mm) vs Distance (0-10 m)
+  // Format matches PhotonHist_AngleDistance: X-axis is the observable, Y-axis is distance
+  fdEdxHist_Distance = new TH2D("dEdxHist_Distance",
+                                "dE/dx vs Distance from Origin;dE/dx (keV/mm);Distance (mm)",
+                                500, 0.0, 1000.0,           // 0 to 1000 keV/mm
+                                500, 0.0, 10000.0);         // 0 to 10 meters in mm
   
   // Photon time vs distance histogram: Distance (0-10 m) vs Time (0-50 ns)
   fPhotonHist_TimeDistance = new TH2D("PhotonHist_TimeDistance",
@@ -209,11 +209,11 @@ void DataManager::Finalize()
         // Histogram is now owned by the ROOT file, don't delete it manually
         fPhotonHist_AngleDistance = nullptr;
       }
-      if (fEdepHist_DistanceEnergy) {
-        fEdepHist_DistanceEnergy->Write();
-        G4cout << "Energy deposit histogram written with " << fEdepHist_DistanceEnergy->GetEntries() << " entries" << G4endl;
+      if (fdEdxHist_Distance) {
+        fdEdxHist_Distance->Write();
+        G4cout << "dE/dx histogram written with " << fdEdxHist_Distance->GetEntries() << " entries" << G4endl;
         // Histogram is now owned by the ROOT file, don't delete it manually
-        fEdepHist_DistanceEnergy = nullptr;
+        fdEdxHist_Distance = nullptr;
       }
       if (fPhotonHist_TimeDistance) {
         fPhotonHist_TimeDistance->Write();
@@ -259,10 +259,10 @@ void DataManager::Reset()
   fTree = nullptr;
   fRootFile.reset();
   fPhotonHist_AngleDistance = nullptr;
-  fEdepHist_DistanceEnergy = nullptr;
+  fdEdxHist_Distance = nullptr;
   fPhotonHist_TimeDistance = nullptr;
   fPhotonHist_Wavelength = nullptr;
-  
+
   // Clear output filename
   fOutputFilename = "output.root";
   
@@ -559,21 +559,28 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void DataManager::AddEnergyDeposit(G4double x, G4double y, G4double z,
-                                  G4double energy, G4double time,
+                                  G4double energy, G4double stepLength,
+                                  G4double time,
                                   const G4String& particleName,
                                   G4int trackID, G4int parentID)
 {
-  // Always fill the 2D histogram for aggregated data
-  if (fEdepHist_DistanceEnergy) {
-    // Calculate distance from origin
-    G4double distance = std::sqrt(x*x + y*y + z*z) / mm;  // Convert to mm
-    
-    // Convert energy to keV for histogram
-    G4double energy_keV = energy / keV;
-    
-    fEdepHist_DistanceEnergy->Fill(distance, energy_keV);
+  // Fill the dE/dx histogram for aggregated data
+  // Skip photons (gamma and opticalphoton) - dE/dx is not meaningful for them
+  if (fdEdxHist_Distance && particleName != "gamma" && particleName != "opticalphoton") {
+    // Only fill if step length is positive to avoid division by zero
+    if (stepLength > 0.0) {
+      // Calculate distance from origin
+      G4double distance = std::sqrt(x*x + y*y + z*z) / mm;  // Convert to mm
+
+      // Calculate dE/dx in keV/mm
+      G4double stepLength_mm = stepLength / mm;
+      G4double dEdx = (energy / keV) / stepLength_mm;
+
+      // Fill histogram: X-axis is dE/dx, Y-axis is distance
+      fdEdxHist_Distance->Fill(dEdx, distance);
+    }
   }
-  
+
   // Conditionally store individual energy deposit data
   if (fStoreIndividualEdeps) {
     fEdepPosX.push_back(x / mm);        // Store in mm
@@ -911,7 +918,7 @@ DataManager::~DataManager()
   // Clean up ROOT objects - histograms are already handled by Finalize()
   // Just make sure pointers are null
   fPhotonHist_AngleDistance = nullptr;
-  fEdepHist_DistanceEnergy = nullptr;
+  fdEdxHist_Distance = nullptr;
   fPhotonHist_TimeDistance = nullptr;
   fPhotonHist_Wavelength = nullptr;
   fTree = nullptr;

@@ -122,7 +122,8 @@ class DataManager
                          const std::vector<G4int>& genealogy);
 
     void AddEnergyDeposit(G4double x, G4double y, G4double z,
-                         G4double energy, G4double time,
+                         G4double energy, G4double stepLength,
+                         G4double time,
                          const G4String& particleName,
                          G4int trackID = -1,
                          G4int parentID = -1);
@@ -287,7 +288,7 @@ class DataManager
     
     // 2D ROOT histograms for aggregated data (500x500 bins)
     TH2D* fPhotonHist_AngleDistance = nullptr;  // Opening angle vs distance
-    TH2D* fEdepHist_DistanceEnergy = nullptr;   // Distance vs energy deposit
+    TH2D* fdEdxHist_Distance = nullptr;         // dE/dx vs distance
     TH2D* fPhotonHist_TimeDistance = nullptr;   // Photon time vs distance
 
     // 1D ROOT histogram for wavelength distribution
