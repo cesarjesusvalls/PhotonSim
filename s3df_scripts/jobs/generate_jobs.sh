@@ -544,6 +544,8 @@ echo ""
 echo "=== Step 2: Setting up LUCiD environment ==="
 export SINGULARITY_IMAGE_PATH=/sdf/group/neutrino/images/develop.sif
 export JAX_PLATFORMS=cuda,cpu
+export PYTHONPATH=${LUCID_PATH}:\${PYTHONPATH}
+export SINGULARITYENV_PYTHONPATH=\${PYTHONPATH}
 function spython() {
     singularity exec --nv -B /sdf,/fs,/sdf/scratch,/lscratch \${SINGULARITY_IMAGE_PATH} python "\$@"
 }
@@ -560,7 +562,7 @@ echo "Input: ${output_dir}/${output_file}"
 echo "Output folder: \${LUCID_OUTPUT_FOLDER}"
 echo "LUCiD flags:${LUCID_FLAGS}"
 
-spython ${LUCID_PATH}/tools/production/generate_events_with_particles.py \\
+spython ${LUCID_PATH}/lucid/production/generate_events_with_particles.py \\
     --root-file ${output_dir}/${output_file} \\
     --output "\${LUCID_OUTPUT_FOLDER}" \\
     ${LUCID_FLAGS}
