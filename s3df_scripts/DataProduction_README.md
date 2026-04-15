@@ -495,7 +495,7 @@ After jobs complete, you can generate interactive HTML visualizations to validat
 # Using singularity on S3DF
 singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch \
   /sdf/group/neutrino/images/develop.sif python \
-  $LUCID_PATH/tools/production/visualize_particle_events.py \
+  $LUCID_PATH/lucid/production/visualize_particle_events.py \
   <hdf5_file> \
   $LUCID_PATH/config/SK_geom_config.json \
   --event <event_index> \
@@ -508,7 +508,7 @@ singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch \
 # Visualize event 0 from config_000001 job 1
 singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch \
   /sdf/group/neutrino/images/develop.sif python \
-  $LUCID_PATH/tools/production/visualize_particle_events.py \
+  $LUCID_PATH/lucid/production/visualize_particle_events.py \
   $OUTPUT_BASE_PATH/water/uniform_energy/config_000001/events_job_000001.h5 \
   $LUCID_PATH/config/SK_geom_config.json \
   --event 0 \
@@ -538,7 +538,7 @@ The HTML file can be opened in any web browser for interactive exploration.
 For quick local validation without SLURM jobs:
 
 ```bash
-$LUCID_PATH/tools/production/generate_validation_htmls.sh [-c CONFIG] [-n EVENTS] [-o OUTPUT]
+$LUCID_PATH/lucid/production/generate_validation_htmls.sh [-c CONFIG] [-n EVENTS] [-o OUTPUT]
 ```
 
 - `-c`: Dataprod config number (default: 07)
