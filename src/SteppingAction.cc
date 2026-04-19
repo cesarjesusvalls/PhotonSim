@@ -287,14 +287,14 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
         G4TrackStatus status = track->GetTrackStatus();
 
         // Only skip deflection handling for tracks being killed
-        // Suspended tracks (fSuspend) should still be handled - they're temporarily paused
-        if (status == fStopAndKill) {
-          return; // Skip deflection handling for killed tracks
-        }
-
+        // Suspended tracks (fSuspend) should still be handled - they're temporarily paused.
+        // Why: a bare `return` here also skipped the segment-recording block below,
+        // so the stopping pion's final step was absent from Segment_NCherenkov while
+        // its Cerenkov secondaries still bumped MTrack_NCherenkov on their first step.
         // Check for processes that cause significant deflections: hadElastic, hIoni
         // (Inelastic processes always kill tracks, so they never reach here)
-        if (currentProcessName == "hadElastic" || currentProcessName == "hIoni") {
+        if (status != fStopAndKill &&
+            (currentProcessName == "hadElastic" || currentProcessName == "hIoni")) {
 
           // If deflection > 5 degrees, kill and replace the track
           if (angle > 5.0 * deg) {
