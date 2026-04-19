@@ -488,12 +488,29 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
     G4double edep = step->GetTotalEnergyDeposit();
     G4double preTime = step->GetPreStepPoint()->GetGlobalTime();
 
+    // β = v/c at pre-step (drives Cherenkov physics)
+    G4double betaStart = step->GetPreStepPoint()->GetBeta();
+
+    // Count Cherenkov photons emitted in this step. G4 emits them as secondaries
+    // with creator process "Cerenkov" — count those produced by this step only.
+    G4int nCherenkovInStep = 0;
+    const std::vector<const G4Track*>* secondaries = step->GetSecondaryInCurrentStep();
+    if (secondaries) {
+      for (const G4Track* sec : *secondaries) {
+        const G4VProcess* creator = sec->GetCreatorProcess();
+        if (creator && creator->GetProcessName() == "Cerenkov") {
+          ++nCherenkovInStep;
+        }
+      }
+    }
+
     dataManager->AddTrackSegment(trackID, parentID, pdgCode,
                                 particleName, initialEnergy,
                                 prePos.x(), prePos.y(), prePos.z(),
                                 postPos.x(), postPos.y(), postPos.z(),
                                 preDir.x(), preDir.y(), preDir.z(),
-                                edep, preTime);
+                                edep, preTime,
+                                betaStart, nCherenkovInStep);
   }
 }
 
