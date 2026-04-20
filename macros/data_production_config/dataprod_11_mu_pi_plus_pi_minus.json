@@ -27,8 +27,7 @@
   ],
   "lucid_options": {
     "apply_smearing": true,
-    "apply_translation": true,
-    "include_track_segments": true
+    "apply_translation": true
   },
   "n_jobs": 2,
   "n_events_per_job": 100,

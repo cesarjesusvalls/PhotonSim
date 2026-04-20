@@ -109,8 +109,7 @@ All job generation uses JSON configuration files in `macros/data_production_conf
   ],
   "lucid_options": {
     "apply_smearing": true,
-    "apply_translation": true,
-    "include_track_segments": true
+    "apply_translation": true
   },
   "n_jobs": 100,
   "n_events_per_job": 1000
@@ -138,7 +137,6 @@ All job generation uses JSON configuration files in `macros/data_production_conf
 |-------------------------|---------|---------|---------------------------------------------------------------|
 | `apply_smearing`        | boolean | true    | Apply PMT charge and timing smearing                          |
 | `apply_translation`     | boolean | true    | Apply random translation to place vertex within detector      |
-| `include_track_segments`| boolean | false   | Include TrackInformation and Segments data in HDF5 output     |
 
 ### Multi-Particle Events
 
@@ -289,7 +287,7 @@ Photons are grouped into categorized particles based on the track that produced 
 
 ### Track Information and Segments (HDF5 output)
 
-When `include_track_segments: true` is set in `lucid_options`, the HDF5 output includes detailed trajectory information for "meaningful" tracks—those that produced Cherenkov photons or have descendants that did.
+The HDF5 output includes detailed trajectory information for "meaningful" tracks—those that produced Cherenkov photons or have descendants that did.
 
 #### Track Genealogy (per particle)
 

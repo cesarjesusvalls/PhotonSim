@@ -95,7 +95,6 @@ APPLY_SMEARING=$(jq -r '.lucid_options.apply_smearing // true' "$CONFIG_FILE")
 # Note: apply_rotation is not used because PhotonSim already generates primaries with
 # random isotropic directions (/gun/randomDirection true), making rotation in LUCiD redundant.
 APPLY_TRANSLATION=$(jq -r '.lucid_options.apply_translation // true' "$CONFIG_FILE")
-INCLUDE_TRACK_SEGMENTS=$(jq -r '.lucid_options.include_track_segments // false' "$CONFIG_FILE")
 CLEANUP_ROOT_FILES=$(jq -r '.cleanup_root_files // false' "$CONFIG_FILE")
 
 # Validate config_number (required only when use_config_number is true)
@@ -178,7 +177,6 @@ echo "Run LUCiD: $RUN_LUCID"
 if [ "$RUN_LUCID" == "true" ]; then
     echo "  - Apply smearing: $APPLY_SMEARING"
     echo "  - Apply translation: $APPLY_TRANSLATION"
-    echo "  - Include track segments: $INCLUDE_TRACK_SEGMENTS"
     echo "  - Cleanup ROOT files: $CLEANUP_ROOT_FILES"
 fi
 echo "Number of particles per event: $N_PARTICLES"
@@ -504,7 +502,6 @@ create_job_script() {
         LUCID_FLAGS=""
         [ "$APPLY_SMEARING" == "true" ] && LUCID_FLAGS="$LUCID_FLAGS --apply-smearing"
         [ "$APPLY_TRANSLATION" == "true" ] && LUCID_FLAGS="$LUCID_FLAGS --apply-translation"
-        [ "$INCLUDE_TRACK_SEGMENTS" == "true" ] && LUCID_FLAGS="$LUCID_FLAGS --include-track-segments"
 
         cat > "$job_script" << EOFJOBSCRIPT
 #!/bin/bash
@@ -737,7 +734,6 @@ EOF
         cat >> "$readme_file" << EOF
   - Apply smearing: $APPLY_SMEARING
   - Apply translation: $APPLY_TRANSLATION
-  - Include track segments: $INCLUDE_TRACK_SEGMENTS
 EOF
     fi
 
