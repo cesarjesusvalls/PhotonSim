@@ -1,6 +1,6 @@
 {
   "config_number": 2,
-  "name": "pi_plus_210_to_1500MeV",
+  "name": "single pi+",
   "description": "Single positive pion with LUCiD processing",
   "material": "water",
   "output_path": "uniform_energy",

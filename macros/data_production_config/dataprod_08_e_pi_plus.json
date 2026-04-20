@@ -1,6 +1,6 @@
 {
   "config_number": 8,
-  "name": "e_pi_plus_100_to_1500MeV",
+  "name": "e- + pi+",
   "description": "Multi-particle events with electron and positive pion with LUCiD processing",
   "material": "water",
   "output_path": "uniform_energy",

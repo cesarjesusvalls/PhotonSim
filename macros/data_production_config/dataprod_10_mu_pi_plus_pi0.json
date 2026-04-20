@@ -1,6 +1,6 @@
 {
   "config_number": 10,
-  "name": "mu_pi_plus_pi0_100_to_1500MeV",
+  "name": "mu- + pi+ + pi0",
   "description": "Multi-particle events with muon, positive pion and neutral pion with LUCiD processing",
   "material": "water",
   "output_path": "uniform_energy",

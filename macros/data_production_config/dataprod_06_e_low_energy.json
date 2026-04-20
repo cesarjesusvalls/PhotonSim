@@ -1,6 +1,6 @@
 {
   "config_number": 6,
-  "name": "electron_low_energy_1_to_20MeV",
+  "name": "single low energy e-",
   "description": "Low energy electrons with LUCiD processing",
   "material": "water",
   "output_path": "uniform_energy",

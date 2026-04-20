@@ -1,6 +1,6 @@
 {
   "config_number": 1,
-  "name": "muon_210_to_1500MeV",
+  "name": "single mu-",
   "description": "Single muon with LUCiD processing",
   "material": "water",
   "output_path": "uniform_energy",

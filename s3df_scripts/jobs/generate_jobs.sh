@@ -74,6 +74,8 @@ echo ""
 # Parse JSON config - basic fields
 CONFIG_NUMBER=$(jq -r '.config_number' "$CONFIG_FILE")
 CONFIG_NAME=$(jq -r '.name' "$CONFIG_FILE")
+# Filesystem/SLURM-safe slug of CONFIG_NAME (e.g. "mu- + pi+" -> "muminus_plus_piplus")
+CONFIG_NAME_SLUG=$(echo "$CONFIG_NAME" | sed 's/+/plus/g; s/-/minus/g; s/ /_/g; s/__*/_/g')
 CONFIG_DESC=$(jq -r '.description' "$CONFIG_FILE")
 MATERIAL=$(jq -r '.material' "$CONFIG_FILE")
 OUTPUT_PATH=$(jq -r '.output_path' "$CONFIG_FILE")
@@ -189,6 +191,11 @@ echo ""
 
 # Create output directory
 mkdir -p "$CONFIG_DIR"
+
+# Pre-create LUCiD v3 four-subdir layout so concurrent jobs don't race on mkdir
+if [ "$RUN_LUCID" == "true" ]; then
+    mkdir -p "$CONFIG_DIR/sensor" "$CONFIG_DIR/inst" "$CONFIG_DIR/seg" "$CONFIG_DIR/labl"
+fi
 
 # Function to create PhotonSim macro with unified multi-primary approach
 create_unified_macro() {
@@ -403,7 +410,7 @@ EOFMACRO
             if [ "$USE_CONFIG_NUMBER" == "true" ]; then
                 JOB_NAME="photonsim_config$(printf "%06d" $CONFIG_NUMBER)_${energy_int}MeV_${JOB_ID}"
             else
-                JOB_NAME="photonsim_${CONFIG_NAME}_${energy_int}MeV_${JOB_ID}"
+                JOB_NAME="photonsim_${CONFIG_NAME_SLUG}_${energy_int}MeV_${JOB_ID}"
             fi
             create_slurm_script "$SLURM_SCRIPT" "$JOB_SCRIPT" "$ENERGY_DIR" "$JOB_ID" "$JOB_NAME"
 
@@ -468,7 +475,7 @@ handle_uniform() {
         if [ "$USE_CONFIG_NUMBER" == "true" ]; then
             JOB_NAME="photonsim_config$(printf "%06d" $CONFIG_NUMBER)_${JOB_ID}"
         else
-            JOB_NAME="photonsim_${CONFIG_NAME}_${JOB_ID}"
+            JOB_NAME="photonsim_${CONFIG_NAME_SLUG}_${JOB_ID}"
         fi
         create_slurm_script "$SLURM_SCRIPT" "$JOB_SCRIPT" "$CONFIG_DIR" "$JOB_ID" "$JOB_NAME"
 
@@ -548,67 +555,57 @@ function spython() {
     singularity exec --nv -B /sdf,/fs,/sdf/scratch,/lscratch \${SINGULARITY_IMAGE_PATH} python "\$@"
 }
 
-# Create output folder for LUCiD
-LUCID_OUTPUT_FOLDER="${output_dir}/folder_job_${job_id}"
-mkdir -p "\${LUCID_OUTPUT_FOLDER}"
-echo "Created LUCiD output folder: \${LUCID_OUTPUT_FOLDER}"
+# Step 3: Run LUCiD (v3 four-file dataset, one batch per job)
+# file_index = job_id - 1 (LUCiD zero-pads to %04d for filenames)
+FILE_INDEX=\$((10#${job_id} - 1))
+FILE_INDEX_PADDED=\$(printf "%04d" \$FILE_INDEX)
 
-# Step 3: Run LUCiD with particle-based workflow
 echo ""
 echo "=== Step 3: Running LUCiD (generate_events_with_particles.py) ==="
 echo "Input: ${output_dir}/${output_file}"
-echo "Output folder: \${LUCID_OUTPUT_FOLDER}"
+echo "Output dataset dir: ${output_dir}"
+echo "Dataset name: ${CONFIG_NAME}"
+echo "File index: \${FILE_INDEX_PADDED}"
 echo "LUCiD flags:${LUCID_FLAGS}"
 
 spython ${LUCID_PATH}/lucid/production/generate_events_with_particles.py \\
     --root-file ${output_dir}/${output_file} \\
-    --output "\${LUCID_OUTPUT_FOLDER}" \\
+    --output "${output_dir}" \\
+    --dataset-name "${CONFIG_NAME}" \\
+    --file-index-start \$FILE_INDEX \\
     ${LUCID_FLAGS}
 
-# Check if LUCiD output was created
-LUCID_OUTPUT_FILE="\${LUCID_OUTPUT_FOLDER}/merged_events.h5"
-if [ -f "\${LUCID_OUTPUT_FILE}" ]; then
-    echo "Success! LUCiD output file created: \${LUCID_OUTPUT_FILE}"
-    ls -lh "\${LUCID_OUTPUT_FILE}"
-else
-    echo "Error: LUCiD output file not created"
+# Step 4: Verify the v3 four-file output batch for this job
+echo ""
+echo "=== Step 4: Verifying v3 output ==="
+ALL_OK=true
+for sub in sensor inst seg labl; do
+    H5="${output_dir}/\${sub}/wc_\${sub}_\${FILE_INDEX_PADDED}.h5"
+    if [ -f "\${H5}" ]; then
+        ls -lh "\${H5}"
+    else
+        echo "Error: missing \${H5}"
+        ALL_OK=false
+    fi
+done
+if [ "\${ALL_OK}" != "true" ]; then
     exit 1
 fi
-
-# Step 4: Rename and move the .h5 file
-echo ""
-echo "=== Step 4: Organizing output files ==="
-FINAL_H5_NAME="events_job_${job_id}.h5"
-FINAL_H5_PATH="${output_dir}/\${FINAL_H5_NAME}"
-
-mv "\${LUCID_OUTPUT_FILE}" "\${FINAL_H5_PATH}"
-echo "Moved and renamed: \${LUCID_OUTPUT_FILE} -> \${FINAL_H5_PATH}"
-ls -lh "\${FINAL_H5_PATH}"
-
-# Remove the temporary folder
-rmdir "\${LUCID_OUTPUT_FOLDER}" 2>/dev/null && echo "Removed temporary folder: \${LUCID_OUTPUT_FOLDER}" || echo "Folder not empty, keeping: \${LUCID_OUTPUT_FOLDER}"
 
 # Step 5: Cleanup ROOT file if requested
 CLEANUP_ROOT=${CLEANUP_ROOT_FILES}
 if [ "\${CLEANUP_ROOT}" == "true" ]; then
     echo ""
     echo "=== Step 5: Cleaning up ROOT file ==="
-    if [ -f "\${FINAL_H5_PATH}" ]; then
-        rm -f "${output_dir}/${output_file}"
-        echo "Removed intermediate ROOT file: ${output_dir}/${output_file}"
-    else
-        echo "Warning: HDF5 output not found, keeping ROOT file for safety"
-    fi
+    rm -f "${output_dir}/${output_file}"
+    echo "Removed intermediate ROOT file: ${output_dir}/${output_file}"
 fi
 
 echo ""
 echo "=== Job completed successfully ==="
-if [ "\${CLEANUP_ROOT}" == "true" ]; then
-    echo "LUCiD output: \${FINAL_H5_PATH}"
-    echo "(ROOT file was cleaned up)"
-else
+echo "LUCiD dataset: ${output_dir}/{sensor,inst,seg,labl}/wc_*_\${FILE_INDEX_PADDED}.h5"
+if [ "\${CLEANUP_ROOT}" != "true" ]; then
     echo "PhotonSim output: ${output_dir}/${output_file}"
-    echo "LUCiD output: \${FINAL_H5_PATH}"
 fi
 EOFJOBSCRIPT
     else
@@ -765,7 +762,13 @@ For each job (e.g., job 000001):
 EOF
 
     if [ "$RUN_LUCID" == "true" ]; then
-        echo "- LUCiD events file: \`events_job_000001.h5\`" >> "$readme_file"
+        cat >> "$readme_file" << 'EOF'
+- LUCiD v3 batch (`file_index=0`, from job 1):
+  - `sensor/wc_sensor_0000.h5`
+  - `inst/wc_inst_0000.h5`
+  - `seg/wc_seg_0000.h5`
+  - `labl/wc_labl_0000.h5`
+EOF
     fi
 
     cat >> "$readme_file" << EOF

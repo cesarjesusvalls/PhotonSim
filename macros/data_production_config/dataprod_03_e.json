@@ -1,6 +1,6 @@
 {
   "config_number": 3,
-  "name": "electron_10_to_1500MeV",
+  "name": "single e-",
   "description": "Single electron with LUCiD processing",
   "material": "water",
   "output_path": "uniform_energy",

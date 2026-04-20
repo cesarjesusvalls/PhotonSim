@@ -92,7 +92,7 @@ All job generation uses JSON configuration files in `macros/data_production_conf
 ```json
 {
   "config_number": 1,
-  "name": "muon_uniform_up_to_1500MeV",
+  "name": "single mu-",
   "description": "Uniform energy muons with LUCiD processing",
   "material": "water",
   "output_path": "uniform_energy",
@@ -121,7 +121,7 @@ All job generation uses JSON configuration files in `macros/data_production_conf
 | Field                 | Type    | Description                                       |
 |-----------------------|---------|---------------------------------------------------|
 | `config_number`       | integer | Unique ID (used in output folder: `config_XXXXXX`)|
-| `name`                | string  | Human-readable name                               |
+| `name`                | string  | Human-readable dataset label; passed to LUCiD as `--dataset-name` and recorded in HDF5 provenance |
 | `material`            | string  | "water" (other materials coming soon)             |
 | `output_path`         | string  | Subdirectory for output                           |
 | `energy_distribution` | string  | "uniform" or "monoenergetic"                      |
@@ -200,83 +200,69 @@ echo "y" | ./jobs/submit_all_configs.sh -n 10 -e 100 -s
 
 Pre-defined configurations in `macros/data_production_config/`:
 
-| Config # | File | Particles | Energy Range |
-|----------|------|-----------|--------------|
-| 1 | `dataprod_01_mu.json` | mu- | 210-1500 MeV |
-| 2 | `dataprod_02_pi_plus.json` | pi+ | 210-1500 MeV |
-| 3 | `dataprod_03_e.json` | e- | 10-1500 MeV |
-| 4 | `dataprod_04_pi_minus.json` | pi- | 100-1500 MeV |
-| 5 | `dataprod_05_pi0.json` | pi0 | 100-1500 MeV |
-| 6 | `dataprod_06_e_low_energy.json` | e- (low energy) | 1-20 MeV |
-| 7 | `dataprod_07_mu_pi_plus.json` | mu- + pi+ | 105-1500 MeV |
-| 8 | `dataprod_08_e_pi_plus.json` | e- + pi+ | 100-1500 MeV |
-| 9 | `dataprod_09_e_pi0.json` | e- + pi0 | 100-1500 MeV |
-| 10 | `dataprod_10_mu_pi_plus_pi0.json` | mu- + pi+ + pi0 | 100-1500 MeV |
-| 11 | `dataprod_11_mu_pi_plus_pi_minus.json` | mu- + pi+ + pi- | 100-1500 MeV |
-| 12 | `dataprod_12_e_pi_plus_pi0.json` | e- + pi+ + pi0 | 100-1500 MeV |
+| Config # | File | Dataset name | Energy Range |
+|----------|------|--------------|--------------|
+| 1 | `dataprod_01_mu.json` | `single mu-` | 210-1500 MeV |
+| 2 | `dataprod_02_pi_plus.json` | `single pi+` | 210-1500 MeV |
+| 3 | `dataprod_03_e.json` | `single e-` | 10-1500 MeV |
+| 4 | `dataprod_04_pi_minus.json` | `single pi-` | 100-1500 MeV |
+| 5 | `dataprod_05_pi0.json` | `single pi0` | 100-1500 MeV |
+| 6 | `dataprod_06_e_low_energy.json` | `single low energy e-` | 1-20 MeV |
+| 7 | `dataprod_07_mu_pi_plus.json` | `mu- + pi+` | 105-1500 MeV |
+| 8 | `dataprod_08_e_pi_plus.json` | `e- + pi+` | 100-1500 MeV |
+| 9 | `dataprod_09_e_pi0.json` | `e- + pi0` | 100-1500 MeV |
+| 10 | `dataprod_10_mu_pi_plus_pi0.json` | `mu- + pi+ + pi0` | 100-1500 MeV |
+| 11 | `dataprod_11_mu_pi_plus_pi_minus.json` | `mu- + pi+ + pi-` | 100-1500 MeV |
+| 12 | `dataprod_12_e_pi_plus_pi0.json` | `e- + pi+ + pi0` | 100-1500 MeV |
 
 ## Output Structure
 
-All data production jobs use a consistent output structure:
+Each `config_XXXXXX/` directory is one LUCiD **dataset**. Every job in that
+config contributes one **batch** (`file_index = job_id - 1`) to the dataset,
+producing four parallel HDF5 files spread across the `sensor/`, `inst/`,
+`seg/`, and `labl/` subdirectories.
 
 ```
 OUTPUT_BASE_PATH/
 └── water/
     └── uniform_energy/
-        ├── config_000001/          # mu- single particle
-        │   ├── job_000001.mac
+        ├── config_000001/                           # dataset: "single mu-"
+        │   ├── job_000001.mac                       # PhotonSim macro for job 1
         │   ├── run_job_000001.sh
         │   ├── submit_job_000001.sbatch
-        │   ├── output_job_000001.root  (deleted if cleanup_root_files: true)
-        │   └── events_job_000001.h5  (if run_lucid: true)
-        ├── config_000002/          # pi+ single particle
+        │   ├── output_job_000001.root               # (deleted if cleanup_root_files: true)
+        │   ├── sensor/wc_sensor_0000.h5             # ─┐
+        │   ├── inst/wc_inst_0000.h5                 #  ├── batch 0 (job 1)
+        │   ├── seg/wc_seg_0000.h5                   #  │
+        │   ├── labl/wc_labl_0000.h5                 # ─┘
+        │   ├── sensor/wc_sensor_0001.h5             # ─┐ batch 1 (job 2)
+        │   └── ...                                  #  │
+        ├── config_000002/                           # dataset: "single pi+"
         ├── ...
-        └── config_000009/          # mu- + pi+ + pi- multi-particle
+        └── config_000012/                           # dataset: "e- + pi+ + pi0"
 ```
 
-### HDF5 Output Format
+### LUCiD v3 Dataset Schema
 
-Each `events_job_XXXXXX.h5` file contains one group per event (`event_0`, `event_1`, etc.) with the following datasets:
+The four files per batch are the v3 production format defined in
+[`LUCiD/docs/LUCID_DATASET.md`](../../LUCiD/docs/LUCID_DATASET.md). Summary:
 
-#### Event Metadata
+| File | Role |
+|------|------|
+| `sensor/wc_sensor_NNNN.h5` | Raw PMT readout (post-smearing): `PE`, `T`, `sensor_idx` per event. |
+| `inst/wc_inst_NNNN.h5`     | Per-particle decomposition of the PMT signal (pre-smearing truth). |
+| `seg/wc_seg_NNNN.h5`       | Geant4 3D track segments (`start_*`, `end_*`, `dir_*`, `edep`, `time`). |
+| `labl/wc_labl_NNNN.h5`     | Labels and truth metadata (categories, genealogy, containment, `t0`). |
 
-| Dataset | Shape | Dtype | Description |
-|---------|-------|-------|-------------|
-| `event_number` | () | int32 | Event index in the file |
-| `n_particles` | () | int32 | Number of categorized particles in this event |
-| `t0` | () | float32 | Event time offset (ns), sampled from U(-15, 15) |
-
-#### Reconstructed Sensor Data
-
-| Dataset | Shape | Dtype | Description |
-|---------|-------|-------|-------------|
-| `PE` | (N_sensors,) | float32 | Observed photoelectrons per sensor (with smearing) |
-| `T` | (N_sensors,) | float32 | Observed first-hit time per sensor (ns, with smearing) |
-
-#### Per-Particle Sensor Data
-
-| Dataset | Shape | Dtype | Description |
-|---------|-------|-------|-------------|
-| `PE_per_particle` | (n_particles, N_sensors) | float32 | True PE per sensor for each categorized particle |
-| `T_per_particle` | (n_particles, N_sensors) | float32 | True first-hit time per sensor for each particle |
-
-#### Categorized Particle Metadata
-
-| Dataset | Shape | Dtype | Description |
-|---------|-------|-------|-------------|
-| `Particle_Category` | (n_particles,) | int32 | Category ID (0=Primary, 1=DecayElectron, 2=Gamma, 3=SecondaryPion) |
-| `Particle_CategorizedGenealogy` | (n_particles,) | int32[] | Ancestry chain of categorized particle indices |
-
-#### Containment Metrics
-
-| Dataset | Shape | Dtype | Description |
-|---------|-------|-------|-------------|
-| `light_containment_by_particle` | (n_particles,) | float64 | Fraction of light contained in detector per particle |
-| `overall_light_containment` | () | float64 | Overall light containment for the event |
+Each file's `config/` group carries the provenance block (`dataset_name`,
+`run_id`, `file_index`, `source_file`, `lucid_master_seed`, ...). See
+[`LUCID_DATASET.md`](../../LUCiD/docs/LUCID_DATASET.md) for the full
+schema (field names, shapes, dtypes).
 
 ### Particle Categories
 
-Photons are grouped into categorized particles based on the track that produced them:
+Photons are grouped into categorized particles (stored in `labl/`) based on
+the track that produced them:
 
 | Category | Code | Condition | Description |
 |----------|------|-----------|-------------|
@@ -285,53 +271,15 @@ Photons are grouped into categorized particles based on the track that produced 
 | Gamma | 2 | γ from π⁰ decay | Electromagnetic showers from neutral pion decay |
 | SecondaryPion | 3 | π± from inelastic scatter or deflection > 5°, p ≥ 195 MeV/c | Charged pions from hadronic interactions or large-angle elastic scatters |
 
-### Track Information and Segments (HDF5 output)
+### Segment merging (PhotonSim side)
 
-The HDF5 output includes detailed trajectory information for "meaningful" tracks—those that produced Cherenkov photons or have descendants that did.
+Track segments in `seg/` are produced by PhotonSim and merged before
+writing to keep storage bounded while preserving trajectory detail:
 
-#### Track Genealogy (per particle)
-
-| Dataset | Shape | Dtype | Description |
-|---------|-------|-------|-------------|
-| `Particle_TrackGenealogy` | (n_particles,) | int32[] | All meaningful G4 track IDs in ancestry chain per particle |
-
-#### TrackInformation Group (`/event_N/TrackInformation/`)
-
-N_m = number of meaningful tracks in the event
-
-| Dataset | Shape | Dtype | Description |
-|---------|-------|-------|-------------|
-| `TrackID` | (N_m,) | int32 | Track identifier |
-| `ParentID` | (N_m,) | int32 | Parent track ID (0 = primary) |
-| `PDG` | (N_m,) | int32 | PDG particle code |
-| `InitialEnergy` | (N_m,) | float32 | Initial kinetic energy (MeV) |
-| `NCherenkov` | (N_m,) | int32 | Number of Cherenkov photons produced |
-| `SegmentOffset` | (N_m,) | int32 | Starting index in Segments arrays |
-| `NSegments` | (N_m,) | int32 | Number of segments for this track |
-
-**Group attribute:** `n_tracks` (int32)
-
-#### Segments Group (`/event_N/Segments/`)
-
-N_seg = total number of segments across all meaningful tracks. Positions are in cm.
-
-| Dataset | Shape | Dtype | Description |
-|---------|-------|-------|-------------|
-| `StartX/Y/Z` | (N_seg,) | float32 | Segment start position (cm) |
-| `EndX/Y/Z` | (N_seg,) | float32 | Segment end position (cm) |
-| `DirX/Y/Z` | (N_seg,) | float32 | Direction at segment start |
-| `Edep` | (N_seg,) | float32 | Energy deposited (MeV) |
-| `Time` | (N_seg,) | float32 | Time at segment start (ns) |
-
-**Group attribute:** `n_segments` (int32)
-
-**Segment merging criteria (in PhotonSim):**
 | Track Energy | Merge Condition |
 |--------------|-----------------|
 | ≥ 10 MeV | Save when length ≥ 10mm OR direction change > 2° |
 | < 10 MeV | Save when cumulative Edep ≥ 1 MeV |
-
-This reduces storage while preserving trajectory detail for reconstruction.
 
 ## Job Management
 
@@ -484,6 +432,11 @@ ls -la $OUTPUT_BASE_PATH/water/uniform_energy/config_000001/
 3. Test locally by running the generated `run_job_*.sh` script
 
 ## Output Validation with LUCiD Visualization
+
+> **Deprecated / in transition.** The current `visualize_particle_events.py`
+> viewer is being replaced by a new viewer and may be broken against v3
+> output. The usage example below is kept for reference only; update this
+> section once the replacement viewer lands.
 
 After jobs complete, you can generate interactive HTML visualizations to validate the output using LUCiD's `visualize_particle_events.py` script.
 

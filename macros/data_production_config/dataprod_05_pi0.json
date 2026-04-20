@@ -1,6 +1,6 @@
 {
   "config_number": 5,
-  "name": "pi0_100_to_1500MeV",
+  "name": "single pi0",
   "description": "Single neutral pion with LUCiD processing",
   "material": "water",
   "output_path": "uniform_energy",
