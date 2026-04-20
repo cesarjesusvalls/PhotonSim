@@ -527,7 +527,7 @@ singularity exec -B /sdf,/fs,/sdf/scratch,/lscratch \
 
 The script generates an interactive HTML file with:
 - 3D visualization of sensor hits colored by charge or categorized particle
-- Slider to switch between views (Track Segments, Voxels, By Particle, All, individual particles)
+- Slider to switch between views (Track Segments, By Particle, All, individual particles)
 - Event genealogy information showing categorized particle hierarchy
 - Light containment metrics per particle
 
