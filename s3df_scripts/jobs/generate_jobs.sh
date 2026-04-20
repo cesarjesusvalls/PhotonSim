@@ -82,6 +82,9 @@ STORE_INDIVIDUAL=$(jq -r '.store_individual_photons' "$CONFIG_FILE")
 RUN_LUCID=$(jq -r '.run_lucid' "$CONFIG_FILE")
 N_JOBS=$(jq -r '.n_jobs' "$CONFIG_FILE")
 N_EVENTS=$(jq -r '.n_events_per_job' "$CONFIG_FILE")
+if [ "$TEST_MODE" = true ]; then
+    N_EVENTS=2
+fi
 N_PARTICLES=$(jq '.particles | length' "$CONFIG_FILE")
 
 # Parse new fields with defaults
