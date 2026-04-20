@@ -133,6 +133,8 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("Segment_DirZ", &fSegment_DirZ);
   fTree->Branch("Segment_Edep", &fSegment_Edep);
   fTree->Branch("Segment_Time", &fSegment_Time);
+  fTree->Branch("Segment_BetaStart", &fSegment_BetaStart);
+  fTree->Branch("Segment_NCherenkov", &fSegment_NCherenkov);
 
   // Event-level track information branches
   fTree->Branch("TrackInfo_TrackID", &fTrackInfo_TrackID);
@@ -381,10 +383,13 @@ void DataManager::EndEvent()
           current = next;
         } else {
           // Merge: extend end position, accumulate edep, keep original start and direction
+          // betaStart from the first sub-step is preserved (current.betaStart unchanged);
+          // nCherenkov accumulates across merged sub-steps.
           current.endX = next.endX;
           current.endY = next.endY;
           current.endZ = next.endZ;
           current.edep += next.edep;
+          current.nCherenkov += next.nCherenkov;
         }
       }
       // Don't forget the last segment
@@ -413,6 +418,8 @@ void DataManager::EndEvent()
       fSegment_DirZ.push_back(seg.dirZ);
       fSegment_Edep.push_back(seg.edep);
       fSegment_Time.push_back(seg.time);
+      fSegment_BetaStart.push_back(seg.betaStart);
+      fSegment_NCherenkov.push_back(seg.nCherenkov);
     }
 
     segmentOffset += mergedSegments.size();
@@ -698,7 +705,8 @@ void DataManager::AddTrackSegment(G4int trackID, G4int parentID, G4int pdgCode,
                                   G4double startX, G4double startY, G4double startZ,
                                   G4double endX, G4double endY, G4double endZ,
                                   G4double dirX, G4double dirY, G4double dirZ,
-                                  G4double edep, G4double time)
+                                  G4double edep, G4double time,
+                                  G4double betaStart, G4int nCherenkov)
 {
   // Get or create track segment info
   auto it = fAllTrackSegments.find(trackID);
@@ -728,6 +736,8 @@ void DataManager::AddTrackSegment(G4int trackID, G4int parentID, G4int pdgCode,
   seg.dirZ = dirZ;
   seg.edep = edep / MeV;
   seg.time = time / ns;
+  seg.betaStart = betaStart;          // dimensionless (β = v/c)
+  seg.nCherenkov = nCherenkov;        // count, no units
 
   it->second.segments.push_back(seg);
 }
@@ -864,6 +874,8 @@ void DataManager::ClearEventData()
   fSegment_DirZ.clear();
   fSegment_Edep.clear();
   fSegment_Time.clear();
+  fSegment_BetaStart.clear();
+  fSegment_NCherenkov.clear();
 
   // Clear energy deposit data
   fEdepPosX.clear();

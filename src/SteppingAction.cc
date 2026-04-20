@@ -287,14 +287,14 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
         G4TrackStatus status = track->GetTrackStatus();
 
         // Only skip deflection handling for tracks being killed
-        // Suspended tracks (fSuspend) should still be handled - they're temporarily paused
-        if (status == fStopAndKill) {
-          return; // Skip deflection handling for killed tracks
-        }
-
+        // Suspended tracks (fSuspend) should still be handled - they're temporarily paused.
+        // Why: a bare `return` here also skipped the segment-recording block below,
+        // so the stopping pion's final step was absent from Segment_NCherenkov while
+        // its Cerenkov secondaries still bumped MTrack_NCherenkov on their first step.
         // Check for processes that cause significant deflections: hadElastic, hIoni
         // (Inelastic processes always kill tracks, so they never reach here)
-        if (currentProcessName == "hadElastic" || currentProcessName == "hIoni") {
+        if (status != fStopAndKill &&
+            (currentProcessName == "hadElastic" || currentProcessName == "hIoni")) {
 
           // If deflection > 5 degrees, kill and replace the track
           if (angle > 5.0 * deg) {
@@ -488,12 +488,29 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
     G4double edep = step->GetTotalEnergyDeposit();
     G4double preTime = step->GetPreStepPoint()->GetGlobalTime();
 
+    // β = v/c at pre-step (drives Cherenkov physics)
+    G4double betaStart = step->GetPreStepPoint()->GetBeta();
+
+    // Count Cherenkov photons emitted in this step. G4 emits them as secondaries
+    // with creator process "Cerenkov" — count those produced by this step only.
+    G4int nCherenkovInStep = 0;
+    const std::vector<const G4Track*>* secondaries = step->GetSecondaryInCurrentStep();
+    if (secondaries) {
+      for (const G4Track* sec : *secondaries) {
+        const G4VProcess* creator = sec->GetCreatorProcess();
+        if (creator && creator->GetProcessName() == "Cerenkov") {
+          ++nCherenkovInStep;
+        }
+      }
+    }
+
     dataManager->AddTrackSegment(trackID, parentID, pdgCode,
                                 particleName, initialEnergy,
                                 prePos.x(), prePos.y(), prePos.z(),
                                 postPos.x(), postPos.y(), postPos.z(),
                                 preDir.x(), preDir.y(), preDir.z(),
-                                edep, preTime);
+                                edep, preTime,
+                                betaStart, nCherenkovInStep);
   }
 }
 

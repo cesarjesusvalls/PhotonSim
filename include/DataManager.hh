@@ -84,6 +84,8 @@ struct TrackSegment {
   G4double dirX, dirY, dirZ;        // Direction at pre-step
   G4double edep;                    // Energy deposited in this step
   G4double time;                    // Time at pre-step
+  G4double betaStart;               // β = v/c at pre-step (for Cherenkov physics)
+  G4int    nCherenkov;              // Cherenkov photons emitted in this step
 };
 
 /// Structure to hold all segment info for a track during event processing
@@ -148,7 +150,8 @@ class DataManager
                         G4double startX, G4double startY, G4double startZ,
                         G4double endX, G4double endY, G4double endZ,
                         G4double dirX, G4double dirY, G4double dirZ,
-                        G4double edep, G4double time);
+                        G4double edep, G4double time,
+                        G4double betaStart, G4int nCherenkov);
     void IncrementCherenkovCount(G4int trackID);
     std::vector<G4int> BuildExtendedGenealogy(G4int trackID);
 
@@ -245,6 +248,8 @@ class DataManager
     std::vector<G4double> fSegment_DirZ;
     std::vector<G4double> fSegment_Edep;
     std::vector<G4double> fSegment_Time;
+    std::vector<G4double> fSegment_BetaStart;    // β = v/c at segment start (after merging, taken from first sub-step)
+    std::vector<G4int>    fSegment_NCherenkov;   // Cherenkov photons emitted in segment (sum across merged sub-steps)
     
     // Energy deposit data (vectors for multiple deposits per event)
     std::vector<G4double> fEdepPosX;
