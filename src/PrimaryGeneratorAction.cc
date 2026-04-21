@@ -29,12 +29,19 @@
 
 #include "PrimaryGeneratorAction.hh"
 #include "PrimaryGeneratorMessenger.hh"
+#include "RooTrackerReader.hh"
 
+#include "G4Event.hh"
 #include "G4ParticleGun.hh"
 #include "G4ParticleTable.hh"
 #include "G4ParticleDefinition.hh"
+#include "G4PrimaryParticle.hh"
+#include "G4PrimaryVertex.hh"
+#include "G4RotationMatrix.hh"
 #include "G4SystemOfUnits.hh"
 #include "Randomize.hh"
+
+#include <cmath>
 
 namespace PhotonSim
 {
@@ -76,6 +83,50 @@ PrimaryGeneratorAction::~PrimaryGeneratorAction()
 
 void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event)
 {
+  // GENIE mode: read the corresponding rootracker entry and inject the
+  // final-state particle list as primaries. We map event id → rootracker
+  // entry 1:1, so a job reads entries 0..N-1 from the input file.
+  if (fGenieReader && fGenieReader->IsOpen()) {
+    const Long64_t idx = static_cast<Long64_t>(event->GetEventID());
+    if (!fGenieReader->LoadEvent(idx)) {
+      G4cerr << "PrimaryGeneratorAction: GENIE event " << idx
+             << " could not be loaded; aborting event." << G4endl;
+      return;
+    }
+
+    // One random SO(3) rotation per event for isotropic neutrino direction.
+    // Built from a uniformly-sampled axis on the sphere and a uniform angle.
+    G4RotationMatrix rot;
+    if (fGenieIsotropic) {
+      const G4double cosT = 2.0 * G4UniformRand() - 1.0;
+      const G4double sinT = std::sqrt(1.0 - cosT * cosT);
+      const G4double phi  = 2.0 * M_PI * G4UniformRand();
+      const G4ThreeVector axis(sinT * std::cos(phi), sinT * std::sin(phi), cosT);
+      const G4double ang  = 2.0 * M_PI * G4UniformRand();
+      rot.rotate(ang, axis);
+    }
+
+    G4PrimaryVertex* vertex = new G4PrimaryVertex(G4ThreeVector(0., 0., 0.), 0.0);
+    G4ParticleTable* particleTable = G4ParticleTable::GetParticleTable();
+    for (const auto& p : fGenieReader->FinalStateParticles()) {
+      G4ParticleDefinition* pdef = particleTable->FindParticle(p.pdg);
+      if (!pdef) {
+        // Silently skip particles G4 doesn't know (typically high-A nuclear
+        // remnants). They carry little Cherenkov-relevant energy.
+        continue;
+      }
+      G4ThreeVector mom(p.px * MeV, p.py * MeV, p.pz * MeV);
+      if (fGenieIsotropic) mom = rot * mom;
+      G4PrimaryParticle* primary = new G4PrimaryParticle(pdef, mom.x(), mom.y(), mom.z());
+      vertex->SetPrimary(primary);
+    }
+    event->AddPrimaryVertex(vertex);
+
+    // Record the incoming neutrino kinetic energy as the "true" event energy.
+    fTrueEnergy = fGenieReader->IncomingNeutrinoKE_MeV() * MeV;
+    return;
+  }
+
   // Helper lambda to generate random direction
   auto generateRandomDirection = [this]() -> G4ThreeVector {
     if (fRandomDirection) {
@@ -213,6 +264,25 @@ void PrimaryGeneratorAction::AddPrimaryWithEnergyRange(const G4String& particleN
   spec.maxEnergy = maxEnergy;
   spec.useRandomEnergy = true;
   fPrimaryList.push_back(spec);
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void PrimaryGeneratorAction::SetGenieInput(const G4String& path)
+{
+  if (!fGenieReader) fGenieReader = std::make_unique<RooTrackerReader>();
+  if (!fGenieReader->Open(path)) {
+    G4cerr << "PrimaryGeneratorAction: failed to open GENIE input " << path << G4endl;
+    fGenieReader.reset();
+  } else {
+    G4cout << "PrimaryGeneratorAction: opened GENIE rootracker " << path
+           << " (" << fGenieReader->GetNumEvents() << " events)" << G4endl;
+  }
+}
+
+G4bool PrimaryGeneratorAction::HasGenieInput() const
+{
+  return fGenieReader && fGenieReader->IsOpen();
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

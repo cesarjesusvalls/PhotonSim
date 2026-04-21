@@ -34,6 +34,8 @@
 #include "G4String.hh"
 #include "G4SystemOfUnits.hh"
 #include "G4ThreeVector.hh"
+#include <memory>
+#include <string>
 #include <vector>
 
 class G4ParticleGun;
@@ -43,6 +45,7 @@ namespace PhotonSim
 {
 
 class PrimaryGeneratorMessenger;
+class RooTrackerReader;
 
 /// Specification for an individual primary particle
 struct PrimaryParticleSpec {
@@ -81,6 +84,12 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     void AddPrimaryWithEnergyRange(const G4String& particleName, G4double minEnergy, G4double maxEnergy);
     void ClearPrimaries() { fPrimaryList.clear(); }
 
+    // GENIE rooTracker input: when set, PhotonSim injects final-state
+    // particles from each rootracker entry as per-event primaries.
+    void SetGenieInput(const G4String& path);
+    void SetGenieIsotropic(G4bool iso) { fGenieIsotropic = iso; }
+    G4bool HasGenieInput() const;
+
     // method to access particle gun
     const G4ParticleGun* GetParticleGun() const { return fParticleGun; }
     G4double GetTrueEnergy() const { return fTrueEnergy; }
@@ -104,6 +113,10 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
 
     // List of heterogeneous primary particles
     std::vector<PrimaryParticleSpec> fPrimaryList;
+
+    // GENIE rooTracker primary source (optional)
+    std::unique_ptr<RooTrackerReader> fGenieReader;
+    G4bool fGenieIsotropic = true;
 };
 
 }  // namespace PhotonSim

@@ -88,6 +88,8 @@ class PrimaryGeneratorMessenger: public G4UImessenger
     G4UIcommand*                   fAddPrimaryCmd = nullptr;
     G4UIcommand*                   fAddPrimaryWithEnergyRangeCmd = nullptr;
     G4UIcmdWithoutParameter*       fClearPrimariesCmd = nullptr;
+    G4UIcmdWithAString*            fGenieInputCmd = nullptr;
+    G4UIcmdWithABool*              fGenieIsotropicCmd = nullptr;
 };
 
 }  // namespace PhotonSim

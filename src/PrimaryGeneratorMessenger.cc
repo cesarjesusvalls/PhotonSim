@@ -165,6 +165,21 @@ PrimaryGeneratorMessenger::PrimaryGeneratorMessenger(PrimaryGeneratorAction* pri
   fClearPrimariesCmd = new G4UIcmdWithoutParameter("/gun/clearPrimaries", this);
   fClearPrimariesCmd->SetGuidance("Clear the heterogeneous primary particle list");
   fClearPrimariesCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
+  // GENIE rooTracker primary injection
+  fGenieInputCmd = new G4UIcmdWithAString("/gun/genieInput", this);
+  fGenieInputCmd->SetGuidance("Path to a GENIE rooTracker ROOT file (gntpc -f rootracker output).");
+  fGenieInputCmd->SetGuidance("When set, PhotonSim injects final-state particles from each rootracker");
+  fGenieInputCmd->SetGuidance("entry as primaries, mapping G4 event id -> rootracker entry.");
+  fGenieInputCmd->SetParameterName("path", false);
+  fGenieInputCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
+  fGenieIsotropicCmd = new G4UIcmdWithABool("/gun/genieIsotropic", this);
+  fGenieIsotropicCmd->SetGuidance("When true (default), apply a per-event random SO(3) rotation");
+  fGenieIsotropicCmd->SetGuidance("to all GENIE primaries so the incoming neutrino direction is");
+  fGenieIsotropicCmd->SetGuidance("uniform on the sphere. Set false to use GENIE's z-axis beam.");
+  fGenieIsotropicCmd->SetParameterName("isotropic", false);
+  fGenieIsotropicCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -183,6 +198,8 @@ PrimaryGeneratorMessenger::~PrimaryGeneratorMessenger()
   delete fAddPrimaryCmd;
   delete fAddPrimaryWithEnergyRangeCmd;
   delete fClearPrimariesCmd;
+  delete fGenieInputCmd;
+  delete fGenieIsotropicCmd;
   delete fGunDir;
 }
 
@@ -261,6 +278,12 @@ void PrimaryGeneratorMessenger::SetNewValue(G4UIcommand* command, G4String newVa
   }
   else if (command == fClearPrimariesCmd) {
     fPrimaryGeneratorAction->ClearPrimaries();
+  }
+  else if (command == fGenieInputCmd) {
+    fPrimaryGeneratorAction->SetGenieInput(newValue);
+  }
+  else if (command == fGenieIsotropicCmd) {
+    fPrimaryGeneratorAction->SetGenieIsotropic(fGenieIsotropicCmd->GetNewBoolValue(newValue));
   }
 }
 
