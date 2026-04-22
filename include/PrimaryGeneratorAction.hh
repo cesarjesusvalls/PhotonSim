@@ -114,9 +114,16 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     // List of heterogeneous primary particles
     std::vector<PrimaryParticleSpec> fPrimaryList;
 
-    // GENIE rooTracker primary source (optional)
+    // GENIE rooTracker primary source (optional). One rootracker entry can
+    // contain many final-state particles; we emit them one per G4 event
+    // (primary-by-primary), with a single random rotation shared by all
+    // particles from the same rootracker entry.
     std::unique_ptr<RooTrackerReader> fGenieReader;
     G4bool fGenieIsotropic = true;
+    long long fGenieCurrentEntry = -1;   // which entry is currently loaded
+    std::size_t fGenieNextParticleIdx = 0;  // next FSI particle in that entry
+    G4double fGenieRotAxisX = 0.0, fGenieRotAxisY = 0.0, fGenieRotAxisZ = 1.0;
+    G4double fGenieRotAngle = 0.0;
 };
 
 }  // namespace PhotonSim
