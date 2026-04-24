@@ -85,6 +85,13 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("PrimaryEnergy", &fPrimaryEnergy, "PrimaryEnergy/D");
   fTree->Branch("NOpticalPhotons", &fNOpticalPhotons, "NOpticalPhotons/I");
   fTree->Branch("NEnergyDeposits", &fNEnergyDeposits, "NEnergyDeposits/I");
+
+  // GENIE provenance: -1 / 0 / 0.0 for particle-gun events. LUCiD v5
+  // reads these to populate per_interaction/neutrino_pdg and
+  // per_interaction/neutrino_energy_MeV.
+  fTree->Branch("RooTrackerEntryID", &fGenieEntryID, "RooTrackerEntryID/I");
+  fTree->Branch("IncomingNuPdg", &fIncomingNuPdg, "IncomingNuPdg/I");
+  fTree->Branch("IncomingNuKE", &fIncomingNuKE, "IncomingNuKE/D");
   
   // Optical photon data branches
   fTree->Branch("PhotonPosX", &fPhotonPosX);
@@ -278,10 +285,16 @@ void DataManager::Reset()
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-void DataManager::BeginEvent(G4int eventID, G4double primaryEnergy)
+void DataManager::BeginEvent(G4int eventID, G4double primaryEnergy,
+                             G4int genieEntryID,
+                             G4int incomingNuPdg,
+                             G4double incomingNuKE)
 {
   fEventID = eventID;
   fPrimaryEnergy = primaryEnergy / MeV; // Store in MeV
+  fGenieEntryID = genieEntryID;
+  fIncomingNuPdg = incomingNuPdg;
+  fIncomingNuKE = incomingNuKE;
   ClearEventData();
 }
 

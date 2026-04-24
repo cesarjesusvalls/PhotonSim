@@ -54,14 +54,20 @@ void EventAction::BeginOfEventAction(const G4Event* event)
     fStartTime = std::chrono::steady_clock::now();
   }
   
-  // Get primary particle energy from the generator
+  // Get primary particle energy + GENIE provenance from the generator.
+  // The GENIE fields are -1/0/0 for particle-gun events and populated
+  // from the rootracker entry (entry index, incoming neutrino PDG, KE)
+  // when the event came from GENIE.
   const auto primaryGenerator = static_cast<const PrimaryGeneratorAction*>(
     G4RunManager::GetRunManager()->GetUserPrimaryGeneratorAction());
   G4double primaryEnergy = primaryGenerator->GetTrueEnergy();
-  
-  // Notify DataManager about the beginning of a new event
+  G4int    genieEntryID  = primaryGenerator->GetCurrentGenieEntryID();
+  G4int    incomingNuPdg = primaryGenerator->GetCurrentGenieNuPdg();
+  G4double incomingNuKE  = primaryGenerator->GetCurrentGenieNuKE();
+
   DataManager* dataManager = DataManager::GetInstance();
-  dataManager->BeginEvent(event->GetEventID(), primaryEnergy);
+  dataManager->BeginEvent(event->GetEventID(), primaryEnergy,
+                          genieEntryID, incomingNuPdg, incomingNuKE);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

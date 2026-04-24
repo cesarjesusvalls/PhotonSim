@@ -113,7 +113,10 @@ class DataManager
     // Reset method for proper cleanup
     void Reset();
     
-    void BeginEvent(G4int eventID, G4double primaryEnergy);
+    void BeginEvent(G4int eventID, G4double primaryEnergy,
+                    G4int genieEntryID = -1,
+                    G4int incomingNuPdg = 0,
+                    G4double incomingNuKE = 0.0);
     void EndEvent();
     
     void AddOpticalPhoton(G4double x, G4double y, G4double z,
@@ -192,6 +195,14 @@ class DataManager
     G4double fPrimaryEnergy = 0.0;
     G4int fNOpticalPhotons = 0;
     G4int fNEnergyDeposits = 0;
+
+    // GENIE provenance (set per event by BeginEvent; -1 / 0 / NaN when the
+    // event was fired from the particle gun). These are written as ROOT
+    // branches so LUCiD's v5 labl can populate per_interaction/neutrino_*
+    // fields without re-reading the rootracker.
+    G4int    fGenieEntryID  = -1;
+    G4int    fIncomingNuPdg = 0;
+    G4double fIncomingNuKE  = 0.0;
     
     // Optical photon data (vectors for multiple photons per event)
     std::vector<G4double> fPhotonPosX;

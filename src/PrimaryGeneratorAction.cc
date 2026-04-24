@@ -83,58 +83,59 @@ PrimaryGeneratorAction::~PrimaryGeneratorAction()
 
 void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event)
 {
-  // GENIE mode: emit one final-state primary per G4 event. Each rootracker
-  // entry contributes its status==1 particles, one per G4 event, sharing a
-  // single per-entry random rotation (so the primaries from one interaction
-  // keep their relative kinematics). When the current entry's particles are
-  // exhausted we advance to the next rootracker entry; when all entries are
-  // exhausted we emit an empty event and print a warning.
+  // Reset per-event GENIE provenance; populated below if this is a GENIE run.
+  fGenieCurrentEventEntry = -1;
+  fGenieCurrentEventNuPdg = 0;
+  fGenieCurrentEventNuKE  = 0.0;
+
+  // GENIE mode: one rootracker entry = one G4 event, with every status==1
+  // final-state particle from that entry injected as a G4 primary. Mirrors
+  // the particle-gun heterogeneous-list loop below. A single random
+  // rotation per entry preserves relative FSI kinematics. When the
+  // rootracker is exhausted we emit an empty G4 event and print a warning.
   if (fGenieReader && fGenieReader->IsOpen()) {
     G4ParticleTable* particleTable = G4ParticleTable::GetParticleTable();
 
-    auto advance_entry = [this]() -> bool {
-      const long long next = fGenieCurrentEntry + 1;
-      if (next >= static_cast<long long>(fGenieReader->GetNumEvents())) {
-        return false;  // rootracker exhausted
-      }
-      if (!fGenieReader->LoadEvent(next)) return false;
-      fGenieCurrentEntry = next;
-      fGenieNextParticleIdx = 0;
-      // Fresh per-entry rotation (same matrix reused for every particle
-      // coming out of this entry, so the interaction's geometry is kept).
-      if (fGenieIsotropic) {
-        const G4double cosT = 2.0 * G4UniformRand() - 1.0;
-        const G4double sinT = std::sqrt(1.0 - cosT * cosT);
-        const G4double phi  = 2.0 * M_PI * G4UniformRand();
-        fGenieRotAxisX = sinT * std::cos(phi);
-        fGenieRotAxisY = sinT * std::sin(phi);
-        fGenieRotAxisZ = cosT;
-        fGenieRotAngle = 2.0 * M_PI * G4UniformRand();
-      }
-      return true;
-    };
+    const long long next = fGenieCurrentEntry + 1;
+    if (next >= static_cast<long long>(fGenieReader->GetNumEvents())) {
+      G4cerr << "PrimaryGeneratorAction: GENIE rootracker exhausted at G4 event "
+             << event->GetEventID() << "; emitting empty event." << G4endl;
+      return;
+    }
+    if (!fGenieReader->LoadEvent(next)) {
+      G4cerr << "PrimaryGeneratorAction: failed to load rootracker entry "
+             << next << "; emitting empty event." << G4endl;
+      return;
+    }
+    fGenieCurrentEntry = next;
 
-    // Find the next usable primary: advance entry as needed, skip particles
-    // G4 doesn't know (exotic nuclear remnants).
-    while (true) {
-      if (fGenieCurrentEntry < 0 ||
-          fGenieNextParticleIdx >= fGenieReader->FinalStateParticles().size()) {
-        if (!advance_entry()) {
-          G4cerr << "PrimaryGeneratorAction: GENIE rootracker exhausted at G4 event "
-                 << event->GetEventID() << "; emitting empty event." << G4endl;
-          return;
-        }
-        continue;
-      }
-      const auto& particles = fGenieReader->FinalStateParticles();
-      const auto& p = particles[fGenieNextParticleIdx];
-      ++fGenieNextParticleIdx;
+    // Fresh per-entry rotation.
+    if (fGenieIsotropic) {
+      const G4double cosT = 2.0 * G4UniformRand() - 1.0;
+      const G4double sinT = std::sqrt(1.0 - cosT * cosT);
+      const G4double phi  = 2.0 * M_PI * G4UniformRand();
+      fGenieRotAxisX = sinT * std::cos(phi);
+      fGenieRotAxisY = sinT * std::sin(phi);
+      fGenieRotAxisZ = cosT;
+      fGenieRotAngle = 2.0 * M_PI * G4UniformRand();
+    }
 
+    // Stash per-event provenance before firing so EventAction can forward
+    // it to DataManager in BeginEvent().
+    fGenieCurrentEventEntry = static_cast<G4int>(fGenieCurrentEntry);
+    fGenieCurrentEventNuPdg = fGenieReader->IncomingNeutrinoPdg();
+    fGenieCurrentEventNuKE  = fGenieReader->IncomingNeutrinoKE_MeV();
+
+    const auto& particles = fGenieReader->FinalStateParticles();
+    auto* vertex = new G4PrimaryVertex(G4ThreeVector(0., 0., 0.), 0.0);
+    int n_fired = 0;
+    G4double total_ke = 0.0;
+
+    for (const auto& p : particles) {
       G4ParticleDefinition* pdef = particleTable->FindParticle(p.pdg);
       if (!pdef) {
-        // Unknown to G4 (e.g., heavy nuclear fragment) — skip and try
-        // next. This is the only unavoidable filter: G4 cannot create
-        // a particle it doesn't know about. Every other primary
+        // G4 doesn't know this PDG (e.g., heavy nuclear fragment) — skip.
+        // This is the only unavoidable filter. Every other primary
         // (including neutrons and sub-Cherenkov-threshold charged
         // particles) is propagated; LUCiD handles 0-photon events
         // downstream by storing a zero-filled v3 entry.
@@ -149,17 +150,30 @@ void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event)
         mom = rot * mom;
       }
 
-      auto* vertex = new G4PrimaryVertex(G4ThreeVector(0., 0., 0.), 0.0);
       auto* primary = new G4PrimaryParticle(pdef, mom.x(), mom.y(), mom.z());
       vertex->SetPrimary(primary);
-      event->AddPrimaryVertex(vertex);
+      ++n_fired;
 
-      // Per-primary kinetic energy (like particle-gun mode).
-      const G4double mass = pdef->GetPDGMass();
+      const G4double mass  = pdef->GetPDGMass();
       const G4double pmag2 = mom.mag2();
-      fTrueEnergy = std::sqrt(pmag2 + mass * mass) - mass;
-      return;
+      total_ke += std::sqrt(pmag2 + mass * mass) - mass;
     }
+
+    if (n_fired > 0) {
+      event->AddPrimaryVertex(vertex);
+    } else {
+      // Nothing to fire (every primary was an unknown-to-G4 PDG). Delete
+      // the empty vertex we allocated and let the event proceed as dark.
+      delete vertex;
+    }
+
+    // fTrueEnergy is used downstream as the "event primary energy" scalar.
+    // For multi-primary G4 events we report the sum of FSI kinetic
+    // energies. LUCiD's v5 labl also stores per-primary energies in
+    // per_interaction/primary_energies_data, which is the authoritative
+    // record.
+    fTrueEnergy = total_ke;
+    return;
   }
 
   // Helper lambda to generate random direction

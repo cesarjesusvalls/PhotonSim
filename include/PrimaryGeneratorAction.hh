@@ -99,6 +99,14 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     G4bool GetRandomDirection() const { return fRandomDirection; }
     G4int GetNumberOfPrimaries() const { return fNumberOfPrimaries; }
 
+    // GENIE per-event metadata (set when the current G4 event was fired from
+    // a GENIE rootracker entry; cleared otherwise). EventAction forwards
+    // these into DataManager so the labl output can surface neutrino probe
+    // info per v5 interaction row.
+    G4int    GetCurrentGenieEntryID() const { return fGenieCurrentEventEntry; }
+    G4int    GetCurrentGenieNuPdg() const   { return fGenieCurrentEventNuPdg; }
+    G4double GetCurrentGenieNuKE() const    { return fGenieCurrentEventNuKE; }
+
   private:
     G4ParticleGun* fParticleGun = nullptr;
     PrimaryGeneratorMessenger* fMessenger = nullptr;
@@ -114,16 +122,23 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     // List of heterogeneous primary particles
     std::vector<PrimaryParticleSpec> fPrimaryList;
 
-    // GENIE rooTracker primary source (optional). One rootracker entry can
-    // contain many final-state particles; we emit them one per G4 event
-    // (primary-by-primary), with a single random rotation shared by all
-    // particles from the same rootracker entry.
+    // GENIE rooTracker primary source (optional). One rootracker entry maps
+    // to one G4 event; all status==1 final-state particles from that entry
+    // are fired together, mirroring the particle-gun heterogeneous list.
+    // Per-entry random rotation is applied once so relative FSI kinematics
+    // are preserved.
     std::unique_ptr<RooTrackerReader> fGenieReader;
     G4bool fGenieIsotropic = true;
-    long long fGenieCurrentEntry = -1;   // which entry is currently loaded
-    std::size_t fGenieNextParticleIdx = 0;  // next FSI particle in that entry
+    long long fGenieCurrentEntry = -1;   // last rootracker entry loaded
     G4double fGenieRotAxisX = 0.0, fGenieRotAxisY = 0.0, fGenieRotAxisZ = 1.0;
     G4double fGenieRotAngle = 0.0;
+
+    // Per-event cache of the GENIE-level provenance (rootracker entry index
+    // + incoming neutrino kinematics) so EventAction can read them back
+    // after GeneratePrimaries fires. -1 / 0 / NaN for non-GENIE events.
+    G4int    fGenieCurrentEventEntry = -1;
+    G4int    fGenieCurrentEventNuPdg = 0;
+    G4double fGenieCurrentEventNuKE = 0.0;
 };
 
 }  // namespace PhotonSim
