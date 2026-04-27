@@ -76,13 +76,8 @@ PhotonSim/
 │       └── visualize_photons.py
 │
 ├── output/                    # All analysis outputs (gitignored)
-│   ├── 3d_lookup_table/     # ✨ Comprehensive 3D table
-│   │   ├── photon_table_3d.npy   # 62.5B photons, (91,500,500) bins
-│   │   ├── table_metadata.npz    # Energy ranges, bin info
-│   │   └── visualizations/       # Table analysis plots
 │   ├── benchmarks/           # Performance results
 │   ├── documentation/        # Analysis reports
-│   ├── tables/              # Discrete energy tables
 │   └── visualizations/      # Generated plots
 │
 └── s3df_scripts/            # HPC cluster utilities
@@ -123,12 +118,11 @@ All muon macros automatically disable decay processes:
 
 ## Key Data Products
 
-### 🔬 **3D Lookup Table** (Generated)
-- **Location**: `output/3d_lookup_table/photon_table_3d.npy`
-- **Data**: 62.5 billion photons from 91 energy points (100-1000 MeV)
-- **Dimensions**: (91, 500, 500) - [energy, angle, distance]
-- **Coverage**: Complete energy range with Cherenkov physics
-- **Note**: Generated locally in output/ directory (gitignored)
+### 🔬 **3D Lookup Table** (built in LUCiD)
+ML-training input tables (`photon_lookup_table.h5`, `dedx_lookup_table.h5`)
+are no longer produced inside this repo. PhotonSim writes the per-energy
+ROOT files; the ROOT → HDF5 build lives in LUCiD. See
+`LUCiD/docs/SIREN_TRAINING_INPUTS.md`.
 
 ## Quick Usage
 
@@ -173,8 +167,9 @@ python tools/validation/compare_energies.py
 PhotonSim can generate comprehensive simulation data locally:
 - **Energy Range**: 100-1000 MeV in configurable steps
 - **Output**: ROOT files with optical photon and energy deposit data
-- **3D Tables**: Comprehensive lookup tables for ML training
 - **HPC Support**: Batch job scripts for large-scale generation (`s3df_scripts/`)
+- **ML Training Inputs**: ROOT outputs feed into LUCiD's table builders;
+  see `LUCiD/docs/SIREN_TRAINING_INPUTS.md`.
 
 ## Integration Ready
 

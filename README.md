@@ -84,8 +84,10 @@ python tools/visualization/visualize_photons.py build/optical_photons.root
 ```
 
 `tools/` contains additional analysis and validation utilities (physics
-validation, wavelength spectra, lookup-table generation). They are
-consumers of PhotonSim ROOT output and are independent of this binary.
+validation, wavelength spectra). They are consumers of PhotonSim ROOT
+output and are independent of this binary. The ROOT → HDF5 lookup-table
+builders that produced SIREN training inputs have moved to LUCiD; see
+`LUCiD/docs/SIREN_TRAINING_INPUTS.md`.
 
 ## Project layout
 

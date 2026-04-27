@@ -1,5 +1,10 @@
 # PhotonSim Tools
 
+> **Not the SIREN training input.** The HDF5 `photon_lookup_table.h5`
+> consumed by LUCiD's SIREN trainer is built by `lucid-build-photon-table`
+> in LUCiD; see `LUCiD/docs/SIREN_TRAINING_INPUTS.md`. The scripts in this
+> directory build a different, in-memory 3D table used by older analyses.
+
 Collection of analysis and utility tools for PhotonSim.
 
 ## Main Scripts
