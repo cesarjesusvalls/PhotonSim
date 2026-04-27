@@ -76,6 +76,23 @@ DataManagerMessenger::DataManagerMessenger()
   fStoreSegmentIndexCmd->SetDefaultValue(false);
   fStoreSegmentIndexCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
 
+  fStoreProcessNameCmd = new G4UIcmdWithABool("/photon/storeProcessName", this);
+  fStoreProcessNameCmd->SetGuidance("Enable/disable PhotonProcess branch on OpticalPhotonsRaw");
+  fStoreProcessNameCmd->SetGuidance("Stores Geant4 process name per photon (Cerenkov/Scintillation/...).");
+  fStoreProcessNameCmd->SetGuidance("Default off — useful only when scintillation/WLS materials are present.");
+  fStoreProcessNameCmd->SetParameterName("store", false);
+  fStoreProcessNameCmd->SetDefaultValue(false);
+  fStoreProcessNameCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
+  fStreamPhotonsChunkedCmd = new G4UIcmdWithABool("/photon/streamPhotonsChunked", this);
+  fStreamPhotonsChunkedCmd->SetGuidance("Enable/disable mid-event flushing of photon chunks");
+  fStreamPhotonsChunkedCmd->SetGuidance("When true (default), photons flush every 100k to OpticalPhotonsRaw");
+  fStreamPhotonsChunkedCmd->SetGuidance("so peak vector RAM stays bounded. When false, only flush at EndEvent");
+  fStreamPhotonsChunkedCmd->SetGuidance("(one giant chunk per event; same on-disk schema). Debug-only.");
+  fStreamPhotonsChunkedCmd->SetParameterName("stream", false);
+  fStreamPhotonsChunkedCmd->SetDefaultValue(true);
+  fStreamPhotonsChunkedCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
   fFilenameCmd = new G4UIcmdWithAString("/output/filename", this);
   fFilenameCmd->SetGuidance("Set output ROOT filename");
   fFilenameCmd->SetGuidance("Must be called before /run/initialize");
@@ -94,6 +111,8 @@ DataManagerMessenger::~DataManagerMessenger()
   delete fStorePhotonsCmd;
   delete fStoreEdepsCmd;
   delete fStoreSegmentIndexCmd;
+  delete fStoreProcessNameCmd;
+  delete fStreamPhotonsChunkedCmd;
   delete fFilenameCmd;
 }
 
@@ -117,6 +136,18 @@ void DataManagerMessenger::SetNewValue(G4UIcommand* command, G4String newValue)
     bool store = fStoreSegmentIndexCmd->GetNewBoolValue(newValue);
     fDataManager->SetStoreSegmentIndex(store);
     G4cout << "Per-photon segment index storage: " << (store ? "enabled" : "disabled") << G4endl;
+  }
+
+  if (command == fStoreProcessNameCmd) {
+    bool store = fStoreProcessNameCmd->GetNewBoolValue(newValue);
+    fDataManager->SetStoreProcessName(store);
+    G4cout << "Per-photon process name storage: " << (store ? "enabled" : "disabled") << G4endl;
+  }
+
+  if (command == fStreamPhotonsChunkedCmd) {
+    bool stream = fStreamPhotonsChunkedCmd->GetNewBoolValue(newValue);
+    fDataManager->SetStreamPhotonsChunked(stream);
+    G4cout << "Chunked photon streaming: " << (stream ? "enabled" : "disabled") << G4endl;
   }
 
   if (command == fFilenameCmd) {

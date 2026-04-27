@@ -32,6 +32,7 @@
 #include "G4String.hh"
 #include "G4Types.hh"
 #include "G4ThreeVector.hh"
+#include "Rtypes.h"   // Long64_t
 #include <vector>
 #include <memory>
 #include <string>
@@ -169,9 +170,13 @@ class DataManager
     void SetStoreIndividualPhotons(bool store) { fStoreIndividualPhotons = store; }
     void SetStoreIndividualEdeps(bool store) { fStoreIndividualEdeps = store; }
     void SetStoreSegmentIndex(bool store) { fStoreSegmentIndex = store; }
+    void SetStoreProcessName(bool store) { fStoreProcessName = store; }
+    void SetStreamPhotonsChunked(bool stream) { fStreamPhotonsChunked = stream; }
     bool GetStoreIndividualPhotons() const { return fStoreIndividualPhotons; }
     bool GetStoreIndividualEdeps() const { return fStoreIndividualEdeps; }
     bool GetStoreSegmentIndex() const { return fStoreSegmentIndex; }
+    bool GetStoreProcessName() const { return fStoreProcessName; }
+    bool GetStreamPhotonsChunked() const { return fStreamPhotonsChunked; }
     
     // Output filename control
     void SetOutputFilename(const G4String& filename) { fOutputFilename = filename; }
@@ -189,9 +194,28 @@ class DataManager
     DataManager& operator=(const DataManager&) = delete;
     
     static DataManager* fInstance;
-    
+
     std::unique_ptr<TFile> fRootFile;
     TTree* fTree = nullptr;
+
+    // Per-event metadata tree's sister tree: holds chunked per-photon
+    // measurements. One entry = one chunk of up to fPhotonChunkSize photons.
+    // EventID + ChunkStartID stamp each chunk so readers can locate the
+    // photons that belong to a given event/global-id range.
+    TTree* fRawTree = nullptr;
+    G4int   fEventIDChunk  = -1;
+    Long64_t fChunkStartID = 0;       // global photon ID at start of current chunk
+    Long64_t fPhotonsInChunk = 0;     // grows as photons are appended; flushed at K
+    Long64_t fEventPhotonCount = 0;   // total photons emitted in the current event,
+                                      // used to derive the per-chunk start id.
+
+    // Float-cast write buffers used inside FlushPhotonChunk(). Declared here
+    // to avoid reallocating per chunk.
+    std::vector<float> fChunk_PosX, fChunk_PosY, fChunk_PosZ;
+    std::vector<float> fChunk_DirX, fChunk_DirY, fChunk_DirZ;
+    std::vector<float> fChunk_Time, fChunk_Wavelength;
+    std::vector<float> fChunk_PolX, fChunk_PolY, fChunk_PolZ;
+    std::vector<std::string> fChunk_Process;
     
     // Event-level data
     G4int fEventID = 0;
@@ -232,6 +256,13 @@ class DataManager
     // creation. Used only inside EndEvent to look up the emitting segment;
     // not written to ROOT.
     std::vector<G4int> fPhotonImmediateParentTrackID;
+
+    // Transient retained-across-event copy of photon emission times. The
+    // streamed `fPhotonTime` vector gets flushed every fPhotonChunkSize
+    // photons (so peak memory stays bounded), but the segment-index
+    // compute at EndEvent needs every photon's time. We retain a parallel
+    // copy here only when fStoreSegmentIndex is true. Not written to ROOT.
+    std::vector<G4double> fPhotonTimeRetained;
 
     // Particle system: unique genealogies and their photons
     G4int fNParticles = 0;
@@ -320,6 +351,19 @@ class DataManager
     // pointing into Segment_*). Default off — opt-in for downstream
     // segment <-> sensor correspondence consumers.
     bool fStoreSegmentIndex = false;
+    // When true, write PhotonProcess (Geant4 emission process name). Default
+    // off — every photon is "Cerenkov" in the Cherenkov-only detector, so
+    // storing it is dead weight unless scintillation/WLS materials are added.
+    bool fStoreProcessName = false;
+    // When true (default), flush photon chunks to OpticalPhotonsRaw every
+    // fPhotonChunkSize photons during the event so peak vector RAM stays
+    // bounded. When false, the only flush happens at EndEvent (chunk size
+    // becomes effectively unbounded). Debug knob — same on-disk schema
+    // either way.
+    bool fStreamPhotonsChunked = true;
+    // Chunk size for OpticalPhotonsRaw entries. 100,000 photons ≈ 4 MB of
+    // active streamed-vector memory.
+    static constexpr Long64_t fPhotonChunkSize = 100000;
     
     // 2D ROOT histograms for aggregated data (500x500 bins)
     TH2D* fPhotonHist_AngleDistance = nullptr;  // Opening angle vs distance
@@ -333,6 +377,16 @@ class DataManager
     G4String fOutputFilename = "optical_photons.root";
     
     void ClearEventData();
+
+    // Flush the currently-buffered photons in the streamed `fPhoton*`
+    // vectors out to OpticalPhotonsRaw as a single TTree entry, then
+    // clear those vectors to bound peak memory. Called every
+    // fPhotonChunkSize photons by AddOpticalPhoton (when streaming is
+    // on), and once at EndEvent to drain the partial last chunk. Does
+    // NOT touch fPhotonTime / fPhotonImmediateParentTrackID — those
+    // are the retained accumulators used by the segment-index compute
+    // at EndEvent.
+    void FlushPhotonChunk();
 };
 
 }  // namespace PhotonSim

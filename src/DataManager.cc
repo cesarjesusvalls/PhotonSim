@@ -93,22 +93,10 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("IncomingNuPdg", &fIncomingNuPdg, "IncomingNuPdg/I");
   fTree->Branch("IncomingNuKE", &fIncomingNuKE, "IncomingNuKE/D");
   
-  // Optical photon data branches
-  fTree->Branch("PhotonPosX", &fPhotonPosX);
-  fTree->Branch("PhotonPosY", &fPhotonPosY);
-  fTree->Branch("PhotonPosZ", &fPhotonPosZ);
-  fTree->Branch("PhotonDirX", &fPhotonDirX);
-  fTree->Branch("PhotonDirY", &fPhotonDirY);
-  fTree->Branch("PhotonDirZ", &fPhotonDirZ);
-  fTree->Branch("PhotonTime", &fPhotonTime);
-  fTree->Branch("PhotonWavelength", &fPhotonWavelength);
-  fTree->Branch("PhotonPolX", &fPhotonPolX);
-  fTree->Branch("PhotonPolY", &fPhotonPolY);
-  fTree->Branch("PhotonPolZ", &fPhotonPolZ);
-  fTree->Branch("PhotonProcess", &fPhotonProcess);
-
-  // Per-photon link to merged segment (opt-in; absent when fStoreSegmentIndex is false).
-  // Sentinel -1 means the parent track had no output segments.
+  // Per-photon scalar measurements live on the sister tree
+  // OpticalPhotonsRaw (set up below). Only Photon_SegmentIndex stays
+  // event-grain on this metadata tree because it's derived data
+  // computed at EndEvent (one int per photon, not a bulk array).
   if (fStoreSegmentIndex) {
     fTree->Branch("Photon_SegmentIndex", &fPhoton_SegmentIndex);
   }
@@ -174,6 +162,34 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("EdepTrackID", &fEdepTrackID);
   fTree->Branch("EdepParentID", &fEdepParentID);
   
+  // === Sister tree: chunked per-photon measurements ===
+  // Each entry holds up to fPhotonChunkSize photons. EventID and
+  // ChunkStartID let readers locate the photons that belong to a given
+  // event / global photon-id range. Memory bound: when streaming is on
+  // (fStreamPhotonsChunked=true), the streamed std::vectors flush every
+  // fPhotonChunkSize photons, so peak photon-vector RAM is O(K).
+  fRawTree = new TTree("OpticalPhotonsRaw", "Per-photon scalars (chunked)");
+  fRawTree->Branch("EventID", &fEventIDChunk, "EventID/I");
+  fRawTree->Branch("ChunkStartID", &fChunkStartID, "ChunkStartID/L");
+  fRawTree->Branch("PhotonPosX", &fChunk_PosX);
+  fRawTree->Branch("PhotonPosY", &fChunk_PosY);
+  fRawTree->Branch("PhotonPosZ", &fChunk_PosZ);
+  fRawTree->Branch("PhotonDirX", &fChunk_DirX);
+  fRawTree->Branch("PhotonDirY", &fChunk_DirY);
+  fRawTree->Branch("PhotonDirZ", &fChunk_DirZ);
+  fRawTree->Branch("PhotonTime", &fChunk_Time);
+  fRawTree->Branch("PhotonWavelength", &fChunk_Wavelength);
+  fRawTree->Branch("PhotonPolX", &fChunk_PolX);
+  fRawTree->Branch("PhotonPolY", &fChunk_PolY);
+  fRawTree->Branch("PhotonPolZ", &fChunk_PolZ);
+  if (fStoreProcessName) {
+    fRawTree->Branch("PhotonProcess", &fChunk_Process);
+  }
+  // Cap basket buffering so default behaviour doesn't accumulate many
+  // chunks before flushing to disk (which would partially defeat the
+  // streaming bound). 50 MB target tree-wide.
+  fRawTree->SetAutoFlush(-50000000LL);
+
   // Create 2D histograms for aggregated data (500x500 bins)
   // Photon histogram: Opening angle (0-π rad) vs Distance (0-10 m)
   fPhotonHist_AngleDistance = new TH2D("PhotonHist_AngleDistance", 
@@ -216,7 +232,13 @@ void DataManager::Finalize()
     if (fRootFile && fTree) {
       fRootFile->cd();
       fTree->Write();
-      
+      if (fRawTree) {
+        fRawTree->Write();
+        G4cout << "OpticalPhotonsRaw written with " << fRawTree->GetEntries()
+               << " chunk entries" << G4endl;
+        fRawTree = nullptr;  // Tree owned by ROOT file after Write
+      }
+
       // Write histograms
       if (fPhotonHist_AngleDistance) {
         fPhotonHist_AngleDistance->Write();
@@ -302,13 +324,84 @@ void DataManager::BeginEvent(G4int eventID, G4double primaryEnergy,
   fIncomingNuPdg = incomingNuPdg;
   fIncomingNuKE = incomingNuKE;
   ClearEventData();
+  // Reset event-wide photon counter and chunk state for this event.
+  fEventPhotonCount = 0;
+  fPhotonsInChunk = 0;
+  fChunkStartID = 0;
+  fEventIDChunk = eventID;
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void DataManager::FlushPhotonChunk()
+{
+  if (!fRawTree) return;
+  const Long64_t n = static_cast<Long64_t>(fPhotonPosX.size());
+  if (n == 0) return;
+
+  // Stamp the chunk for the reader. ChunkStartID is the global photon
+  // index at the start of this chunk; fEventPhotonCount has already
+  // been incremented n times since the last flush, so the chunk covers
+  // [fEventPhotonCount - n, fEventPhotonCount).
+  fEventIDChunk = fEventID;
+  fChunkStartID = fEventPhotonCount - n;
+
+  // Cast streamed G4double vectors into float write buffers. Reusing
+  // member buffers avoids per-chunk allocations.
+  fChunk_PosX.assign(fPhotonPosX.begin(), fPhotonPosX.end());
+  fChunk_PosY.assign(fPhotonPosY.begin(), fPhotonPosY.end());
+  fChunk_PosZ.assign(fPhotonPosZ.begin(), fPhotonPosZ.end());
+  fChunk_DirX.assign(fPhotonDirX.begin(), fPhotonDirX.end());
+  fChunk_DirY.assign(fPhotonDirY.begin(), fPhotonDirY.end());
+  fChunk_DirZ.assign(fPhotonDirZ.begin(), fPhotonDirZ.end());
+  fChunk_Time.assign(fPhotonTime.begin(), fPhotonTime.end());
+  fChunk_Wavelength.assign(fPhotonWavelength.begin(), fPhotonWavelength.end());
+  fChunk_PolX.assign(fPhotonPolX.begin(), fPhotonPolX.end());
+  fChunk_PolY.assign(fPhotonPolY.begin(), fPhotonPolY.end());
+  fChunk_PolZ.assign(fPhotonPolZ.begin(), fPhotonPolZ.end());
+  if (fStoreProcessName) {
+    fChunk_Process = fPhotonProcess;  // copy strings
+  }
+
+  fRawTree->Fill();
+
+  // Clear the streamed vectors (NOT shrink_to_fit — keep capacity to
+  // avoid re-allocating on every chunk). Retained accumulators
+  // (fPhotonTimeRetained, fPhotonImmediateParentTrackID) are NOT
+  // touched here — they are needed at EndEvent for segment-index.
+  fPhotonPosX.clear();
+  fPhotonPosY.clear();
+  fPhotonPosZ.clear();
+  fPhotonDirX.clear();
+  fPhotonDirY.clear();
+  fPhotonDirZ.clear();
+  fPhotonTime.clear();
+  fPhotonWavelength.clear();
+  fPhotonPolX.clear();
+  fPhotonPolY.clear();
+  fPhotonPolZ.clear();
+  fPhotonProcess.clear();
+  fChunk_Process.clear();
+
+  fPhotonsInChunk = 0;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 void DataManager::EndEvent()
 {
-  fNOpticalPhotons = fPhotonPosX.size();
+  // Drain any photons accumulated since the last FlushPhotonChunk
+  // (the partial last chunk for the event). This makes
+  // OpticalPhotonsRaw self-contained for this event before we Fill the
+  // metadata tree below.
+  if (fStoreIndividualPhotons && !fPhotonPosX.empty()) {
+    FlushPhotonChunk();
+  }
+
+  // Total photons across the event = global counter (NOT current
+  // fPhotonPosX.size() — that's been cleared by chunk flushes when
+  // streaming is on).
+  fNOpticalPhotons = static_cast<G4int>(fEventPhotonCount);
   fNEnergyDeposits = fEdepEnergy.size();
 
   // Skip track segment processing when individual photon storage is disabled
@@ -471,9 +564,13 @@ void DataManager::EndEvent()
   // table built during the merge loop. -1 sentinel when the parent track has
   // no output segments (non-meaningful) or is unknown.
   if (fStoreSegmentIndex) {
-    fPhoton_SegmentIndex.resize(fPhotonPosX.size(), -1);
-    for (size_t p = 0; p < fPhotonPosX.size(); ++p) {
-      if (p >= fPhotonImmediateParentTrackID.size()) break;
+    // Read photon counts/parents/times from the *retained* event-wide
+    // accumulators. fPhotonPosX / fPhotonTime are the streamed vectors
+    // and have already been flushed to OpticalPhotonsRaw and cleared
+    // by the partial-chunk flush at the top of EndEvent().
+    const size_t nPhotons = fPhotonImmediateParentTrackID.size();
+    fPhoton_SegmentIndex.resize(nPhotons, -1);
+    for (size_t p = 0; p < nPhotons; ++p) {
       G4int parentID = fPhotonImmediateParentTrackID[p];
       auto remapIt = trackUnmergedToMergedGlobal.find(parentID);
       if (remapIt == trackUnmergedToMergedGlobal.end()) continue;
@@ -482,9 +579,9 @@ void DataManager::EndEvent()
       const auto& segs = segsIt->second.segments;
       if (segs.empty()) continue;
 
-      // fPhotonTime[p] is in ns (set in AddOpticalPhoton via time/ns).
+      // fPhotonTimeRetained[p] is in ns (set in AddOpticalPhoton via time/ns).
       // segs[i].time is also in ns (set in AddTrackSegment via time/ns).
-      G4double pt = fPhotonTime[p];
+      G4double pt = fPhotonTimeRetained[p];
       // Largest segment idx with seg.time <= pt — that is the emitting step.
       int lo = 0, hi = static_cast<int>(segs.size()) - 1, found = -1;
       while (lo <= hi) {
@@ -618,6 +715,7 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
 
   // Conditionally store individual photon data
   if (fStoreIndividualPhotons) {
+    // ---- Streamed: flushed by FlushPhotonChunk every fPhotonChunkSize ----
     fPhotonPosX.push_back(x / mm);   // Store in mm
     fPhotonPosY.push_back(y / mm);
     fPhotonPosZ.push_back(z / mm);
@@ -629,16 +727,34 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
     fPhotonPolX.push_back(polX);     // Store polarization (unit vector)
     fPhotonPolY.push_back(polY);
     fPhotonPolZ.push_back(polZ);
-    fPhotonProcess.push_back(std::string(process));
+    if (fStoreProcessName) {
+      fPhotonProcess.push_back(std::string(process));
+    }
 
-    // Track this photon's genealogy (photon index is current size - 1)
-    G4int photonIndex = fPhotonPosX.size() - 1;
+    // Track this photon's genealogy. Photon ID is the global index across
+    // the whole event (NOT fPhotonPosX.size()-1, which resets on every
+    // FlushPhotonChunk under streaming). Keep using fEventPhotonCount as
+    // the running counter; the mapping into fParticle_PhotonIDsData stays
+    // intact across chunk boundaries.
+    G4int photonIndex = static_cast<G4int>(fEventPhotonCount);
     fGenealogyToPhotonIDs[genealogy].push_back(photonIndex);
+    ++fEventPhotonCount;
 
-    // Capture the immediate Geant4 parent for later remap to merged segment idx.
-    // The vector stays parallel to the photon arrays even when fStoreSegmentIndex
-    // is off (cheap; one int per photon).
-    fPhotonImmediateParentTrackID.push_back(immediateParentTrackID);
+    // Retained-across-event arrays needed by the segment-index compute
+    // at EndEvent. Only kept when the feature is enabled — they would
+    // otherwise grow to ~360 MB at 30 M photons for no benefit.
+    if (fStoreSegmentIndex) {
+      fPhotonImmediateParentTrackID.push_back(immediateParentTrackID);
+      fPhotonTimeRetained.push_back(time / ns);
+    }
+
+    // Auto-flush when the chunk is full (skipped when streaming is off
+    // for debug/A-B comparison; in that mode the only flush is at
+    // EndEvent so the chunk size grows to NPhotons).
+    if (fStreamPhotonsChunked &&
+        static_cast<Long64_t>(fPhotonPosX.size()) >= fPhotonChunkSize) {
+      FlushPhotonChunk();
+    }
   }
 }
 
@@ -917,6 +1033,10 @@ void DataManager::ClearEventData()
   fPhotonProcess.clear();
   fPhoton_SegmentIndex.clear();
   fPhotonImmediateParentTrackID.clear();
+  fPhotonTimeRetained.clear();
+  fEventPhotonCount = 0;
+  fPhotonsInChunk = 0;
+  fChunkStartID = 0;
 
   // Clear particle system
   fNParticles = 0;
