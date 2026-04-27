@@ -124,7 +124,8 @@ class DataManager
                          G4double time, G4double wavelength,
                          G4double polX, G4double polY, G4double polZ,
                          const G4String& process,
-                         const std::vector<G4int>& genealogy);
+                         const std::vector<G4int>& genealogy,
+                         G4int immediateParentTrackID = 0);
 
     void AddEnergyDeposit(G4double x, G4double y, G4double z,
                          G4double energy, G4double stepLength,
@@ -167,8 +168,10 @@ class DataManager
     // Control methods for individual data storage
     void SetStoreIndividualPhotons(bool store) { fStoreIndividualPhotons = store; }
     void SetStoreIndividualEdeps(bool store) { fStoreIndividualEdeps = store; }
+    void SetStoreSegmentIndex(bool store) { fStoreSegmentIndex = store; }
     bool GetStoreIndividualPhotons() const { return fStoreIndividualPhotons; }
     bool GetStoreIndividualEdeps() const { return fStoreIndividualEdeps; }
+    bool GetStoreSegmentIndex() const { return fStoreSegmentIndex; }
     
     // Output filename control
     void SetOutputFilename(const G4String& filename) { fOutputFilename = filename; }
@@ -217,6 +220,18 @@ class DataManager
     std::vector<G4double> fPhotonPolY;
     std::vector<G4double> fPhotonPolZ;
     std::vector<std::string> fPhotonProcess;
+
+    // Per-photon link to the merged segment that emitted it. Filled at EndEvent
+    // by walking each photon's immediate-parent track segments by time and
+    // remapping unmerged sub-step -> merged segment index. -1 sentinel when the
+    // parent track has no output segments (non-meaningful track or unknown).
+    // Only written to ROOT when fStoreSegmentIndex is true.
+    std::vector<G4int> fPhoton_SegmentIndex;
+
+    // Transient: immediate Geant4 parent track ID per photon, captured at
+    // creation. Used only inside EndEvent to look up the emitting segment;
+    // not written to ROOT.
+    std::vector<G4int> fPhotonImmediateParentTrackID;
 
     // Particle system: unique genealogies and their photons
     G4int fNParticles = 0;
@@ -301,6 +316,10 @@ class DataManager
     // Control flags for individual data storage
     bool fStoreIndividualPhotons = true;
     bool fStoreIndividualEdeps = true;
+    // When true, fill and write Photon_SegmentIndex (one int32 per photon
+    // pointing into Segment_*). Default off — opt-in for downstream
+    // segment <-> sensor correspondence consumers.
+    bool fStoreSegmentIndex = false;
     
     // 2D ROOT histograms for aggregated data (500x500 bins)
     TH2D* fPhotonHist_AngleDistance = nullptr;  // Opening angle vs distance

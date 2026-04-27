@@ -65,6 +65,7 @@ class DataManagerMessenger: public G4UImessenger
     G4UIdirectory*                 fOutputDir = nullptr;
     G4UIcmdWithABool*              fStorePhotonsCmd = nullptr;
     G4UIcmdWithABool*              fStoreEdepsCmd = nullptr;
+    G4UIcmdWithABool*              fStoreSegmentIndexCmd = nullptr;
     G4UIcmdWithAString*            fFilenameCmd = nullptr;
 };
 

@@ -67,7 +67,15 @@ DataManagerMessenger::DataManagerMessenger()
   fStoreEdepsCmd->SetParameterName("store", false);
   fStoreEdepsCmd->SetDefaultValue(true);
   fStoreEdepsCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
-  
+
+  fStoreSegmentIndexCmd = new G4UIcmdWithABool("/photon/storeSegmentIndex", this);
+  fStoreSegmentIndexCmd->SetGuidance("Enable/disable per-photon segment index branch");
+  fStoreSegmentIndexCmd->SetGuidance("Adds Photon_SegmentIndex (int) pointing into Segment_* arrays.");
+  fStoreSegmentIndexCmd->SetGuidance("Required for downstream segment <-> sensor correspondence.");
+  fStoreSegmentIndexCmd->SetParameterName("store", false);
+  fStoreSegmentIndexCmd->SetDefaultValue(false);
+  fStoreSegmentIndexCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
   fFilenameCmd = new G4UIcmdWithAString("/output/filename", this);
   fFilenameCmd->SetGuidance("Set output ROOT filename");
   fFilenameCmd->SetGuidance("Must be called before /run/initialize");
@@ -85,6 +93,7 @@ DataManagerMessenger::~DataManagerMessenger()
   delete fOutputDir;
   delete fStorePhotonsCmd;
   delete fStoreEdepsCmd;
+  delete fStoreSegmentIndexCmd;
   delete fFilenameCmd;
 }
 
@@ -103,7 +112,13 @@ void DataManagerMessenger::SetNewValue(G4UIcommand* command, G4String newValue)
     fDataManager->SetStoreIndividualEdeps(store);
     G4cout << "Individual energy deposit storage: " << (store ? "enabled" : "disabled") << G4endl;
   }
-  
+
+  if (command == fStoreSegmentIndexCmd) {
+    bool store = fStoreSegmentIndexCmd->GetNewBoolValue(newValue);
+    fDataManager->SetStoreSegmentIndex(store);
+    G4cout << "Per-photon segment index storage: " << (store ? "enabled" : "disabled") << G4endl;
+  }
+
   if (command == fFilenameCmd) {
     fDataManager->SetOutputFilename(newValue);
     G4cout << "Output filename set to: " << newValue << G4endl;

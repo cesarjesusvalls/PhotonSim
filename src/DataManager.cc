@@ -107,6 +107,12 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("PhotonPolZ", &fPhotonPolZ);
   fTree->Branch("PhotonProcess", &fPhotonProcess);
 
+  // Per-photon link to merged segment (opt-in; absent when fStoreSegmentIndex is false).
+  // Sentinel -1 means the parent track had no output segments.
+  if (fStoreSegmentIndex) {
+    fTree->Branch("Photon_SegmentIndex", &fPhoton_SegmentIndex);
+  }
+
   // Particle system branches (categorized particles based on genealogy)
   fTree->Branch("NParticles", &fNParticles, "NParticles/I");
   fTree->Branch("Particle_GenealogySize", &fParticle_GenealogySize);
@@ -350,6 +356,11 @@ void DataManager::EndEvent()
   fNMeaningfulTracks = meaningfulTrackIDs.size();
   G4int segmentOffset = 0;
 
+  // Per-track lookup: unmerged sub-step index -> global merged segment index.
+  // Built during the merge loop below, consumed afterwards to fill
+  // fPhoton_SegmentIndex. Only populated when fStoreSegmentIndex is on.
+  std::map<G4int, std::vector<G4int>> trackUnmergedToMergedGlobal;
+
   for (G4int trackID : meaningfulTrackIDs) {
     auto it = fAllTrackSegments.find(trackID);
     if (it == fAllTrackSegments.end()) continue;
@@ -359,9 +370,14 @@ void DataManager::EndEvent()
 
     // Merge segments for this track
     std::vector<TrackSegment> mergedSegments;
+    // Per-sub-step local merged index (only populated when needed).
+    std::vector<G4int> unmergedToMergedLocal;
+    if (fStoreSegmentIndex) unmergedToMergedLocal.reserve(info.segments.size());
 
     if (!info.segments.empty()) {
       TrackSegment current = info.segments[0];
+      G4int currentMergedLocal = 0;
+      if (fStoreSegmentIndex) unmergedToMergedLocal.push_back(currentMergedLocal);
 
       for (size_t i = 1; i < info.segments.size(); i++) {
         const TrackSegment& next = info.segments[i];
@@ -394,6 +410,7 @@ void DataManager::EndEvent()
           mergedSegments.push_back(current);
           // Start new segment
           current = next;
+          ++currentMergedLocal;
         } else {
           // Merge: extend end position, accumulate edep, keep original start and direction
           // betaStart from the first sub-step is preserved (current.betaStart unchanged);
@@ -404,9 +421,18 @@ void DataManager::EndEvent()
           current.edep += next.edep;
           current.nCherenkov += next.nCherenkov;
         }
+        if (fStoreSegmentIndex) unmergedToMergedLocal.push_back(currentMergedLocal);
       }
       // Don't forget the last segment
       mergedSegments.push_back(current);
+    }
+
+    if (fStoreSegmentIndex) {
+      std::vector<G4int>& globalMap = trackUnmergedToMergedGlobal[trackID];
+      globalMap.reserve(unmergedToMergedLocal.size());
+      for (G4int local : unmergedToMergedLocal) {
+        globalMap.push_back(segmentOffset + local);
+      }
     }
 
     fMTrack_TrackID.push_back(info.trackID);
@@ -438,6 +464,40 @@ void DataManager::EndEvent()
     segmentOffset += mergedSegments.size();
   }
   fNSegments = segmentOffset;
+
+  // === Step 2.5: Per-photon merged-segment index ===
+  // For each photon, look up its immediate parent's segments by time and remap
+  // through the (trackID, unmerged sub-step idx) -> global merged segment idx
+  // table built during the merge loop. -1 sentinel when the parent track has
+  // no output segments (non-meaningful) or is unknown.
+  if (fStoreSegmentIndex) {
+    fPhoton_SegmentIndex.resize(fPhotonPosX.size(), -1);
+    for (size_t p = 0; p < fPhotonPosX.size(); ++p) {
+      if (p >= fPhotonImmediateParentTrackID.size()) break;
+      G4int parentID = fPhotonImmediateParentTrackID[p];
+      auto remapIt = trackUnmergedToMergedGlobal.find(parentID);
+      if (remapIt == trackUnmergedToMergedGlobal.end()) continue;
+      auto segsIt = fAllTrackSegments.find(parentID);
+      if (segsIt == fAllTrackSegments.end()) continue;
+      const auto& segs = segsIt->second.segments;
+      if (segs.empty()) continue;
+
+      // fPhotonTime[p] is in ns (set in AddOpticalPhoton via time/ns).
+      // segs[i].time is also in ns (set in AddTrackSegment via time/ns).
+      G4double pt = fPhotonTime[p];
+      // Largest segment idx with seg.time <= pt — that is the emitting step.
+      int lo = 0, hi = static_cast<int>(segs.size()) - 1, found = -1;
+      while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (segs[mid].time <= pt) { found = mid; lo = mid + 1; }
+        else { hi = mid - 1; }
+      }
+      if (found < 0) continue;
+      const auto& globalMap = remapIt->second;
+      if (found >= static_cast<int>(globalMap.size())) continue;
+      fPhoton_SegmentIndex[p] = globalMap[found];
+    }
+  }
 
   // === Step 3: Convert genealogy map to particle arrays with extended genealogy ===
   fNParticles = fGenealogyToPhotonIDs.size();
@@ -529,7 +589,8 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
                                   G4double time, G4double wavelength,
                                   G4double polX, G4double polY, G4double polZ,
                                   const G4String& process,
-                                  const std::vector<G4int>& genealogy)
+                                  const std::vector<G4int>& genealogy,
+                                  G4int immediateParentTrackID)
 {
   // Always fill the 2D histogram for aggregated data
   if (fPhotonHist_AngleDistance) {
@@ -573,6 +634,11 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
     // Track this photon's genealogy (photon index is current size - 1)
     G4int photonIndex = fPhotonPosX.size() - 1;
     fGenealogyToPhotonIDs[genealogy].push_back(photonIndex);
+
+    // Capture the immediate Geant4 parent for later remap to merged segment idx.
+    // The vector stays parallel to the photon arrays even when fStoreSegmentIndex
+    // is off (cheap; one int per photon).
+    fPhotonImmediateParentTrackID.push_back(immediateParentTrackID);
   }
 }
 
@@ -849,6 +915,8 @@ void DataManager::ClearEventData()
   fPhotonPolY.clear();
   fPhotonPolZ.clear();
   fPhotonProcess.clear();
+  fPhoton_SegmentIndex.clear();
+  fPhotonImmediateParentTrackID.clear();
 
   // Clear particle system
   fNParticles = 0;

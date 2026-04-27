@@ -420,13 +420,16 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
       G4double photonEnergy = track->GetKineticEnergy();
       G4double wavelength = (h_Planck * c_light) / photonEnergy;
 
-      // Record this optical photon with genealogy
+      // Record this optical photon with genealogy.
+      // parentID is the immediate Geant4 parent track that emitted the photon —
+      // used post-merge in EndEvent to look up the originating segment.
       dataManager->AddOpticalPhoton(position.x(), position.y(), position.z(),
                                    direction.x(), direction.y(), direction.z(),
                                    time, wavelength,
                                    polarization.x(), polarization.y(), polarization.z(),
                                    processName,
-                                   genealogy);
+                                   genealogy,
+                                   parentID);
 
       // If this is a Cerenkov photon, increment the count for the parent track
       if (processName == "Cerenkov") {
