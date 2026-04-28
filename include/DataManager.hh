@@ -172,11 +172,13 @@ class DataManager
     void SetStoreSegmentIndex(bool store) { fStoreSegmentIndex = store; }
     void SetStoreProcessName(bool store) { fStoreProcessName = store; }
     void SetStreamPhotonsChunked(bool stream) { fStreamPhotonsChunked = stream; }
+    void SetEmitRawSegments(bool emit) { fEmitRawSegments = emit; }
     bool GetStoreIndividualPhotons() const { return fStoreIndividualPhotons; }
     bool GetStoreIndividualEdeps() const { return fStoreIndividualEdeps; }
     bool GetStoreSegmentIndex() const { return fStoreSegmentIndex; }
     bool GetStoreProcessName() const { return fStoreProcessName; }
     bool GetStreamPhotonsChunked() const { return fStreamPhotonsChunked; }
+    bool GetEmitRawSegments() const { return fEmitRawSegments; }
     
     // Output filename control
     void SetOutputFilename(const G4String& filename) { fOutputFilename = filename; }
@@ -361,6 +363,13 @@ class DataManager
     // becomes effectively unbounded). Debug knob — same on-disk schema
     // either way.
     bool fStreamPhotonsChunked = true;
+    // When true, skip the segment merger in EndEvent and emit one
+    // Segment_* row per raw G4 step. Downstream (LUCiD) reapplies the
+    // merger in Python and writes group_id alongside; the merger
+    // becomes a Python-side label instead of a C++-side destruction.
+    // Default true on this branch; existing C++ merger is kept compilable
+    // for byte-identity verification and will be removed in a follow-up.
+    bool fEmitRawSegments = true;
     // Chunk size for OpticalPhotonsRaw entries. 100,000 photons ≈ 4 MB of
     // active streamed-vector memory.
     static constexpr Long64_t fPhotonChunkSize = 100000;

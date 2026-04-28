@@ -68,6 +68,7 @@ class DataManagerMessenger: public G4UImessenger
     G4UIcmdWithABool*              fStoreSegmentIndexCmd = nullptr;
     G4UIcmdWithABool*              fStoreProcessNameCmd = nullptr;
     G4UIcmdWithABool*              fStreamPhotonsChunkedCmd = nullptr;
+    G4UIcmdWithABool*              fEmitRawSegmentsCmd = nullptr;
     G4UIcmdWithAString*            fFilenameCmd = nullptr;
 };
 

@@ -473,7 +473,20 @@ void DataManager::EndEvent()
     std::vector<G4int> unmergedToMergedLocal;
     if (fStoreSegmentIndex) unmergedToMergedLocal.reserve(info.segments.size());
 
-    if (!info.segments.empty()) {
+    if (fEmitRawSegments) {
+      // Raw mode: every G4 sub-step is its own segment. The Python-side
+      // merger in LUCiD (lucid/sources/segment_grouping.py) reapplies the
+      // logic below to produce group_id, so aggregating raw rows by
+      // group_id is byte-identical to today's merged output. The
+      // identity unmerged->merged map keeps the Photon_SegmentIndex
+      // binary-search block below working unchanged.
+      mergedSegments = info.segments;
+      if (fStoreSegmentIndex) {
+        for (size_t i = 0; i < info.segments.size(); ++i) {
+          unmergedToMergedLocal.push_back(static_cast<G4int>(i));
+        }
+      }
+    } else if (!info.segments.empty()) {
       TrackSegment current = info.segments[0];
       G4int currentMergedLocal = 0;
       if (fStoreSegmentIndex) unmergedToMergedLocal.push_back(currentMergedLocal);

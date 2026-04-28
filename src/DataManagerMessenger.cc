@@ -93,6 +93,15 @@ DataManagerMessenger::DataManagerMessenger()
   fStreamPhotonsChunkedCmd->SetDefaultValue(true);
   fStreamPhotonsChunkedCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
 
+  fEmitRawSegmentsCmd = new G4UIcmdWithABool("/photon/emitRawSegments", this);
+  fEmitRawSegmentsCmd->SetGuidance("Enable/disable raw-segment output (skip C++ merger).");
+  fEmitRawSegmentsCmd->SetGuidance("When true (default on this branch), every G4 sub-step is its own");
+  fEmitRawSegmentsCmd->SetGuidance("Segment_* row; LUCiD reapplies the merger and writes group_id.");
+  fEmitRawSegmentsCmd->SetGuidance("When false, today's C++ merger runs (kept for byte-identity A/B).");
+  fEmitRawSegmentsCmd->SetParameterName("emit", false);
+  fEmitRawSegmentsCmd->SetDefaultValue(true);
+  fEmitRawSegmentsCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
   fFilenameCmd = new G4UIcmdWithAString("/output/filename", this);
   fFilenameCmd->SetGuidance("Set output ROOT filename");
   fFilenameCmd->SetGuidance("Must be called before /run/initialize");
@@ -113,6 +122,7 @@ DataManagerMessenger::~DataManagerMessenger()
   delete fStoreSegmentIndexCmd;
   delete fStoreProcessNameCmd;
   delete fStreamPhotonsChunkedCmd;
+  delete fEmitRawSegmentsCmd;
   delete fFilenameCmd;
 }
 
@@ -148,6 +158,13 @@ void DataManagerMessenger::SetNewValue(G4UIcommand* command, G4String newValue)
     bool stream = fStreamPhotonsChunkedCmd->GetNewBoolValue(newValue);
     fDataManager->SetStreamPhotonsChunked(stream);
     G4cout << "Chunked photon streaming: " << (stream ? "enabled" : "disabled") << G4endl;
+  }
+
+  if (command == fEmitRawSegmentsCmd) {
+    bool emit = fEmitRawSegmentsCmd->GetNewBoolValue(newValue);
+    fDataManager->SetEmitRawSegments(emit);
+    G4cout << "Raw-segment emission (Python-side merger): "
+           << (emit ? "enabled" : "disabled (C++ merger active)") << G4endl;
   }
 
   if (command == fFilenameCmd) {
