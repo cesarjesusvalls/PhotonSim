@@ -460,6 +460,12 @@ void DataManager::EndEvent()
 
     const TrackSegmentInfo& info = it->second;
     bool isLowEnergy = (info.initialEnergy / MeV) < lowEnergyThreshold;
+    // Electrons / positrons multiple-scatter on essentially every step,
+    // so the geometric (angle / length) criterion fires constantly and
+    // produces an absurd number of segments per EM track. Route any e±
+    // through the edep-based merger regardless of initial energy.
+    bool isElectron = (std::abs(info.pdgCode) == 11);
+    bool useEdepMerging = isLowEnergy || isElectron;
 
     // Merge segments for this track
     std::vector<TrackSegment> mergedSegments;
@@ -477,8 +483,8 @@ void DataManager::EndEvent()
 
         bool shouldSave = false;
 
-        if (isLowEnergy) {
-          // Low energy track: merge until edep >= 1 MeV
+        if (useEdepMerging) {
+          // Low energy or e± track: merge until edep >= 1 MeV
           shouldSave = (current.edep >= minEdepForLowEnergy);
         } else {
           // Normal track: use length and angle criteria
