@@ -84,18 +84,18 @@ G4Material* DetectorConstruction::ConstructWater()
   
   // Water optical properties
   G4MaterialPropertiesTable* waterMPT = new G4MaterialPropertiesTable();
-  
-  // Photon energies (wavelengths from 200-700 nm)
+
+  // Photon energies (wavelengths ~275-675 nm — matches SK/HK PMT QE coverage)
   const G4int nEntries = 10;
   G4double photonEnergy[nEntries] = {
-    1.77*eV, 2.07*eV, 2.48*eV, 2.76*eV, 3.10*eV,
-    3.54*eV, 4.13*eV, 4.96*eV, 5.64*eV, 6.20*eV
+    1.84*eV, 2.07*eV, 2.48*eV, 2.76*eV, 3.10*eV,
+    3.31*eV, 3.54*eV, 3.81*eV, 4.13*eV, 4.51*eV
   };
-  
-  // Refractive index of water
+
+  // Refractive index of water (linear-interp of legacy 200-700 nm table at new knots)
   G4double refractiveIndex[nEntries] = {
     1.333, 1.334, 1.335, 1.337, 1.338,
-    1.340, 1.343, 1.347, 1.351, 1.358
+    1.339, 1.340, 1.342, 1.343, 1.345
   };
   
   // Absorption length of water (in meters)
