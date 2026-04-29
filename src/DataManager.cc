@@ -35,7 +35,6 @@
 #include "G4SystemOfUnits.hh"
 #include "G4ios.hh"
 #include <cmath>
-#include <set>
 #include <algorithm>
 
 namespace PhotonSim
@@ -71,20 +70,19 @@ void DataManager::Initialize(const G4String& filename)
 {
   // Use provided filename, or stored filename if none provided
   G4String actualFilename = filename.empty() ? fOutputFilename : filename;
-  
+
   fRootFile = std::make_unique<TFile>(actualFilename.c_str(), "RECREATE");
   if (!fRootFile || fRootFile->IsZombie()) {
     G4cerr << "Error: Cannot create ROOT file " << actualFilename << G4endl;
     return;
   }
-  
+
   fTree = new TTree("OpticalPhotons", "Optical Photon Data");
-  
+
   // Event-level branches
   fTree->Branch("EventID", &fEventID, "EventID/I");
   fTree->Branch("PrimaryEnergy", &fPrimaryEnergy, "PrimaryEnergy/D");
   fTree->Branch("NOpticalPhotons", &fNOpticalPhotons, "NOpticalPhotons/I");
-  fTree->Branch("NEnergyDeposits", &fNEnergyDeposits, "NEnergyDeposits/I");
 
   // GENIE provenance: -1 / 0 / 0.0 for particle-gun events. LUCiD v5
   // reads these to populate per_interaction/neutrino_pdg and
@@ -92,37 +90,19 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("RooTrackerEntryID", &fGenieEntryID, "RooTrackerEntryID/I");
   fTree->Branch("IncomingNuPdg", &fIncomingNuPdg, "IncomingNuPdg/I");
   fTree->Branch("IncomingNuKE", &fIncomingNuKE, "IncomingNuKE/D");
-  
+
   // Per-photon scalar measurements live on the sister tree
-  // OpticalPhotonsRaw (set up below). Only Photon_SegmentIndex stays
-  // event-grain on this metadata tree because it's derived data
-  // computed at EndEvent (one int per photon, not a bulk array).
-  if (fStoreSegmentIndex) {
-    fTree->Branch("Photon_SegmentIndex", &fPhoton_SegmentIndex);
-  }
+  // OpticalPhotonsRaw (set up below). Photon_SegmentIndex stays event-grain
+  // on this metadata tree because it's derived data computed at EndEvent
+  // (one int per photon, not a bulk array).
+  fTree->Branch("Photon_SegmentIndex", &fPhoton_SegmentIndex);
 
-  // Particle system branches (categorized particles based on genealogy)
-  fTree->Branch("NParticles", &fNParticles, "NParticles/I");
-  fTree->Branch("Particle_GenealogySize", &fParticle_GenealogySize);
-  fTree->Branch("Particle_GenealogyData", &fParticle_GenealogyData);
-  fTree->Branch("Particle_PhotonIDsSize", &fParticle_PhotonIDsSize);
-  fTree->Branch("Particle_PhotonIDsData", &fParticle_PhotonIDsData);
-  fTree->Branch("Particle_ExtGenealogySize", &fParticle_ExtGenealogySize);
-  fTree->Branch("Particle_ExtGenealogyData", &fParticle_ExtGenealogyData);
-
-  // Meaningful tracks table (tracks contributing to Cherenkov emission)
-  fTree->Branch("NMeaningfulTracks", &fNMeaningfulTracks, "NMeaningfulTracks/I");
-  fTree->Branch("MTrack_TrackID", &fMTrack_TrackID);
-  fTree->Branch("MTrack_ParentID", &fMTrack_ParentID);
-  fTree->Branch("MTrack_PDG", &fMTrack_PDG);
-  fTree->Branch("MTrack_InitialEnergy", &fMTrack_InitialEnergy);
-  fTree->Branch("MTrack_ParticleName", &fMTrack_ParticleName);
-  fTree->Branch("MTrack_NCherenkov", &fMTrack_NCherenkov);
-  fTree->Branch("MTrack_SegmentOffset", &fMTrack_SegmentOffset);
-  fTree->Branch("MTrack_NSegments", &fMTrack_NSegments);
-
-  // Segments table (all steps for meaningful tracks)
+  // Segments table — one row per G4 step of every non-optical-photon
+  // track. Track ownership is inline via Segment_TrackID; LUCiD's
+  // `derive_meaningful_tracks` filters Cherenkov-producing tracks via
+  // groupby on this branch.
   fTree->Branch("NSegments", &fNSegments, "NSegments/I");
+  fTree->Branch("Segment_TrackID", &fSegment_TrackID);
   fTree->Branch("Segment_StartX", &fSegment_StartX);
   fTree->Branch("Segment_StartY", &fSegment_StartY);
   fTree->Branch("Segment_StartZ", &fSegment_StartZ);
@@ -137,10 +117,9 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("Segment_BetaStart", &fSegment_BetaStart);
   fTree->Branch("Segment_NCherenkov", &fSegment_NCherenkov);
 
-  // Event-level track information branches
+  // Event-level track information branches (one row per registered G4 track,
+  // optical photons excluded at registration time).
   fTree->Branch("TrackInfo_TrackID", &fTrackInfo_TrackID);
-  fTree->Branch("TrackInfo_Category", &fTrackInfo_Category);
-  fTree->Branch("TrackInfo_SubID", &fTrackInfo_SubID);
   fTree->Branch("TrackInfo_PosX", &fTrackInfo_PosX);
   fTree->Branch("TrackInfo_PosY", &fTrackInfo_PosY);
   fTree->Branch("TrackInfo_PosZ", &fTrackInfo_PosZ);
@@ -152,17 +131,7 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("TrackInfo_ParentTrackID", &fTrackInfo_ParentTrackID);
   fTree->Branch("TrackInfo_PDG", &fTrackInfo_PDG);
   fTree->Branch("TrackInfo_CreatorProcess", &fTrackInfo_CreatorProcess);
-  
-  // Energy deposit data branches
-  fTree->Branch("EdepPosX", &fEdepPosX);
-  fTree->Branch("EdepPosY", &fEdepPosY);
-  fTree->Branch("EdepPosZ", &fEdepPosZ);
-  fTree->Branch("EdepEnergy", &fEdepEnergy);
-  fTree->Branch("EdepTime", &fEdepTime);
-  fTree->Branch("EdepParticle", &fEdepParticle);
-  fTree->Branch("EdepTrackID", &fEdepTrackID);
-  fTree->Branch("EdepParentID", &fEdepParentID);
-  
+
   // === Sister tree: chunked per-photon measurements ===
   // Each entry holds up to fPhotonChunkSize photons. EventID and
   // ChunkStartID let readers locate the photons that belong to a given
@@ -193,18 +162,18 @@ void DataManager::Initialize(const G4String& filename)
 
   // Create 2D histograms for aggregated data (500x500 bins)
   // Photon histogram: Opening angle (0-π rad) vs Distance (0-10 m)
-  fPhotonHist_AngleDistance = new TH2D("PhotonHist_AngleDistance", 
+  fPhotonHist_AngleDistance = new TH2D("PhotonHist_AngleDistance",
                                       "Photon Opening Angle vs Distance from Origin;Opening Angle (rad);Distance (mm)",
                                       500, 0.0, M_PI,           // 0 to π radians (all possible angles)
                                       500, 0.0, 10000.0);       // 0 to 10 meters in mm
-  
+
   // dE/dx histogram: dE/dx (0-1000 keV/mm) vs Distance (0-10 m)
   // Format matches PhotonHist_AngleDistance: X-axis is the observable, Y-axis is distance
   fdEdxHist_Distance = new TH2D("dEdxHist_Distance",
                                 "dE/dx vs Distance from Origin;dE/dx (keV/mm);Distance (mm)",
                                 500, 0.0, 1000.0,           // 0 to 1000 keV/mm
                                 500, 0.0, 10000.0);         // 0 to 10 meters in mm
-  
+
   // Photon time vs distance histogram: Distance (0-10 m) vs Time (0-50 ns)
   fPhotonHist_TimeDistance = new TH2D("PhotonHist_TimeDistance",
                                      "Photon Time vs Distance from Origin;Distance (mm);Time (ns)",
@@ -216,7 +185,7 @@ void DataManager::Initialize(const G4String& filename)
                                    "Photon Wavelength Distribution;Wavelength (nm);Counts",
                                    800, 0.0, 800.0);          // 0 to 800 nm
 
-  G4cout << "ROOT file " << actualFilename << " created for optical photon and energy deposit data" << G4endl;
+  G4cout << "ROOT file " << actualFilename << " created for optical photon data" << G4endl;
   G4cout << "2D histograms created: 500x500 bins for aggregated data analysis" << G4endl;
   G4cout << "1D wavelength histogram created: 800 bins from 0-800 nm" << G4endl;
 }
@@ -228,7 +197,7 @@ void DataManager::Finalize()
   if (fFinalized) {
     return;  // Already finalized, avoid double cleanup
   }
-  
+
   try {
     if (fRootFile && fTree) {
       fRootFile->cd();
@@ -244,42 +213,35 @@ void DataManager::Finalize()
       if (fPhotonHist_AngleDistance) {
         fPhotonHist_AngleDistance->Write();
         G4cout << "Photon histogram written with " << fPhotonHist_AngleDistance->GetEntries() << " entries" << G4endl;
-        // Histogram is now owned by the ROOT file, don't delete it manually
         fPhotonHist_AngleDistance = nullptr;
       }
       if (fdEdxHist_Distance) {
         fdEdxHist_Distance->Write();
         G4cout << "dE/dx histogram written with " << fdEdxHist_Distance->GetEntries() << " entries" << G4endl;
-        // Histogram is now owned by the ROOT file, don't delete it manually
         fdEdxHist_Distance = nullptr;
       }
       if (fPhotonHist_TimeDistance) {
         fPhotonHist_TimeDistance->Write();
         G4cout << "Photon time histogram written with " << fPhotonHist_TimeDistance->GetEntries() << " entries" << G4endl;
-        // Histogram is now owned by the ROOT file, don't delete it manually
         fPhotonHist_TimeDistance = nullptr;
       }
       if (fPhotonHist_Wavelength) {
         fPhotonHist_Wavelength->Write();
         G4cout << "Photon wavelength histogram written with " << fPhotonHist_Wavelength->GetEntries() << " entries" << G4endl;
-        // Histogram is now owned by the ROOT file, don't delete it manually
         fPhotonHist_Wavelength = nullptr;
       }
 
       G4cout << "ROOT file closed with " << fTree->GetEntries() << " events" << G4endl;
-      
-      // Important: Let ROOT manage the tree cleanup when the file is closed
+
       fTree = nullptr;  // Tree will be deleted by ROOT file
-      
-      // Close and reset the file
       fRootFile->Close();
-      fRootFile.reset(); // Explicitly reset the unique_ptr
+      fRootFile.reset();
     }
   }
   catch (...) {
     G4cout << "Exception during ROOT file finalization, but data may have been saved" << G4endl;
   }
-  
+
   fFinalized = true;
 }
 
@@ -291,7 +253,7 @@ void DataManager::Reset()
   if (!fFinalized) {
     Finalize();
   }
-  
+
   // Reset all state
   fFinalized = false;
   fTree = nullptr;
@@ -303,11 +265,10 @@ void DataManager::Reset()
 
   // Clear output filename
   fOutputFilename = "output.root";
-  
+
   // Reset storage flags
   fStoreIndividualPhotons = false;
-  fStoreIndividualEdeps = false;
-  
+
   // Clear all data
   ClearEventData();
 }
@@ -403,10 +364,9 @@ void DataManager::EndEvent()
   // fPhotonPosX.size() — that's been cleared by chunk flushes when
   // streaming is on).
   fNOpticalPhotons = static_cast<G4int>(fEventPhotonCount);
-  fNEnergyDeposits = fEdepEnergy.size();
 
   // Skip track segment processing when individual photon storage is disabled
-  // (used for lookup table generation where only histograms are needed)
+  // (used for lookup table generation where only histograms are needed).
   if (!fStoreIndividualPhotons) {
     if (fTree) {
       fTree->Fill();
@@ -414,52 +374,33 @@ void DataManager::EndEvent()
     return;
   }
 
-  // === Step 1: Identify meaningful tracks ===
-  // A track is meaningful if it produced Cherenkov photons OR has a descendant that did
-  std::set<G4int> meaningfulTrackIDs;
-
-  // First pass: find all tracks that directly produced Cherenkov photons
-  for (const auto& pair : fAllTrackSegments) {
-    if (pair.second.cherenkovCount > 0) {
-      meaningfulTrackIDs.insert(pair.first);
-    }
-  }
-
-  // Second pass: walk up ancestry to mark all ancestors as meaningful
-  std::set<G4int> ancestorsToAdd;
-  for (G4int trackID : meaningfulTrackIDs) {
-    G4int currentID = trackID;
-    while (currentID > 0) {
-      auto it = fAllTrackSegments.find(currentID);
-      if (it == fAllTrackSegments.end()) break;
-      ancestorsToAdd.insert(currentID);
-      currentID = it->second.parentID;
-    }
-  }
-  meaningfulTrackIDs.insert(ancestorsToAdd.begin(), ancestorsToAdd.end());
-
-  // === Step 2: Output meaningful tracks and their merged segments ===
-  // Merging criteria:
-  //   - For tracks >= 10 MeV: minimum 10mm length OR direction change > 2 degrees
-  //   - For tracks < 10 MeV: merge until energy loss >= 1 MeV (regardless of length/angle)
+  // === Output segments for every G4 track ===
+  // No "meaningful tracks" filter — emit one row per G4 step (or one
+  // per merged sub-step group when fEmitRawSegments=false). LUCiD
+  // derives the meaningful-track view via Segment_TrackID +
+  // Segment_NCherenkov.
+  //
+  // Merging criteria (only used when fEmitRawSegments=false):
+  //   - For tracks ≥ 10 MeV: minimum 10 mm length OR direction change > 2°
+  //   - For tracks < 10 MeV (or e±): merge until energy loss ≥ 1 MeV
   const G4double minSegmentLength = 10.0;  // mm
   const G4double maxAngleForMerge = 2.0 * M_PI / 180.0;  // 2 degrees in radians
   const G4double lowEnergyThreshold = 10.0;  // MeV - tracks below this use edep-based merging
   const G4double minEdepForLowEnergy = 1.0;  // MeV - minimum edep before saving segment for low-E tracks
 
-  fNMeaningfulTracks = meaningfulTrackIDs.size();
   G4int segmentOffset = 0;
 
   // Per-track lookup: unmerged sub-step index -> global merged segment index.
   // Built during the merge loop below, consumed afterwards to fill
-  // fPhoton_SegmentIndex. Only populated when fStoreSegmentIndex is on.
+  // fPhoton_SegmentIndex.
   std::map<G4int, std::vector<G4int>> trackUnmergedToMergedGlobal;
 
-  for (G4int trackID : meaningfulTrackIDs) {
-    auto it = fAllTrackSegments.find(trackID);
-    if (it == fAllTrackSegments.end()) continue;
+  // Iterate every track in fAllTrackSegments (std::map iteration is
+  // track-id ascending, which is chronological).
+  for (const auto& trackPair : fAllTrackSegments) {
+    G4int trackID = trackPair.first;
+    const TrackSegmentInfo& info = trackPair.second;
 
-    const TrackSegmentInfo& info = it->second;
     bool isLowEnergy = (info.initialEnergy / MeV) < lowEnergyThreshold;
     // Electrons / positrons multiple-scatter on essentially every step,
     // so the geometric (angle / length) criterion fires constantly and
@@ -470,27 +411,21 @@ void DataManager::EndEvent()
 
     // Merge segments for this track
     std::vector<TrackSegment> mergedSegments;
-    // Per-sub-step local merged index (only populated when needed).
     std::vector<G4int> unmergedToMergedLocal;
-    if (fStoreSegmentIndex) unmergedToMergedLocal.reserve(info.segments.size());
+    unmergedToMergedLocal.reserve(info.segments.size());
 
     if (fEmitRawSegments) {
       // Raw mode: every G4 sub-step is its own segment. The Python-side
       // merger in LUCiD (lucid/sources/segment_grouping.py) reapplies the
-      // logic below to produce group_id, so aggregating raw rows by
-      // group_id is byte-identical to today's merged output. The
-      // identity unmerged->merged map keeps the Photon_SegmentIndex
-      // binary-search block below working unchanged.
+      // logic below to produce group_id.
       mergedSegments = info.segments;
-      if (fStoreSegmentIndex) {
-        for (size_t i = 0; i < info.segments.size(); ++i) {
-          unmergedToMergedLocal.push_back(static_cast<G4int>(i));
-        }
+      for (size_t i = 0; i < info.segments.size(); ++i) {
+        unmergedToMergedLocal.push_back(static_cast<G4int>(i));
       }
     } else if (!info.segments.empty()) {
       TrackSegment current = info.segments[0];
       G4int currentMergedLocal = 0;
-      if (fStoreSegmentIndex) unmergedToMergedLocal.push_back(currentMergedLocal);
+      unmergedToMergedLocal.push_back(currentMergedLocal);
 
       for (size_t i = 1; i < info.segments.size(); i++) {
         const TrackSegment& next = info.segments[i];
@@ -502,13 +437,12 @@ void DataManager::EndEvent()
           shouldSave = (current.edep >= minEdepForLowEnergy);
         } else {
           // Normal track: use length and angle criteria
-          // Calculate current merged segment length
           G4double dx = current.endX - current.startX;
           G4double dy = current.endY - current.startY;
           G4double dz = current.endZ - current.startZ;
           G4double currentLength = std::sqrt(dx*dx + dy*dy + dz*dz);
 
-          // Calculate direction change (angle between current direction and next direction)
+          // Calculate direction change
           G4double dot = current.dirX * next.dirX + current.dirY * next.dirY + current.dirZ * next.dirZ;
           dot = std::max(-1.0, std::min(1.0, dot));  // Clamp for numerical stability
           G4double angle = std::acos(dot);
@@ -525,7 +459,7 @@ void DataManager::EndEvent()
           current = next;
           ++currentMergedLocal;
         } else {
-          // Merge: extend end position, accumulate edep, keep original start and direction
+          // Merge: extend end position, accumulate edep, keep original start and direction.
           // betaStart from the first sub-step is preserved (current.betaStart unchanged);
           // nCherenkov accumulates across merged sub-steps.
           current.endX = next.endX;
@@ -534,31 +468,21 @@ void DataManager::EndEvent()
           current.edep += next.edep;
           current.nCherenkov += next.nCherenkov;
         }
-        if (fStoreSegmentIndex) unmergedToMergedLocal.push_back(currentMergedLocal);
+        unmergedToMergedLocal.push_back(currentMergedLocal);
       }
       // Don't forget the last segment
       mergedSegments.push_back(current);
     }
 
-    if (fStoreSegmentIndex) {
-      std::vector<G4int>& globalMap = trackUnmergedToMergedGlobal[trackID];
-      globalMap.reserve(unmergedToMergedLocal.size());
-      for (G4int local : unmergedToMergedLocal) {
-        globalMap.push_back(segmentOffset + local);
-      }
+    std::vector<G4int>& globalMap = trackUnmergedToMergedGlobal[trackID];
+    globalMap.reserve(unmergedToMergedLocal.size());
+    for (G4int local : unmergedToMergedLocal) {
+      globalMap.push_back(segmentOffset + local);
     }
 
-    fMTrack_TrackID.push_back(info.trackID);
-    fMTrack_ParentID.push_back(info.parentID);
-    fMTrack_PDG.push_back(info.pdgCode);
-    fMTrack_InitialEnergy.push_back(info.initialEnergy / MeV);
-    fMTrack_ParticleName.push_back(std::string(info.particleName));
-    fMTrack_NCherenkov.push_back(info.cherenkovCount);
-    fMTrack_SegmentOffset.push_back(segmentOffset);
-    fMTrack_NSegments.push_back(mergedSegments.size());
-
-    // Output merged segments for this track
+    // Output merged segments for this track, with track id inlined.
     for (const TrackSegment& seg : mergedSegments) {
+      fSegment_TrackID.push_back(info.trackID);
       fSegment_StartX.push_back(seg.startX);
       fSegment_StartY.push_back(seg.startY);
       fSegment_StartZ.push_back(seg.startZ);
@@ -578,98 +502,53 @@ void DataManager::EndEvent()
   }
   fNSegments = segmentOffset;
 
-  // === Step 2.5: Per-photon merged-segment index ===
+  // === Per-photon merged-segment index ===
   // For each photon, look up its immediate parent's segments by time and remap
   // through the (trackID, unmerged sub-step idx) -> global merged segment idx
-  // table built during the merge loop. -1 sentinel when the parent track has
-  // no output segments (non-meaningful) or is unknown.
-  if (fStoreSegmentIndex) {
-    // Read photon counts/parents/times from the *retained* event-wide
-    // accumulators. fPhotonPosX / fPhotonTime are the streamed vectors
-    // and have already been flushed to OpticalPhotonsRaw and cleared
-    // by the partial-chunk flush at the top of EndEvent().
-    const size_t nPhotons = fPhotonImmediateParentTrackID.size();
-    fPhoton_SegmentIndex.resize(nPhotons, -1);
-    for (size_t p = 0; p < nPhotons; ++p) {
-      G4int parentID = fPhotonImmediateParentTrackID[p];
-      auto remapIt = trackUnmergedToMergedGlobal.find(parentID);
-      if (remapIt == trackUnmergedToMergedGlobal.end()) continue;
-      auto segsIt = fAllTrackSegments.find(parentID);
-      if (segsIt == fAllTrackSegments.end()) continue;
-      const auto& segs = segsIt->second.segments;
-      if (segs.empty()) continue;
+  // table built during the merge loop. After dropping the meaningful-tracks
+  // filter, every track has segments recorded, so the -1 sentinel never
+  // fires (kept defensively for any edge case).
+  //
+  // Read photon counts/parents/times from the *retained* event-wide
+  // accumulators. fPhotonPosX / fPhotonTime are the streamed vectors and
+  // have already been flushed to OpticalPhotonsRaw and cleared by the
+  // partial-chunk flush at the top of EndEvent().
+  const size_t nPhotons = fPhotonImmediateParentTrackID.size();
+  fPhoton_SegmentIndex.resize(nPhotons, -1);
+  for (size_t p = 0; p < nPhotons; ++p) {
+    G4int parentID = fPhotonImmediateParentTrackID[p];
+    auto remapIt = trackUnmergedToMergedGlobal.find(parentID);
+    if (remapIt == trackUnmergedToMergedGlobal.end()) continue;
+    auto segsIt = fAllTrackSegments.find(parentID);
+    if (segsIt == fAllTrackSegments.end()) continue;
+    const auto& segs = segsIt->second.segments;
+    if (segs.empty()) continue;
 
-      // fPhotonTimeRetained[p] is in ns (set in AddOpticalPhoton via time/ns).
-      // segs[i].time is also in ns (set in AddTrackSegment via time/ns).
-      G4double pt = fPhotonTimeRetained[p];
-      // Largest segment idx with seg.time <= pt — that is the emitting step.
-      int lo = 0, hi = static_cast<int>(segs.size()) - 1, found = -1;
-      while (lo <= hi) {
-        int mid = (lo + hi) / 2;
-        if (segs[mid].time <= pt) { found = mid; lo = mid + 1; }
-        else { hi = mid - 1; }
-      }
-      if (found < 0) continue;
-      const auto& globalMap = remapIt->second;
-      if (found >= static_cast<int>(globalMap.size())) continue;
-      fPhoton_SegmentIndex[p] = globalMap[found];
+    // fPhotonTimeRetained[p] is in ns (set in AddOpticalPhoton via time/ns).
+    // segs[i].time is also in ns (set in AddTrackSegment via time/ns).
+    G4double pt = fPhotonTimeRetained[p];
+    // Largest segment idx with seg.time <= pt — that is the emitting step.
+    int lo = 0, hi = static_cast<int>(segs.size()) - 1, found = -1;
+    while (lo <= hi) {
+      int mid = (lo + hi) / 2;
+      if (segs[mid].time <= pt) { found = mid; lo = mid + 1; }
+      else { hi = mid - 1; }
     }
+    if (found < 0) continue;
+    const auto& globalMap = remapIt->second;
+    if (found >= static_cast<int>(globalMap.size())) continue;
+    fPhoton_SegmentIndex[p] = globalMap[found];
   }
 
-  // === Step 3: Convert genealogy map to particle arrays with extended genealogy ===
-  fNParticles = fGenealogyToPhotonIDs.size();
-
-  for (const auto& pair : fGenealogyToPhotonIDs) {
-    const std::vector<G4int>& genealogy = pair.first;
-    const std::vector<G4int>& photonIDs = pair.second;
-
-    // Store genealogy (categorized track IDs only)
-    fParticle_GenealogySize.push_back(genealogy.size());
-    for (G4int trackID : genealogy) {
-      fParticle_GenealogyData.push_back(trackID);
-    }
-
-    // Store photon IDs for this particle
-    fParticle_PhotonIDsSize.push_back(photonIDs.size());
-    for (G4int photonID : photonIDs) {
-      fParticle_PhotonIDsData.push_back(photonID);
-    }
-
-    // Build and store extended genealogy (all meaningful track IDs in ancestry)
-    // Use the last track in genealogy as the starting point
-    std::set<G4int> extGenealogySet;
-    if (!genealogy.empty()) {
-      G4int leafTrackID = genealogy.back();
-      std::vector<G4int> extGen = BuildExtendedGenealogy(leafTrackID);
-      // Filter to only include meaningful tracks
-      for (G4int tid : extGen) {
-        if (meaningfulTrackIDs.count(tid) > 0) {
-          extGenealogySet.insert(tid);
-        }
-      }
-    }
-    // Convert set to vector maintaining order
-    std::vector<G4int> extGenealogyVec(extGenealogySet.begin(), extGenealogySet.end());
-    std::sort(extGenealogyVec.begin(), extGenealogyVec.end());
-
-    fParticle_ExtGenealogySize.push_back(extGenealogyVec.size());
-    for (G4int tid : extGenealogyVec) {
-      fParticle_ExtGenealogyData.push_back(tid);
-    }
-  }
-
-  // Store every registered Geant4 track. The Python categorizer needs
-  // the full ancestry chain (parent_id + pdg) for every intermediate
-  // track — not just categorized + their immediate parents. Iterating
-  // fTrackRegistry directly preserves the prior track_id-sorted order
-  // (std::map) and adds non-categorized non-direct-parent tracks
-  // (e.g. pi0 ancestors of a Gamma; intermediate hadrons in the
-  // secondary-pion category-parent walk).
+  // === Track info — every registered Geant4 track ===
+  // The Python categorizer needs the full ancestry chain (parent_id +
+  // pdg) for every intermediate track in order to walk back to the
+  // categorized ancestor. std::map iteration is track-id ascending,
+  // which is chronological order. Optical photons were excluded at
+  // RegisterTrack time.
   for (const auto& pair : fTrackRegistry) {
     const TrackInfo& info = pair.second;
     fTrackInfo_TrackID.push_back(info.trackID);
-    fTrackInfo_Category.push_back(info.category);  // -1 = not categorized
-    fTrackInfo_SubID.push_back(info.subID);        // -1 = not categorized
     fTrackInfo_PosX.push_back(info.posX / mm);
     fTrackInfo_PosY.push_back(info.posY / mm);
     fTrackInfo_PosZ.push_back(info.posZ / mm);
@@ -695,7 +574,6 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
                                   G4double time, G4double wavelength,
                                   G4double polX, G4double polY, G4double polZ,
                                   const G4String& process,
-                                  const std::vector<G4int>& genealogy,
                                   G4int immediateParentTrackID)
 {
   // Always fill the 2D histogram for aggregated data
@@ -706,19 +584,19 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
     // Calculate opening angle with respect to muon direction (0,0,1)
     // Assume muon travels along +Z axis
     G4double muon_z = 1.0;  // Unit vector in Z direction
-    G4double dot_product = dz * muon_z;  // dx*0 + dy*0 + dz*1 = dz
+    G4double dot_product = dz * muon_z;
     G4double opening_angle = std::acos(std::max(-1.0, std::min(1.0, dot_product)));
 
     fPhotonHist_AngleDistance->Fill(opening_angle, distance);
 
     // Fill time vs distance histogram
-    G4double time_ns = time / ns;  // Convert to ns
+    G4double time_ns = time / ns;
     fPhotonHist_TimeDistance->Fill(distance, time_ns);
   }
 
   // Fill wavelength histogram
   if (fPhotonHist_Wavelength) {
-    G4double wavelength_nm = wavelength / nm;  // Convert to nm
+    G4double wavelength_nm = wavelength / nm;
     fPhotonHist_Wavelength->Fill(wavelength_nm);
   }
 
@@ -733,29 +611,19 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
     fPhotonDirZ.push_back(dz);
     fPhotonTime.push_back(time / ns); // Store in ns
     fPhotonWavelength.push_back(wavelength / nm); // Store in nm
-    fPhotonPolX.push_back(polX);     // Store polarization (unit vector)
+    fPhotonPolX.push_back(polX);
     fPhotonPolY.push_back(polY);
     fPhotonPolZ.push_back(polZ);
     if (fStoreProcessName) {
       fPhotonProcess.push_back(std::string(process));
     }
 
-    // Track this photon's genealogy. Photon ID is the global index across
-    // the whole event (NOT fPhotonPosX.size()-1, which resets on every
-    // FlushPhotonChunk under streaming). Keep using fEventPhotonCount as
-    // the running counter; the mapping into fParticle_PhotonIDsData stays
-    // intact across chunk boundaries.
-    G4int photonIndex = static_cast<G4int>(fEventPhotonCount);
-    fGenealogyToPhotonIDs[genealogy].push_back(photonIndex);
     ++fEventPhotonCount;
 
     // Retained-across-event arrays needed by the segment-index compute
-    // at EndEvent. Only kept when the feature is enabled — they would
-    // otherwise grow to ~360 MB at 30 M photons for no benefit.
-    if (fStoreSegmentIndex) {
-      fPhotonImmediateParentTrackID.push_back(immediateParentTrackID);
-      fPhotonTimeRetained.push_back(time / ns);
-    }
+    // at EndEvent.
+    fPhotonImmediateParentTrackID.push_back(immediateParentTrackID);
+    fPhotonTimeRetained.push_back(time / ns);
 
     // Auto-flush when the chunk is full (skipped when streaming is off
     // for debug/A-B comparison; in that mode the only flush is at
@@ -771,38 +639,21 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
 
 void DataManager::AddEnergyDeposit(G4double x, G4double y, G4double z,
                                   G4double energy, G4double stepLength,
-                                  G4double time,
-                                  const G4String& particleName,
-                                  G4int trackID, G4int parentID)
+                                  const G4String& particleName)
 {
-  // Fill the dE/dx histogram for aggregated data
-  // Skip photons (gamma and opticalphoton) - dE/dx is not meaningful for them
-  if (fdEdxHist_Distance && particleName != "gamma" && particleName != "opticalphoton") {
-    // Only fill if step length is positive to avoid division by zero
-    if (stepLength > 0.0) {
-      // Calculate distance from origin
-      G4double distance = std::sqrt(x*x + y*y + z*z) / mm;  // Convert to mm
+  // Histogram-only. Skip photons (gamma and opticalphoton) - dE/dx is
+  // not meaningful for them.
+  if (!fdEdxHist_Distance) return;
+  if (particleName == "gamma" || particleName == "opticalphoton") return;
+  // Only fill if step length is positive to avoid division by zero.
+  if (stepLength <= 0.0) return;
 
-      // Calculate dE/dx in keV/mm
-      G4double stepLength_mm = stepLength / mm;
-      G4double dEdx = (energy / keV) / stepLength_mm;
+  G4double distance = std::sqrt(x*x + y*y + z*z) / mm;  // Convert to mm
+  G4double stepLength_mm = stepLength / mm;
+  G4double dEdx = (energy / keV) / stepLength_mm;
 
-      // Fill histogram: X-axis is dE/dx, Y-axis is distance
-      fdEdxHist_Distance->Fill(dEdx, distance);
-    }
-  }
-
-  // Conditionally store individual energy deposit data
-  if (fStoreIndividualEdeps) {
-    fEdepPosX.push_back(x / mm);        // Store in mm
-    fEdepPosY.push_back(y / mm);
-    fEdepPosZ.push_back(z / mm);
-    fEdepEnergy.push_back(energy / MeV); // Store in MeV
-    fEdepTime.push_back(time / ns);      // Store in ns
-    fEdepParticle.push_back(std::string(particleName));
-    fEdepTrackID.push_back(trackID);
-    fEdepParentID.push_back(parentID);
-  }
+  // Fill histogram: X-axis is dE/dx, Y-axis is distance
+  fdEdxHist_Distance->Fill(dEdx, distance);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -814,8 +665,6 @@ void DataManager::RegisterTrack(G4int trackID, const G4String& particleName, G4i
 {
   TrackInfo info;
   info.trackID = trackID;
-  info.category = -1;  // Not yet categorized
-  info.subID = -1;
   info.posX = position.x();
   info.posY = position.y();
   info.posZ = position.z();
@@ -831,18 +680,6 @@ void DataManager::RegisterTrack(G4int trackID, const G4String& particleName, G4i
   info.preMomentumDir = momentum.unit();  // Store initial momentum
 
   fTrackRegistry[trackID] = info;
-}
-
-//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
-
-void DataManager::UpdateTrackCategory(G4int trackID, G4int category, G4int subID, G4int categoryParentTrackID)
-{
-  auto it = fTrackRegistry.find(trackID);
-  if (it != fTrackRegistry.end()) {
-    it->second.category = category;
-    it->second.subID = subID;
-    it->second.parentTrackID = categoryParentTrackID;
-  }
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -868,33 +705,6 @@ TrackInfo* DataManager::GetTrackInfo(G4int trackID)
     return &(it->second);
   }
   return nullptr;
-}
-
-//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
-
-std::vector<G4int> DataManager::BuildGenealogy(G4int trackID)
-{
-  std::vector<G4int> genealogy;
-
-  TrackInfo* info = GetTrackInfo(trackID);
-  if (!info) return genealogy;
-
-  // Build ancestry chain by following parent track IDs
-  // Only include tracks that have been assigned a category
-  G4int currentTrackID = trackID;
-  while (currentTrackID > 0) {
-    TrackInfo* currentInfo = GetTrackInfo(currentTrackID);
-    if (!currentInfo) break;
-
-    // Only add to genealogy if this track has a category assigned
-    if (currentInfo->category >= 0) {
-      genealogy.insert(genealogy.begin(), currentTrackID);  // Insert at front to maintain order
-    }
-
-    currentTrackID = currentInfo->parentTrackID;
-  }
-
-  return genealogy;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -960,74 +770,6 @@ void DataManager::IncrementCherenkovCount(G4int trackID)
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-std::vector<G4int> DataManager::BuildExtendedGenealogy(G4int trackID)
-{
-  std::vector<G4int> extGenealogy;
-
-  // Walk up the ancestry using fAllTrackSegments (which has parent info)
-  G4int currentTrackID = trackID;
-  while (currentTrackID > 0) {
-    auto it = fAllTrackSegments.find(currentTrackID);
-    if (it == fAllTrackSegments.end()) break;
-
-    // Add this track to the genealogy (at front to maintain root->leaf order)
-    extGenealogy.insert(extGenealogy.begin(), currentTrackID);
-
-    // Move to parent
-    currentTrackID = it->second.parentID;
-  }
-
-  return extGenealogy;
-}
-
-//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
-
-void DataManager::RelabelPhotonsForDeflection(G4int newTrackID, G4int oldTrackID, G4double deflectionTime)
-{
-  // Build the new genealogy for the deflected track
-  std::vector<G4int> newGenealogy = BuildGenealogy(newTrackID);
-
-  // Build the old genealogy (parent track's genealogy)
-  std::vector<G4int> oldGenealogy = BuildGenealogy(oldTrackID);
-
-  // Find photons in the old genealogy that were created after deflection time
-  auto it = fGenealogyToPhotonIDs.find(oldGenealogy);
-  if (it == fGenealogyToPhotonIDs.end()) {
-    return; // No photons with this genealogy
-  }
-
-  std::vector<G4int>& oldPhotonIDs = it->second;
-  std::vector<G4int> photonsToMove;
-
-  // Find photons created at or after deflection time
-  for (G4int photonID : oldPhotonIDs) {
-    if (photonID >= 0 && photonID < static_cast<G4int>(fPhotonTime.size())) {
-      G4double photonTime = fPhotonTime[photonID] * ns; // Convert back to GEANT4 units
-      if (photonTime >= deflectionTime) {
-        photonsToMove.push_back(photonID);
-      }
-    }
-  }
-
-  if (photonsToMove.empty()) {
-    return; // No photons to relabel
-  }
-
-  // Remove moved photons from old genealogy
-  for (G4int photonID : photonsToMove) {
-    oldPhotonIDs.erase(std::remove(oldPhotonIDs.begin(), oldPhotonIDs.end(), photonID), oldPhotonIDs.end());
-  }
-
-  // Add photons to new genealogy
-  std::vector<G4int>& newPhotonIDs = fGenealogyToPhotonIDs[newGenealogy];
-  newPhotonIDs.insert(newPhotonIDs.end(), photonsToMove.begin(), photonsToMove.end());
-
-  G4cout << "      >>> Relabeled " << photonsToMove.size() << " photons from genealogy ending with "
-         << oldTrackID << " to genealogy ending with " << newTrackID << G4endl;
-}
-
-//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
-
 void DataManager::ClearEventData()
 {
   fPhotonPosX.clear();
@@ -1049,32 +791,12 @@ void DataManager::ClearEventData()
   fPhotonsInChunk = 0;
   fChunkStartID = 0;
 
-  // Clear particle system
-  fNParticles = 0;
-  fParticle_GenealogySize.clear();
-  fParticle_GenealogyData.clear();
-  fParticle_PhotonIDsSize.clear();
-  fParticle_PhotonIDsData.clear();
-  fParticle_ExtGenealogySize.clear();
-  fParticle_ExtGenealogyData.clear();
-  fGenealogyToPhotonIDs.clear();
-
   // Clear temporary track segment storage
   fAllTrackSegments.clear();
 
-  // Clear meaningful tracks output
-  fNMeaningfulTracks = 0;
-  fMTrack_TrackID.clear();
-  fMTrack_ParentID.clear();
-  fMTrack_PDG.clear();
-  fMTrack_InitialEnergy.clear();
-  fMTrack_ParticleName.clear();
-  fMTrack_NCherenkov.clear();
-  fMTrack_SegmentOffset.clear();
-  fMTrack_NSegments.clear();
-
   // Clear segments output
   fNSegments = 0;
+  fSegment_TrackID.clear();
   fSegment_StartX.clear();
   fSegment_StartY.clear();
   fSegment_StartZ.clear();
@@ -1089,20 +811,8 @@ void DataManager::ClearEventData()
   fSegment_BetaStart.clear();
   fSegment_NCherenkov.clear();
 
-  // Clear energy deposit data
-  fEdepPosX.clear();
-  fEdepPosY.clear();
-  fEdepPosZ.clear();
-  fEdepEnergy.clear();
-  fEdepTime.clear();
-  fEdepParticle.clear();
-  fEdepTrackID.clear();
-  fEdepParentID.clear();
-
   // Clear track info arrays
   fTrackInfo_TrackID.clear();
-  fTrackInfo_Category.clear();
-  fTrackInfo_SubID.clear();
   fTrackInfo_PosX.clear();
   fTrackInfo_PosY.clear();
   fTrackInfo_PosZ.clear();
@@ -1115,17 +825,9 @@ void DataManager::ClearEventData()
   fTrackInfo_PDG.clear();
   fTrackInfo_CreatorProcess.clear();
 
-  // Reset category counters
-  fNPrimaries = 0;
-  fNDecayElectrons = 0;
-  fNSecondaryPions = 0;
-  fNGammas = 0;
-
   // Clear track registry for new event
   ClearTrackRegistry();
 }
-
-//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
@@ -1139,97 +841,14 @@ DataManager::~DataManager()
       // Suppress exceptions in destructor
     }
   }
-  
-  // Clean up ROOT objects - histograms are already handled by Finalize()
-  // Just make sure pointers are null
+
+  // Clean up ROOT objects - histograms are already handled by Finalize().
   fPhotonHist_AngleDistance = nullptr;
   fdEdxHist_Distance = nullptr;
   fPhotonHist_TimeDistance = nullptr;
   fPhotonHist_Wavelength = nullptr;
   fTree = nullptr;
   fRootFile.reset();
-}
-
-//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
-
-void DataManager::PrintPionSummary(G4int eventID)
-{
-  G4cout << "\n";
-  G4cout << "╔════════════════════════════════════════════════════════════════╗" << G4endl;
-  G4cout << "║          PION SUMMARY FOR EVENT " << eventID << "                          ║" << G4endl;
-  G4cout << "╚════════════════════════════════════════════════════════════════╝" << G4endl;
-
-  // Count pions by category
-  G4int primaryPions = 0;
-  G4int secondaryPions = 0;
-  G4int uncategorizedPions = 0;
-
-  // Store pion track IDs for detailed printout
-  std::vector<G4int> primaryIDs, secondaryIDs, uncategorizedIDs;
-
-  for (const auto& entry : fTrackRegistry) {
-    const TrackInfo& info = entry.second;
-    if (info.particleName == "pi+" || info.particleName == "pi-") {
-      if (info.category == kPrimary) {
-        primaryPions++;
-        primaryIDs.push_back(info.trackID);
-      } else if (info.category == kSecondaryPion) {
-        secondaryPions++;
-        secondaryIDs.push_back(info.trackID);
-      } else {
-        uncategorizedPions++;
-        uncategorizedIDs.push_back(info.trackID);
-      }
-    }
-  }
-
-  G4cout << "\nCATEGORY COUNTS:" << G4endl;
-  G4cout << "  Primary pions:       " << primaryPions << G4endl;
-  G4cout << "  Secondary pions:     " << secondaryPions << G4endl;
-  G4cout << "  Uncategorized pions: " << uncategorizedPions << G4endl;
-  G4cout << "  TOTAL pions:         " << (primaryPions + secondaryPions + uncategorizedPions) << G4endl;
-
-  if (uncategorizedPions > 0) {
-    G4cout << "\n⚠ WARNING: Found " << uncategorizedPions << " uncategorized pion(s)!" << G4endl;
-    G4cout << "\nUNCATEGORIZED PION DETAILS:" << G4endl;
-    for (G4int trackID : uncategorizedIDs) {
-      const TrackInfo& info = fTrackRegistry[trackID];
-      G4cout << "  ─────────────────────────────────────────" << G4endl;
-      G4cout << "  TrackID: " << trackID << G4endl;
-      G4cout << "  Particle: " << info.particleName << " (PDG: " << info.pdgCode << ")" << G4endl;
-      G4cout << "  ParentID: " << info.parentTrackID << G4endl;
-
-      TrackInfo* parentInfo = GetTrackInfo(info.parentTrackID);
-      if (parentInfo) {
-        G4cout << "  Parent: " << parentInfo->particleName
-               << " (category=" << parentInfo->category << ")" << G4endl;
-      }
-
-      G4cout << "  Energy: " << info.energy << " MeV" << G4endl;
-      G4cout << "  Position: (" << info.posX << ", " << info.posY << ", " << info.posZ << ")" << G4endl;
-    }
-  }
-
-  if (secondaryPions > 0) {
-    G4cout << "\nSECONDARY PION DETAILS:" << G4endl;
-    for (G4int trackID : secondaryIDs) {
-      const TrackInfo& info = fTrackRegistry[trackID];
-      G4cout << "  ─────────────────────────────────────────" << G4endl;
-      G4cout << "  TrackID: " << trackID << " (subID: " << info.subID << ")" << G4endl;
-      G4cout << "  Particle: " << info.particleName << G4endl;
-      G4cout << "  ParentID: " << info.parentTrackID << G4endl;
-
-      TrackInfo* parentInfo = GetTrackInfo(info.parentTrackID);
-      if (parentInfo) {
-        G4cout << "  Parent: " << parentInfo->particleName
-               << " (category=" << parentInfo->category << ")" << G4endl;
-      }
-
-      G4cout << "  Energy: " << info.energy << " MeV" << G4endl;
-    }
-  }
-
-  G4cout << "\n════════════════════════════════════════════════════════════════\n" << G4endl;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

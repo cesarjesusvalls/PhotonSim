@@ -46,7 +46,9 @@ class DataManager;
 ///
 /// This class defines commands for controlling data storage:
 /// - /photon/storeIndividual [true/false]
-/// - /edep/storeIndividual [true/false]
+/// - /photon/storeProcessName [true/false]
+/// - /photon/streamPhotonsChunked [true/false]
+/// - /photon/emitRawSegments [true/false]
 /// - /output/filename [filename.root]
 
 class DataManagerMessenger: public G4UImessenger
@@ -61,11 +63,8 @@ class DataManagerMessenger: public G4UImessenger
     DataManager*                   fDataManager = nullptr;
 
     G4UIdirectory*                 fPhotonDir = nullptr;
-    G4UIdirectory*                 fEdepDir = nullptr;
     G4UIdirectory*                 fOutputDir = nullptr;
     G4UIcmdWithABool*              fStorePhotonsCmd = nullptr;
-    G4UIcmdWithABool*              fStoreEdepsCmd = nullptr;
-    G4UIcmdWithABool*              fStoreSegmentIndexCmd = nullptr;
     G4UIcmdWithABool*              fStoreProcessNameCmd = nullptr;
     G4UIcmdWithABool*              fStreamPhotonsChunkedCmd = nullptr;
     G4UIcmdWithABool*              fEmitRawSegmentsCmd = nullptr;

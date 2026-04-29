@@ -46,19 +46,12 @@ class TH1D;
 namespace PhotonSim
 {
 
-/// Category enumeration for photon classification
-enum PhotonCategory {
-  kPrimary = 0,
-  kDecayElectron = 1,
-  kSecondaryPion = 2,
-  kGamma = 3
-};
-
-/// Structure to hold track information for categorized particles
+/// Per-track bookkeeping kept across an event. Categorization moved to
+/// LUCiD (`lucid/sources/particle_categorization.py`); the C++ side only
+/// retains kinematic / process-name fields plus the synchronized triplet
+/// the deflection-handling block in SteppingAction reads/writes.
 struct TrackInfo {
   G4int trackID;
-  G4int category;
-  G4int subID;
   G4double posX, posY, posZ;
   G4double dirX, dirY, dirZ;
   G4double energy;
@@ -72,11 +65,6 @@ struct TrackInfo {
   G4ThreeVector preMomentumDir;     // Momentum direction at previous step
   G4ThreeVector preMomentumPos;     // Position where preMomentumDir was recorded
   G4double preMomentumTime = 0.0;   // Time when preMomentumDir was recorded
-
-  // For photon relabeling in deflection handling
-  G4bool needsPhotonRelabeling = false;
-  G4int originalParentID = -1;
-  G4double relabelingTime = 0.0;
 };
 
 /// Structure to hold a single track segment (one G4 step)
@@ -108,50 +96,47 @@ class DataManager
   public:
     static DataManager* GetInstance();
     static void DeleteInstance();
-    
+
     void Initialize(const G4String& filename = "");
     void Finalize();
-    
+
     // Reset method for proper cleanup
     void Reset();
-    
+
     void BeginEvent(G4int eventID, G4double primaryEnergy,
                     G4int genieEntryID = -1,
                     G4int incomingNuPdg = 0,
                     G4double incomingNuKE = 0.0);
     void EndEvent();
-    
+
     void AddOpticalPhoton(G4double x, G4double y, G4double z,
                          G4double dx, G4double dy, G4double dz,
                          G4double time, G4double wavelength,
                          G4double polX, G4double polY, G4double polZ,
                          const G4String& process,
-                         const std::vector<G4int>& genealogy,
-                         G4int immediateParentTrackID = 0);
+                         G4int immediateParentTrackID);
 
+    // Histogram-only — fills `dEdxHist_Distance`. The legacy Edep_*
+    // ROOT branches are gone; LUCiD reads the histogram alone via
+    // `lucid/siren/training/photonsim_data/build_dedx_table.py`.
     void AddEnergyDeposit(G4double x, G4double y, G4double z,
                          G4double energy, G4double stepLength,
-                         G4double time,
-                         const G4String& particleName,
-                         G4int trackID = -1,
-                         G4int parentID = -1);
+                         const G4String& particleName);
 
-    // Enhanced track registry for category-based system
+    // Track registry — kinematics + process name only. Categorization
+    // moved to LUCiD; C++ no longer assigns categories or sub-IDs.
     void RegisterTrack(G4int trackID, const G4String& particleName, G4int parentID,
                       const G4ThreeVector& position, const G4ThreeVector& momentum,
                       G4double energy, G4double time, G4int pdgCode,
                       const G4String& creatorProcess);
-    void UpdateTrackCategory(G4int trackID, G4int category, G4int subID, G4int categoryParentTrackID);
     void UpdatePionMomentum(G4int trackID, const G4ThreeVector& momentumDir,
                            const G4ThreeVector& position, G4double time);
     TrackInfo* GetTrackInfo(G4int trackID);
-    std::vector<G4int> BuildGenealogy(G4int trackID);
     void ClearTrackRegistry();
 
-    // Photon relabeling for deflection handling
-    void RelabelPhotonsForDeflection(G4int newTrackID, G4int oldTrackID, G4double deflectionTime);
-
-    // Track segment system for meaningful tracks
+    // Track segment system — every non-optical-photon G4 step is
+    // recorded; the meaningful-tracks filter is applied in LUCiD via
+    // groupby on Segment_TrackID + Segment_NCherenkov.
     void AddTrackSegment(G4int trackID, G4int parentID, G4int pdgCode,
                         const G4String& particleName, G4double initialEnergy,
                         G4double startX, G4double startY, G4double startZ,
@@ -160,43 +145,29 @@ class DataManager
                         G4double edep, G4double time,
                         G4double betaStart, G4int nCherenkov);
     void IncrementCherenkovCount(G4int trackID);
-    std::vector<G4int> BuildExtendedGenealogy(G4int trackID);
 
-    // Get next SubID for a category
-    G4int GetNextPrimaryID() { return fNPrimaries++; }
-    G4int GetNextDecayElectronID() { return fNDecayElectrons++; }
-    G4int GetNextSecondaryPionID() { return fNSecondaryPions++; }
-    G4int GetNextGammaID() { return fNGammas++; }
-    
     // Control methods for individual data storage
     void SetStoreIndividualPhotons(bool store) { fStoreIndividualPhotons = store; }
-    void SetStoreIndividualEdeps(bool store) { fStoreIndividualEdeps = store; }
-    void SetStoreSegmentIndex(bool store) { fStoreSegmentIndex = store; }
     void SetStoreProcessName(bool store) { fStoreProcessName = store; }
     void SetStreamPhotonsChunked(bool stream) { fStreamPhotonsChunked = stream; }
     void SetEmitRawSegments(bool emit) { fEmitRawSegments = emit; }
     bool GetStoreIndividualPhotons() const { return fStoreIndividualPhotons; }
-    bool GetStoreIndividualEdeps() const { return fStoreIndividualEdeps; }
-    bool GetStoreSegmentIndex() const { return fStoreSegmentIndex; }
     bool GetStoreProcessName() const { return fStoreProcessName; }
     bool GetStreamPhotonsChunked() const { return fStreamPhotonsChunked; }
     bool GetEmitRawSegments() const { return fEmitRawSegments; }
-    
+
     // Output filename control
     void SetOutputFilename(const G4String& filename) { fOutputFilename = filename; }
     G4String GetOutputFilename() const { return fOutputFilename; }
 
-    // Debug output
-    void PrintPionSummary(G4int eventID);
-
   private:
     DataManager() = default;
     ~DataManager();
-    
+
     // Delete copy constructor and assignment operator
     DataManager(const DataManager&) = delete;
     DataManager& operator=(const DataManager&) = delete;
-    
+
     static DataManager* fInstance;
 
     std::unique_ptr<TFile> fRootFile;
@@ -220,12 +191,11 @@ class DataManager
     std::vector<float> fChunk_Time, fChunk_Wavelength;
     std::vector<float> fChunk_PolX, fChunk_PolY, fChunk_PolZ;
     std::vector<std::string> fChunk_Process;
-    
+
     // Event-level data
     G4int fEventID = 0;
     G4double fPrimaryEnergy = 0.0;
     G4int fNOpticalPhotons = 0;
-    G4int fNEnergyDeposits = 0;
 
     // GENIE provenance (set per event by BeginEvent; -1 / 0 / NaN when the
     // event was fired from the particle gun). These are written as ROOT
@@ -234,7 +204,7 @@ class DataManager
     G4int    fGenieEntryID  = -1;
     G4int    fIncomingNuPdg = 0;
     G4double fIncomingNuKE  = 0.0;
-    
+
     // Optical photon data (vectors for multiple photons per event)
     std::vector<G4double> fPhotonPosX;
     std::vector<G4double> fPhotonPosY;
@@ -249,11 +219,11 @@ class DataManager
     std::vector<G4double> fPhotonPolZ;
     std::vector<std::string> fPhotonProcess;
 
-    // Per-photon link to the merged segment that emitted it. Filled at EndEvent
-    // by walking each photon's immediate-parent track segments by time and
-    // remapping unmerged sub-step -> merged segment index. -1 sentinel when the
-    // parent track has no output segments (non-meaningful track or unknown).
-    // Only written to ROOT when fStoreSegmentIndex is true.
+    // Per-photon link to the merged segment that emitted it. Filled at
+    // EndEvent by walking each photon's immediate-parent track segments
+    // by time and remapping unmerged sub-step -> merged segment index.
+    // After the meaningful-tracks-filter drop in Stage 5a, every G4
+    // track has segments recorded, so the -1 sentinel never fires.
     std::vector<G4int> fPhoton_SegmentIndex;
 
     // Transient: immediate Geant4 parent track ID per photon, captured at
@@ -264,40 +234,19 @@ class DataManager
     // Transient retained-across-event copy of photon emission times. The
     // streamed `fPhotonTime` vector gets flushed every fPhotonChunkSize
     // photons (so peak memory stays bounded), but the segment-index
-    // compute at EndEvent needs every photon's time. We retain a parallel
-    // copy here only when fStoreSegmentIndex is true. Not written to ROOT.
+    // compute at EndEvent needs every photon's time. Not written to ROOT.
     std::vector<G4double> fPhotonTimeRetained;
 
-    // Particle system: unique genealogies and their photons
-    G4int fNParticles = 0;
-    std::vector<G4int> fParticle_GenealogySize;
-    std::vector<G4int> fParticle_GenealogyData;
-    std::vector<G4int> fParticle_PhotonIDsSize;
-    std::vector<G4int> fParticle_PhotonIDsData;
-
-    // Internal map for building particles during event
-    std::map<std::vector<G4int>, std::vector<G4int>> fGenealogyToPhotonIDs;
-
-    // Extended genealogy per particle (all meaningful track IDs in ancestry)
-    std::vector<G4int> fParticle_ExtGenealogySize;
-    std::vector<G4int> fParticle_ExtGenealogyData;
-
-    // Temporary storage for track segments during event (all tracks)
+    // Temporary storage for track segments during event (every
+    // non-optical-photon G4 track).
     std::map<G4int, TrackSegmentInfo> fAllTrackSegments;
 
-    // Output: Meaningful tracks table (tracks contributing to Cherenkov emission)
-    G4int fNMeaningfulTracks = 0;
-    std::vector<G4int> fMTrack_TrackID;
-    std::vector<G4int> fMTrack_ParentID;
-    std::vector<G4int> fMTrack_PDG;
-    std::vector<G4double> fMTrack_InitialEnergy;
-    std::vector<std::string> fMTrack_ParticleName;
-    std::vector<G4int> fMTrack_NCherenkov;       // Number of Cherenkov photons produced
-    std::vector<G4int> fMTrack_SegmentOffset;    // Offset into segment arrays
-    std::vector<G4int> fMTrack_NSegments;        // Number of segments for this track
-
-    // Output: Segments table (all steps for meaningful tracks)
+    // Output: Segments table — every G4 step of every non-optical-photon
+    // track. Track ownership is inline via `Segment_TrackID`. LUCiD's
+    // `derive_meaningful_tracks` filters Cherenkov-producing tracks +
+    // ancestors via groupby on this branch.
     G4int fNSegments = 0;
+    std::vector<G4int>    fSegment_TrackID;
     std::vector<G4double> fSegment_StartX;
     std::vector<G4double> fSegment_StartY;
     std::vector<G4double> fSegment_StartZ;
@@ -311,32 +260,15 @@ class DataManager
     std::vector<G4double> fSegment_Time;
     std::vector<G4double> fSegment_BetaStart;    // β = v/c at segment start (after merging, taken from first sub-step)
     std::vector<G4int>    fSegment_NCherenkov;   // Cherenkov photons emitted in segment (sum across merged sub-steps)
-    
-    // Energy deposit data (vectors for multiple deposits per event)
-    std::vector<G4double> fEdepPosX;
-    std::vector<G4double> fEdepPosY;
-    std::vector<G4double> fEdepPosZ;
-    std::vector<G4double> fEdepEnergy;
-    std::vector<G4double> fEdepTime;
-    std::vector<std::string> fEdepParticle;
-    std::vector<G4int> fEdepTrackID;
-    std::vector<G4int> fEdepParentID;
-    
+
     bool fFinalized = false;  // Flag to prevent double finalization
 
-    // Enhanced track registry: map track IDs to full TrackInfo
+    // Track registry: full kinematic / process info per Geant4 track.
     std::map<G4int, TrackInfo> fTrackRegistry;
 
-    // Category counters for current event
-    G4int fNPrimaries = 0;
-    G4int fNDecayElectrons = 0;
-    G4int fNSecondaryPions = 0;
-    G4int fNGammas = 0;
-
-    // Event-level track information (parallel arrays for categorized tracks)
+    // Event-level track information (one row per registered Geant4 track,
+    // optical photons excluded at registration time).
     std::vector<G4int> fTrackInfo_TrackID;
-    std::vector<G4int> fTrackInfo_Category;
-    std::vector<G4int> fTrackInfo_SubID;
     std::vector<G4double> fTrackInfo_PosX;
     std::vector<G4double> fTrackInfo_PosY;
     std::vector<G4double> fTrackInfo_PosZ;
@@ -351,11 +283,6 @@ class DataManager
 
     // Control flags for individual data storage
     bool fStoreIndividualPhotons = true;
-    bool fStoreIndividualEdeps = true;
-    // When true, fill and write Photon_SegmentIndex (one int32 per photon
-    // pointing into Segment_*). Default off — opt-in for downstream
-    // segment <-> sensor correspondence consumers.
-    bool fStoreSegmentIndex = false;
     // When true, write PhotonProcess (Geant4 emission process name). Default
     // off — every photon is "Cerenkov" in the Cherenkov-only detector, so
     // storing it is dead weight unless scintillation/WLS materials are added.
@@ -376,7 +303,7 @@ class DataManager
     // Chunk size for OpticalPhotonsRaw entries. 100,000 photons ≈ 4 MB of
     // active streamed-vector memory.
     static constexpr Long64_t fPhotonChunkSize = 100000;
-    
+
     // 2D ROOT histograms for aggregated data (500x500 bins)
     TH2D* fPhotonHist_AngleDistance = nullptr;  // Opening angle vs distance
     TH2D* fdEdxHist_Distance = nullptr;         // dE/dx vs distance
@@ -384,10 +311,10 @@ class DataManager
 
     // 1D ROOT histogram for wavelength distribution
     TH1D* fPhotonHist_Wavelength = nullptr;     // Photon wavelength distribution
-    
+
     // Output filename
     G4String fOutputFilename = "optical_photons.root";
-    
+
     void ClearEventData();
 
     // Flush the currently-buffered photons in the streamed `fPhoton*`

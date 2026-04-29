@@ -27,9 +27,6 @@ Standard test configurations for different particle types (1 GeV, 20 events each
 - `validate_photonsim_rotation.py` - Validates rotation invariance for any particle type
 - `run_all_validation_tests.sh` - Master script to run all validation tests
 
-### Analysis Tools
-- `analyze_categories.py` - Statistical analysis of category distribution
-
 ## Usage
 
 ### Quick Start: Run All Validation Tests

@@ -44,37 +44,19 @@ namespace PhotonSim
 DataManagerMessenger::DataManagerMessenger()
 {
   fDataManager = DataManager::GetInstance();
-  
+
   fPhotonDir = new G4UIdirectory("/photon/");
   fPhotonDir->SetGuidance("Commands for photon data control");
-  
-  fEdepDir = new G4UIdirectory("/edep/");
-  fEdepDir->SetGuidance("Commands for energy deposit data control");
-  
+
   fOutputDir = new G4UIdirectory("/output/");
   fOutputDir->SetGuidance("Commands for output file control");
-  
+
   fStorePhotonsCmd = new G4UIcmdWithABool("/photon/storeIndividual", this);
   fStorePhotonsCmd->SetGuidance("Enable/disable storage of individual photon data");
   fStorePhotonsCmd->SetGuidance("When disabled, only 2D histograms are filled");
   fStorePhotonsCmd->SetParameterName("store", false);
   fStorePhotonsCmd->SetDefaultValue(true);
   fStorePhotonsCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
-  
-  fStoreEdepsCmd = new G4UIcmdWithABool("/edep/storeIndividual", this);
-  fStoreEdepsCmd->SetGuidance("Enable/disable storage of individual energy deposit data");
-  fStoreEdepsCmd->SetGuidance("When disabled, only 2D histograms are filled");
-  fStoreEdepsCmd->SetParameterName("store", false);
-  fStoreEdepsCmd->SetDefaultValue(true);
-  fStoreEdepsCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
-
-  fStoreSegmentIndexCmd = new G4UIcmdWithABool("/photon/storeSegmentIndex", this);
-  fStoreSegmentIndexCmd->SetGuidance("Enable/disable per-photon segment index branch");
-  fStoreSegmentIndexCmd->SetGuidance("Adds Photon_SegmentIndex (int) pointing into Segment_* arrays.");
-  fStoreSegmentIndexCmd->SetGuidance("Required for downstream segment <-> sensor correspondence.");
-  fStoreSegmentIndexCmd->SetParameterName("store", false);
-  fStoreSegmentIndexCmd->SetDefaultValue(false);
-  fStoreSegmentIndexCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
 
   fStoreProcessNameCmd = new G4UIcmdWithABool("/photon/storeProcessName", this);
   fStoreProcessNameCmd->SetGuidance("Enable/disable PhotonProcess branch on OpticalPhotonsRaw");
@@ -115,11 +97,8 @@ DataManagerMessenger::DataManagerMessenger()
 DataManagerMessenger::~DataManagerMessenger()
 {
   delete fPhotonDir;
-  delete fEdepDir;
   delete fOutputDir;
   delete fStorePhotonsCmd;
-  delete fStoreEdepsCmd;
-  delete fStoreSegmentIndexCmd;
   delete fStoreProcessNameCmd;
   delete fStreamPhotonsChunkedCmd;
   delete fEmitRawSegmentsCmd;
@@ -134,18 +113,6 @@ void DataManagerMessenger::SetNewValue(G4UIcommand* command, G4String newValue)
     bool store = fStorePhotonsCmd->GetNewBoolValue(newValue);
     fDataManager->SetStoreIndividualPhotons(store);
     G4cout << "Individual photon storage: " << (store ? "enabled" : "disabled") << G4endl;
-  }
-  
-  if (command == fStoreEdepsCmd) {
-    bool store = fStoreEdepsCmd->GetNewBoolValue(newValue);
-    fDataManager->SetStoreIndividualEdeps(store);
-    G4cout << "Individual energy deposit storage: " << (store ? "enabled" : "disabled") << G4endl;
-  }
-
-  if (command == fStoreSegmentIndexCmd) {
-    bool store = fStoreSegmentIndexCmd->GetNewBoolValue(newValue);
-    fDataManager->SetStoreSegmentIndex(store);
-    G4cout << "Per-photon segment index storage: " << (store ? "enabled" : "disabled") << G4endl;
   }
 
   if (command == fStoreProcessNameCmd) {
