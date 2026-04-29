@@ -104,11 +104,11 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
       return;  // Don't register or process this track
     }
 
-    dataManager->RegisterTrack(trackID, particleName, parentID, position, momentum, energy, time, pdgCode);
-
     // Category classification logic
     const G4VProcess* creationProcess = track->GetCreatorProcess();
     G4String processName = creationProcess ? creationProcess->GetProcessName() : "Primary";
+
+    dataManager->RegisterTrack(trackID, particleName, parentID, position, momentum, energy, time, pdgCode, processName);
 
     // DEBUG: Print all new pion creations
     if (debugPions && (particleName == "pi+" || particleName == "pi-")) {

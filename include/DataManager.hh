@@ -66,6 +66,7 @@ struct TrackInfo {
   G4int parentTrackID;
   G4String particleName;
   G4int pdgCode;
+  G4String creatorProcess;  // Geant4 process name that spawned the track ("Primary" for parentID==0)
 
   // Synchronized triplet for pion deflection detection
   G4ThreeVector preMomentumDir;     // Momentum direction at previous step
@@ -138,7 +139,8 @@ class DataManager
     // Enhanced track registry for category-based system
     void RegisterTrack(G4int trackID, const G4String& particleName, G4int parentID,
                       const G4ThreeVector& position, const G4ThreeVector& momentum,
-                      G4double energy, G4double time, G4int pdgCode);
+                      G4double energy, G4double time, G4int pdgCode,
+                      const G4String& creatorProcess);
     void UpdateTrackCategory(G4int trackID, G4int category, G4int subID, G4int categoryParentTrackID);
     void UpdatePionMomentum(G4int trackID, const G4ThreeVector& momentumDir,
                            const G4ThreeVector& position, G4double time);
@@ -345,6 +347,7 @@ class DataManager
     std::vector<G4double> fTrackInfo_Time;
     std::vector<G4int> fTrackInfo_ParentTrackID;
     std::vector<G4int> fTrackInfo_PDG;
+    std::vector<std::string> fTrackInfo_CreatorProcess;
 
     // Control flags for individual data storage
     bool fStoreIndividualPhotons = true;

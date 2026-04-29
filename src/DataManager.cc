@@ -151,6 +151,7 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("TrackInfo_Time", &fTrackInfo_Time);
   fTree->Branch("TrackInfo_ParentTrackID", &fTrackInfo_ParentTrackID);
   fTree->Branch("TrackInfo_PDG", &fTrackInfo_PDG);
+  fTree->Branch("TrackInfo_CreatorProcess", &fTrackInfo_CreatorProcess);
   
   // Energy deposit data branches
   fTree->Branch("EdepPosX", &fEdepPosX);
@@ -690,6 +691,7 @@ void DataManager::EndEvent()
       fTrackInfo_Time.push_back(info.time / ns);
       fTrackInfo_ParentTrackID.push_back(info.parentTrackID);
       fTrackInfo_PDG.push_back(info.pdgCode);
+      fTrackInfo_CreatorProcess.push_back(std::string(info.creatorProcess));
     }
   }
 
@@ -819,7 +821,8 @@ void DataManager::AddEnergyDeposit(G4double x, G4double y, G4double z,
 
 void DataManager::RegisterTrack(G4int trackID, const G4String& particleName, G4int parentID,
                                const G4ThreeVector& position, const G4ThreeVector& momentum,
-                               G4double energy, G4double time, G4int pdgCode)
+                               G4double energy, G4double time, G4int pdgCode,
+                               const G4String& creatorProcess)
 {
   TrackInfo info;
   info.trackID = trackID;
@@ -836,6 +839,7 @@ void DataManager::RegisterTrack(G4int trackID, const G4String& particleName, G4i
   info.parentTrackID = parentID;
   info.particleName = particleName;
   info.pdgCode = pdgCode;
+  info.creatorProcess = creatorProcess;
   info.preMomentumDir = momentum.unit();  // Store initial momentum
 
   fTrackRegistry[trackID] = info;
@@ -1121,6 +1125,7 @@ void DataManager::ClearEventData()
   fTrackInfo_Time.clear();
   fTrackInfo_ParentTrackID.clear();
   fTrackInfo_PDG.clear();
+  fTrackInfo_CreatorProcess.clear();
 
   // Reset category counters
   fNPrimaries = 0;
