@@ -658,41 +658,29 @@ void DataManager::EndEvent()
     }
   }
 
-  // Collect track IDs to store: categorized tracks + their parents (no duplicates)
-  std::set<G4int> tracksToStore;
-
+  // Store every registered Geant4 track. The Python categorizer needs
+  // the full ancestry chain (parent_id + pdg) for every intermediate
+  // track — not just categorized + their immediate parents. Iterating
+  // fTrackRegistry directly preserves the prior track_id-sorted order
+  // (std::map) and adds non-categorized non-direct-parent tracks
+  // (e.g. pi0 ancestors of a Gamma; intermediate hadrons in the
+  // secondary-pion category-parent walk).
   for (const auto& pair : fTrackRegistry) {
     const TrackInfo& info = pair.second;
-    if (info.category >= 0) {
-      // Store categorized tracks
-      tracksToStore.insert(info.trackID);
-      // Also store their parents (if they exist in registry)
-      if (info.parentTrackID > 0) {
-        tracksToStore.insert(info.parentTrackID);
-      }
-    }
-  }
-
-  // Now store all unique tracks
-  for (G4int trackID : tracksToStore) {
-    auto it = fTrackRegistry.find(trackID);
-    if (it != fTrackRegistry.end()) {
-      const TrackInfo& info = it->second;
-      fTrackInfo_TrackID.push_back(info.trackID);
-      fTrackInfo_Category.push_back(info.category);  // May be -1 for non-categorized parents
-      fTrackInfo_SubID.push_back(info.subID);        // May be -1 for non-categorized parents
-      fTrackInfo_PosX.push_back(info.posX / mm);
-      fTrackInfo_PosY.push_back(info.posY / mm);
-      fTrackInfo_PosZ.push_back(info.posZ / mm);
-      fTrackInfo_DirX.push_back(info.dirX);
-      fTrackInfo_DirY.push_back(info.dirY);
-      fTrackInfo_DirZ.push_back(info.dirZ);
-      fTrackInfo_Energy.push_back(info.energy / MeV);
-      fTrackInfo_Time.push_back(info.time / ns);
-      fTrackInfo_ParentTrackID.push_back(info.parentTrackID);
-      fTrackInfo_PDG.push_back(info.pdgCode);
-      fTrackInfo_CreatorProcess.push_back(std::string(info.creatorProcess));
-    }
+    fTrackInfo_TrackID.push_back(info.trackID);
+    fTrackInfo_Category.push_back(info.category);  // -1 = not categorized
+    fTrackInfo_SubID.push_back(info.subID);        // -1 = not categorized
+    fTrackInfo_PosX.push_back(info.posX / mm);
+    fTrackInfo_PosY.push_back(info.posY / mm);
+    fTrackInfo_PosZ.push_back(info.posZ / mm);
+    fTrackInfo_DirX.push_back(info.dirX);
+    fTrackInfo_DirY.push_back(info.dirY);
+    fTrackInfo_DirZ.push_back(info.dirZ);
+    fTrackInfo_Energy.push_back(info.energy / MeV);
+    fTrackInfo_Time.push_back(info.time / ns);
+    fTrackInfo_ParentTrackID.push_back(info.parentTrackID);
+    fTrackInfo_PDG.push_back(info.pdgCode);
+    fTrackInfo_CreatorProcess.push_back(std::string(info.creatorProcess));
   }
 
   if (fTree) {
