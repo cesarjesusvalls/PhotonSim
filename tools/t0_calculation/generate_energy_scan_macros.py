@@ -20,7 +20,6 @@ def create_macro_file(energy_mev, output_dir):
 
 # Disable individual photon storage to save space - only histograms
 /photon/storeIndividual false
-/edep/storeIndividual false
 
 # Disable muon decay processes via macro commands
 /particle/select mu-

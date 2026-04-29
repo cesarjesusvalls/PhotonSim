@@ -8,7 +8,6 @@
 
 # Enable individual photon storage to see category data
 /photon/storeIndividual true
-/edep/storeIndividual false
 
 # Add different particle types to the same event
 /gun/addPrimary mu- 1000 MeV

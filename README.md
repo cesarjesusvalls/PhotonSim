@@ -68,11 +68,14 @@ Example macros live in `macros/` (e.g. `test_muon.mac`,
 | `PhotonPosX/Y/Z` | Photon creation positions (mm) |
 | `PhotonDirX/Y/Z` | Photon direction unit vectors |
 | `PhotonTime` | Creation time (ns) |
-| `PhotonWavelength` | Photon wavelength (nm), when enabled via `/photon/storeIndividual` |
+| `PhotonWavelength` | Photon wavelength (nm) |
 | `PhotonProcess` | `Cerenkov` or `Scintillation` |
 
-Track-segment and per-particle branches are also written when segments
-are enabled; see `src/DataManager.cc` for the full schema.
+The per-photon branches (rows below `NOpticalPhotons`) are written to
+the `OpticalPhotonsRaw` chunk tree only when `/photon/storeIndividual
+true`. Track-segment and per-track branches (`Segment_*`,
+`TrackInfo_*`) are always written; see `src/DataManager.cc` for the
+full schema.
 
 ## Visualization
 

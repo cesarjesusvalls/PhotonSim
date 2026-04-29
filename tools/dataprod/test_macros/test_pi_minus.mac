@@ -8,7 +8,6 @@
 
 # Enable individual photon storage (needed for LUCiD)
 /photon/storeIndividual true
-/edep/storeIndividual false
 
 # Primary particle configuration
 /gun/numberOfPrimaries 1

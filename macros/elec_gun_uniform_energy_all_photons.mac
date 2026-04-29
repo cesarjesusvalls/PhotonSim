@@ -7,7 +7,6 @@
 
 # Enable individual photon storage to capture photon information
 /photon/storeIndividual true
-/edep/storeIndividual false
 
 # Set up primary particle with random energy
 /gun/particle e-

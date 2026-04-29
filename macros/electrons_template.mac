@@ -7,7 +7,6 @@
 
 # Disable individual photon/edep storage to save space (optional)
 /photon/storeIndividual false
-/edep/storeIndividual false
 
 # Set up primary particle
 /gun/particle e-

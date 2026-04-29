@@ -375,25 +375,17 @@ void DataManager::EndEvent()
   }
 
   // === Output segments for every G4 track ===
-  // No "meaningful tracks" filter — emit one row per G4 step (or one
-  // per merged sub-step group when fEmitRawSegments=false). LUCiD
-  // derives the meaningful-track view via Segment_TrackID +
-  // Segment_NCherenkov.
-  //
-  // Merging criteria (only used when fEmitRawSegments=false):
-  //   - For tracks ≥ 10 MeV: minimum 10 mm length OR direction change > 2°
-  //   - For tracks < 10 MeV (or e±): merge until energy loss ≥ 1 MeV
-  const G4double minSegmentLength = 10.0;  // mm
-  const G4double maxAngleForMerge = 2.0 * M_PI / 180.0;  // 2 degrees in radians
-  const G4double lowEnergyThreshold = 10.0;  // MeV - tracks below this use edep-based merging
-  const G4double minEdepForLowEnergy = 1.0;  // MeV - minimum edep before saving segment for low-E tracks
+  // No "meaningful tracks" filter — emit one row per raw G4 sub-step.
+  // LUCiD's lucid/sources/segment_grouping.py applies the merger
+  // (group_id column) downstream; LUCiD also derives the
+  // meaningful-track view via Segment_TrackID + Segment_NCherenkov.
 
   G4int segmentOffset = 0;
 
-  // Per-track lookup: unmerged sub-step index -> global merged segment index.
-  // Built during the merge loop below, consumed afterwards to fill
-  // fPhoton_SegmentIndex.
-  std::map<G4int, std::vector<G4int>> trackUnmergedToMergedGlobal;
+  // Per-track lookup: local sub-step index -> global segment index.
+  // Identity within each track (raw emission), with each track's block
+  // shifted by segmentOffset. Consumed below to fill fPhoton_SegmentIndex.
+  std::map<G4int, G4int> trackSegmentBaseOffset;
 
   // Iterate every track in fAllTrackSegments (std::map iteration is
   // track-id ascending, which is chronological).
@@ -401,87 +393,10 @@ void DataManager::EndEvent()
     G4int trackID = trackPair.first;
     const TrackSegmentInfo& info = trackPair.second;
 
-    bool isLowEnergy = (info.initialEnergy / MeV) < lowEnergyThreshold;
-    // Electrons / positrons multiple-scatter on essentially every step,
-    // so the geometric (angle / length) criterion fires constantly and
-    // produces an absurd number of segments per EM track. Route any e±
-    // through the edep-based merger regardless of initial energy.
-    bool isElectron = (std::abs(info.pdgCode) == 11);
-    bool useEdepMerging = isLowEnergy || isElectron;
+    trackSegmentBaseOffset[trackID] = segmentOffset;
 
-    // Merge segments for this track
-    std::vector<TrackSegment> mergedSegments;
-    std::vector<G4int> unmergedToMergedLocal;
-    unmergedToMergedLocal.reserve(info.segments.size());
-
-    if (fEmitRawSegments) {
-      // Raw mode: every G4 sub-step is its own segment. The Python-side
-      // merger in LUCiD (lucid/sources/segment_grouping.py) reapplies the
-      // logic below to produce group_id.
-      mergedSegments = info.segments;
-      for (size_t i = 0; i < info.segments.size(); ++i) {
-        unmergedToMergedLocal.push_back(static_cast<G4int>(i));
-      }
-    } else if (!info.segments.empty()) {
-      TrackSegment current = info.segments[0];
-      G4int currentMergedLocal = 0;
-      unmergedToMergedLocal.push_back(currentMergedLocal);
-
-      for (size_t i = 1; i < info.segments.size(); i++) {
-        const TrackSegment& next = info.segments[i];
-
-        bool shouldSave = false;
-
-        if (useEdepMerging) {
-          // Low energy or e± track: merge until edep >= 1 MeV
-          shouldSave = (current.edep >= minEdepForLowEnergy);
-        } else {
-          // Normal track: use length and angle criteria
-          G4double dx = current.endX - current.startX;
-          G4double dy = current.endY - current.startY;
-          G4double dz = current.endZ - current.startZ;
-          G4double currentLength = std::sqrt(dx*dx + dy*dy + dz*dz);
-
-          // Calculate direction change
-          G4double dot = current.dirX * next.dirX + current.dirY * next.dirY + current.dirZ * next.dirZ;
-          dot = std::max(-1.0, std::min(1.0, dot));  // Clamp for numerical stability
-          G4double angle = std::acos(dot);
-
-          bool significantDeflection = (angle > maxAngleForMerge);
-          bool reachedMinLength = (currentLength >= minSegmentLength);
-          shouldSave = (significantDeflection || reachedMinLength);
-        }
-
-        if (shouldSave) {
-          // Save current merged segment
-          mergedSegments.push_back(current);
-          // Start new segment
-          current = next;
-          ++currentMergedLocal;
-        } else {
-          // Merge: extend end position, accumulate edep, keep original start and direction.
-          // betaStart from the first sub-step is preserved (current.betaStart unchanged);
-          // nCherenkov accumulates across merged sub-steps.
-          current.endX = next.endX;
-          current.endY = next.endY;
-          current.endZ = next.endZ;
-          current.edep += next.edep;
-          current.nCherenkov += next.nCherenkov;
-        }
-        unmergedToMergedLocal.push_back(currentMergedLocal);
-      }
-      // Don't forget the last segment
-      mergedSegments.push_back(current);
-    }
-
-    std::vector<G4int>& globalMap = trackUnmergedToMergedGlobal[trackID];
-    globalMap.reserve(unmergedToMergedLocal.size());
-    for (G4int local : unmergedToMergedLocal) {
-      globalMap.push_back(segmentOffset + local);
-    }
-
-    // Output merged segments for this track, with track id inlined.
-    for (const TrackSegment& seg : mergedSegments) {
+    // Output every sub-step verbatim, with track id inlined.
+    for (const TrackSegment& seg : info.segments) {
       fSegment_TrackID.push_back(info.trackID);
       fSegment_StartX.push_back(seg.startX);
       fSegment_StartY.push_back(seg.startY);
@@ -498,16 +413,16 @@ void DataManager::EndEvent()
       fSegment_NCherenkov.push_back(seg.nCherenkov);
     }
 
-    segmentOffset += mergedSegments.size();
+    segmentOffset += static_cast<G4int>(info.segments.size());
   }
   fNSegments = segmentOffset;
 
-  // === Per-photon merged-segment index ===
-  // For each photon, look up its immediate parent's segments by time and remap
-  // through the (trackID, unmerged sub-step idx) -> global merged segment idx
-  // table built during the merge loop. After dropping the meaningful-tracks
-  // filter, every track has segments recorded, so the -1 sentinel never
-  // fires (kept defensively for any edge case).
+  // === Per-photon segment index ===
+  // For each photon, look up its immediate parent's segments by time and
+  // shift the local sub-step index by the parent track's
+  // segmentOffset to get a global index into the flat Segment_* arrays.
+  // Every track has segments recorded, so the -1 sentinel never fires
+  // (kept defensively for any edge case).
   //
   // Read photon counts/parents/times from the *retained* event-wide
   // accumulators. fPhotonPosX / fPhotonTime are the streamed vectors and
@@ -517,8 +432,8 @@ void DataManager::EndEvent()
   fPhoton_SegmentIndex.resize(nPhotons, -1);
   for (size_t p = 0; p < nPhotons; ++p) {
     G4int parentID = fPhotonImmediateParentTrackID[p];
-    auto remapIt = trackUnmergedToMergedGlobal.find(parentID);
-    if (remapIt == trackUnmergedToMergedGlobal.end()) continue;
+    auto baseIt = trackSegmentBaseOffset.find(parentID);
+    if (baseIt == trackSegmentBaseOffset.end()) continue;
     auto segsIt = fAllTrackSegments.find(parentID);
     if (segsIt == fAllTrackSegments.end()) continue;
     const auto& segs = segsIt->second.segments;
@@ -535,9 +450,7 @@ void DataManager::EndEvent()
       else { hi = mid - 1; }
     }
     if (found < 0) continue;
-    const auto& globalMap = remapIt->second;
-    if (found >= static_cast<int>(globalMap.size())) continue;
-    fPhoton_SegmentIndex[p] = globalMap[found];
+    fPhoton_SegmentIndex[p] = baseIt->second + found;
   }
 
   // === Track info — every registered Geant4 track ===

@@ -72,17 +72,16 @@ All muon macros include these commands to disable muon decay:
 
 ## Storage Options
 
-### Histogram Only (Recommended)
-```bash
-/photon/storeIndividual false
-/edep/storeIndividual false
-```
-- Only stores 2D histograms
-- Smaller files, faster execution
+Per-photon scalars are written to the `OpticalPhotonsRaw` chunk tree
+only when `/photon/storeIndividual true`. With it disabled, the run
+still writes per-event scalars (`PrimaryEnergy`, `NOpticalPhotons`),
+the per-track and per-segment trees (`TrackInfo_*`, `Segment_*`), and
+the 2D histograms — the only thing dropped is the per-photon list.
 
-### Full Storage
-- Stores every optical photon and energy deposit (default)
-- Large files, detailed analysis possible
+```bash
+/photon/storeIndividual false   # histograms + segments only, smaller files
+/photon/storeIndividual true    # also dump every optical photon
+```
 
 ## Usage
 
@@ -95,8 +94,11 @@ cd build
 
 All macros generate ROOT files containing:
 - `PrimaryEnergy` branch: Actual primary particle energies used for validation
-- 2D histograms: `PhotonHist_AngleDistance`, `EdepHist_DistanceEnergy`
-- Optional: Individual particle trees when full storage enabled
+- 2D histograms: `PhotonHist_AngleDistance`, `dEdxHist_Distance`,
+  `PhotonHist_TimeDistance`, `PhotonHist_Wavelength`
+- Per-track + per-segment trees (`TrackInfo_*`, `Segment_*`)
+- Optional: per-photon `OpticalPhotonsRaw` tree when
+  `/photon/storeIndividual true`
 
 ## Bug Fix Notes
 

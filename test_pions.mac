@@ -7,7 +7,6 @@
 
 # Enable individual photon storage to see category data
 /photon/storeIndividual true
-/edep/storeIndividual true
 
 # Set up primary particle - charged pion that will decay pi -> mu -> e
 /gun/particle pi+

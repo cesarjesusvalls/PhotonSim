@@ -7,7 +7,6 @@
 
 # Enable individual photon storage to capture photon information
 /photon/storeIndividual true
-/edep/storeIndividual false
 
 # Disable muon decay processes via macro commands
 /particle/select mu-
