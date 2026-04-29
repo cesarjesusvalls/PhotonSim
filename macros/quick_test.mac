@@ -1,7 +1,10 @@
-# Test wavelength histogram with 5 mu- events at 1050 MeV
+# Quick PhotonSim smoke test — 5 mu- events at 1050 MeV with per-photon
+# storage on and decays disabled. Useful as a "does PhotonSim still
+# produce sensible output?" check after rebuilds. Edit the gun block
+# below to swap particle / energy if you need a different probe.
 
 # Set output filename before initialization
-/output/filename test_wavelength_5_events.root
+/output/filename quick_test.root
 
 /run/initialize
 

@@ -23,8 +23,9 @@ configs, the batch runner, and SLURM wrappers — use
 - **Full optical physics** (Cherenkov, scintillation).
 - **ROOT output** with per-photon position, direction, creation time,
   process, primary energy, optional wavelength.
-- **Track segment storage** for downstream truth reconstruction (merged
-  G4 steps with length / angle / edep thresholds).
+- **Track segment storage** for downstream truth reconstruction — one
+  row per raw G4 sub-step, with inline `Segment_TrackID` so consumers
+  can re-aggregate by track or apply their own merging policy.
 
 ## Requirements
 
@@ -52,11 +53,15 @@ GEANT4 env vars on macOS; Linux users normally just source
 
 ```bash
 cd build
-./PhotonSim ../macros/test_muon.mac
+./PhotonSim ../macros/quick_test.mac
 ```
 
-Example macros live in `macros/` (e.g. `test_muon.mac`,
-`muon_gun_uniform_energy_all_photons.mac`, `electrons_template.mac`).
+`macros/quick_test.mac` is a 5-event muon smoke test; edit the `/gun/`
+block to swap particle / energy. `macros/list_processes.mac` dumps the
+GEANT4 process table for each particle type (handy when picking
+`/particle/process/inactivate` indices). Bespoke runs are usually
+written from scratch — the macro language is small and well-documented
+upstream.
 
 ### ROOT output branches
 
@@ -77,20 +82,22 @@ true`. Track-segment and per-track branches (`Segment_*`,
 `TrackInfo_*`) are always written; see `src/DataManager.cc` for the
 full schema.
 
-## Visualization
+## Visualization, analysis, and SIREN training inputs
 
-Interactive 3D photon-event viewer (Python, matplotlib-based):
+These all live in [LUCiD](https://github.com/CIDeR-ML/LUCiD):
 
-```bash
-pip install -r requirements.txt  # uproot, numpy, matplotlib, ipywidgets
-python tools/visualization/visualize_photons.py build/optical_photons.root
-```
+- Interactive web event display: `LUCiD/viewer/serve_viewer.py`
+  (consumes the v3 four-file HDF5 dataset produced by `lucid-run-job`).
+- ROOT → HDF5 lookup-table builders for SIREN training:
+  `lucid-build-photon-table` and `lucid-build-dedx-table` (see
+  `LUCiD/docs/SIREN_TRAINING_INPUTS.md`).
+- ROOT-file sanity checks:
+  `LUCiD/lucid/siren/training/photonsim_data/check_root_files.py`.
 
-`tools/` contains additional analysis and validation utilities (physics
-validation, wavelength spectra). They are consumers of PhotonSim ROOT
-output and are independent of this binary. The ROOT → HDF5 lookup-table
-builders that produced SIREN training inputs have moved to LUCiD; see
-`LUCiD/docs/SIREN_TRAINING_INPUTS.md`.
+The only Python utility that lives in this repo is `tools/t0_correction/`
+— a self-contained timing-correction calibration that runs PhotonSim
+energy scans and fits an `(E, distance) → t` parameterization. See
+`tools/t0_correction/README.md`.
 
 ## Project layout
 
@@ -100,8 +107,12 @@ PhotonSim/
 ├── PhotonSim.cc          # main() — parses CLI macro arg, runs G4 run manager
 ├── include/              # C++ headers
 ├── src/                  # C++ sources
-├── macros/               # example .mac macros
-├── tools/                # Python analysis / validation / visualization
+├── macros/
+│   ├── quick_test.mac        # 5-event muon smoke test
+│   ├── list_processes.mac    # dumps GEANT4 process table per particle
+│   └── diffsim_input/        # JSON run-configs (consumed by LUCiD's job runner)
+├── tools/
+│   └── t0_correction/    # PhotonSim-only timing calibration utility
 └── README.md
 ```
 
