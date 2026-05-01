@@ -49,19 +49,15 @@ def create_macro_file(energy_mev, output_dir):
 def main():
     """Generate all macro files for the energy scan."""
     
-    # Define the output directory
-    output_dir = Path("/Users/cjesus/Software/PhotonSim/tools/t0_calculation/energy_scan_macros")
-    
+    # Output dir lives next to this script; run_energy_scan.py picks it up from the same path.
+    output_dir = Path(__file__).parent / "energy_scan_macros"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     # Define energy ranges
     energies = range(100, 2100, 100)
-    
+
     print(f"Generating macro files for energies: {energies}")
     print(f"Output directory: {output_dir}")
-    
-    # Check if output directory exists
-    if not output_dir.exists():
-        print(f"Error: Directory {output_dir} does not exist!")
-        return
     
     # Generate macro files
     created_files = []
@@ -77,28 +73,30 @@ def main():
     
     print(f"\nGenerated {len(created_files)} new macro files.")
     
-    # Create a script to run all the new simulations
+    # Create a convenience batch script. The canonical runner is run_energy_scan.py;
+    # this is just a shell fallback. Paths are resolved relative to the PhotonSim repo root
+    # so the script works wherever the checkout lives.
     run_script_path = output_dir / "run_new_energy_scans.sh"
+    rel_macro_dir = "tools/t0_correction/energy_scan_macros"
     with open(run_script_path, 'w') as f:
         f.write("#!/bin/bash\n")
-        f.write("# Script to run all new energy scan simulations\n")
-        f.write("# Make sure PhotonSim is built in the build directory\n\n")
-        f.write("cd /Users/cjesus/Software/PhotonSim\n")
-        f.write("source setup.sh\n\n")
-        
+        f.write("# Run all energy scan simulations. Invoke from the PhotonSim repo root.\n")
+        f.write("# Requires ./build/PhotonSim to exist and the GEANT4 environment to be set up\n")
+        f.write("# (host-native: source $(geant4-config --prefix)/bin/geant4.sh; container: see\n")
+        f.write("# LUCiD/docs/QUICKSTART_DOCKER.md).\n")
+        f.write("set -e\n\n")
+
         for energy in energies:
-            macro_path = f"tools/t0_calculation/energy_scan_macros/muons_{energy}MeV_scan.mac"
+            macro_path = f"{rel_macro_dir}/muons_{energy}MeV_scan.mac"
             f.write(f"echo 'Running {energy} MeV simulation...'\n")
             f.write(f"./build/PhotonSim {macro_path}\n")
-            f.write(f"mv muons_{energy}MeV_scan.root tools/t0_calculation/energy_scan_macros/\n\n")
-    
-    # Make the run script executable
+            f.write(f"mv muons_{energy}MeV_scan.root {rel_macro_dir}/\n\n")
+
     os.chmod(run_script_path, 0o755)
-    
+
     print(f"Created run script: {run_script_path}")
-    print("\nTo run all simulations:")
-    print(f"cd /Users/cjesus/Software/PhotonSim")
-    print(f"./tools/t0_calculation/energy_scan_macros/run_new_energy_scans.sh")
+    print("\nPreferred: python3 tools/t0_correction/run_energy_scan.py")
+    print(f"Fallback: ./{rel_macro_dir}/run_new_energy_scans.sh  (run from PhotonSim repo root)")
 
 if __name__ == "__main__":
     main()

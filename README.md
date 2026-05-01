@@ -34,7 +34,18 @@ configs, the batch runner, and SLURM wrappers — use
 - CMake ≥ 3.16
 - C++17 compiler
 
-## Build
+## Running PhotonSim
+
+The canonical path is the LUCiD container, which has GEANT4 + ROOT and
+a baked PhotonSim build already installed. Bind-mount your checkout to
+pick up local edits without rebuilding the image:
+
+- macOS / dev laptop → [`LUCiD/docs/QUICKSTART_DOCKER.md`](https://github.com/CIDeR-ML/LUCiD/blob/main/docs/QUICKSTART_DOCKER.md).
+- SLAC S3DF / SLURM → [`LUCiD/docs/QUICKSTART_S3DF.md`](https://github.com/CIDeR-ML/LUCiD/blob/main/docs/QUICKSTART_S3DF.md).
+- Host-native (GEANT4 ≥ 11.3 + ROOT installed yourself) →
+  [`LUCiD/docs/QUICKSTART_LOCAL.md`](https://github.com/CIDeR-ML/LUCiD/blob/main/docs/QUICKSTART_LOCAL.md).
+
+### Build (host-native)
 
 ```bash
 git clone https://github.com/cesarjesusvalls/PhotonSim.git
@@ -45,11 +56,10 @@ make -j$(nproc)
 # → ./PhotonSim
 ```
 
-The `setup.sh` script in the repo root is a convenience for setting
-GEANT4 env vars on macOS; Linux users normally just source
-`$(geant4-config --prefix)/bin/geant4.sh`.
+Linux users typically `source $(geant4-config --prefix)/bin/geant4.sh`
+before building; macOS users likewise need the GEANT4 env vars set.
 
-## Run
+### Run
 
 ```bash
 cd build
