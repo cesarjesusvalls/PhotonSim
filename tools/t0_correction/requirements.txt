@@ -1,0 +1,8 @@
+# Python deps for the t0_correction calibration utility.
+# Pure-Python — no GEANT4/ROOT install needed at runtime (uproot reads ROOT
+# files directly). PhotonSim itself still needs GEANT4 + ROOT to produce the
+# input files; see LUCiD/docs/QUICKSTART_DOCKER.md.
+uproot>=5
+numpy>=1.20
+scipy>=1.7
+matplotlib>=3.5
