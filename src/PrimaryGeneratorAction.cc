@@ -198,6 +198,46 @@ void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event)
   // Always fire from center of detector
   fParticleGun->SetParticlePosition(G4ThreeVector(0., 0., 0.));
 
+  // Bomb mode: resample multiplicity + per-particle (type, energy, direction)
+  // from fBombPool every event. Matches the LUCiD-side macro emitted for
+  // primary_source='bomb' configs.
+  if (fBombMode && !fBombPool.empty()) {
+    G4ParticleTable* particleTable = G4ParticleTable::GetParticleTable();
+
+    const G4int nLo = std::max(0, fBombMin);
+    const G4int nHi = std::max(nLo, fBombMax);
+    const G4int n = nLo + static_cast<G4int>((nHi - nLo + 1) * G4UniformRand());
+
+    G4double sum_ke = 0.0;
+    for (G4int i = 0; i < n; ++i) {
+      const std::size_t idx = static_cast<std::size_t>(fBombPool.size() * G4UniformRand());
+      const auto& spec = fBombPool[idx];
+
+      G4ParticleDefinition* particle = particleTable->FindParticle(spec.particleName);
+      if (!particle) {
+        G4cerr << "Warning: Bomb candidate '" << spec.particleName << "' not found; skipping." << G4endl;
+        continue;
+      }
+      fParticleGun->SetParticleDefinition(particle);
+
+      const G4double energy = spec.minEnergy + (spec.maxEnergy - spec.minEnergy) * G4UniformRand();
+      fParticleGun->SetParticleEnergy(energy);
+      sum_ke += energy;
+
+      // Isotropic direction (Marsaglia), independent of /gun/randomDirection.
+      const G4double cosTheta = 2.0 * G4UniformRand() - 1.0;
+      const G4double sinTheta = std::sqrt(1.0 - cosTheta * cosTheta);
+      const G4double phi = 2.0 * M_PI * G4UniformRand();
+      fParticleGun->SetParticleMomentumDirection(
+        G4ThreeVector(sinTheta * std::cos(phi), sinTheta * std::sin(phi), cosTheta));
+
+      fParticleGun->GeneratePrimaryVertex(event);
+    }
+
+    fTrueEnergy = sum_ke;
+    return;
+  }
+
   // If we have a heterogeneous primary list, use it
   if (!fPrimaryList.empty()) {
     G4ParticleTable* particleTable = G4ParticleTable::GetParticleTable();
@@ -313,6 +353,18 @@ void PrimaryGeneratorAction::AddPrimaryWithEnergyRange(const G4String& particleN
   spec.maxEnergy = maxEnergy;
   spec.useRandomEnergy = true;
   fPrimaryList.push_back(spec);
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void PrimaryGeneratorAction::AddBombCandidate(const G4String& particleName, G4double minEnergy, G4double maxEnergy)
+{
+  PrimaryParticleSpec spec;
+  spec.particleName = particleName;
+  spec.minEnergy = minEnergy;
+  spec.maxEnergy = maxEnergy;
+  spec.useRandomEnergy = true;
+  fBombPool.push_back(spec);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

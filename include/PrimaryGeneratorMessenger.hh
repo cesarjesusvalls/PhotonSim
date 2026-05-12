@@ -63,6 +63,11 @@ class PrimaryGeneratorAction;
 /// - /gun/addPrimary [particleName] [energy] [unit]
 /// - /gun/addPrimaryWithEnergyRange [particleName] [minEnergy] [maxEnergy] [unit]
 /// - /gun/clearPrimaries
+/// - /gun/bombClearCandidates
+/// - /gun/bombMinParticles [int]
+/// - /gun/bombMaxParticles [int]
+/// - /gun/bombAddCandidate [particleName] [minEnergy] [maxEnergy] [unit]
+/// - /gun/bombMode [true/false]
 
 class PrimaryGeneratorMessenger: public G4UImessenger
 {
@@ -88,6 +93,11 @@ class PrimaryGeneratorMessenger: public G4UImessenger
     G4UIcommand*                   fAddPrimaryCmd = nullptr;
     G4UIcommand*                   fAddPrimaryWithEnergyRangeCmd = nullptr;
     G4UIcmdWithoutParameter*       fClearPrimariesCmd = nullptr;
+    G4UIcmdWithoutParameter*       fBombClearCandidatesCmd = nullptr;
+    G4UIcmdWithAnInteger*          fBombMinParticlesCmd = nullptr;
+    G4UIcmdWithAnInteger*          fBombMaxParticlesCmd = nullptr;
+    G4UIcommand*                   fBombAddCandidateCmd = nullptr;
+    G4UIcmdWithABool*              fBombModeCmd = nullptr;
     G4UIcmdWithAString*            fGenieInputCmd = nullptr;
     G4UIcmdWithABool*              fGenieIsotropicCmd = nullptr;
 };

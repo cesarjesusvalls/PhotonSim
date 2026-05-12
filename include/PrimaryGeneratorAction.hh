@@ -84,6 +84,15 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
     void AddPrimaryWithEnergyRange(const G4String& particleName, G4double minEnergy, G4double maxEnergy);
     void ClearPrimaries() { fPrimaryList.clear(); }
 
+    // Bomb mode: per event, fire N=Uniform[fBombMin,fBombMax] particles drawn
+    // with replacement from fBombPool, each with energy uniform in its
+    // candidate range and an isotropic direction.
+    void AddBombCandidate(const G4String& particleName, G4double minEnergy, G4double maxEnergy);
+    void ClearBombCandidates() { fBombPool.clear(); }
+    void SetBombMin(G4int n) { fBombMin = n; }
+    void SetBombMax(G4int n) { fBombMax = n; }
+    void SetBombMode(G4bool on) { fBombMode = on; }
+
     // GENIE rooTracker input: when set, PhotonSim injects final-state
     // particles from each rootracker entry as per-event primaries.
     void SetGenieInput(const G4String& path);
@@ -121,6 +130,12 @@ class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
 
     // List of heterogeneous primary particles
     std::vector<PrimaryParticleSpec> fPrimaryList;
+
+    // Bomb-mode candidate pool + per-event multiplicity bounds.
+    std::vector<PrimaryParticleSpec> fBombPool;
+    G4int fBombMin = 1;
+    G4int fBombMax = 5;
+    G4bool fBombMode = false;
 
     // GENIE rooTracker primary source (optional). One rootracker entry maps
     // to one G4 event; all status==1 final-state particles from that entry

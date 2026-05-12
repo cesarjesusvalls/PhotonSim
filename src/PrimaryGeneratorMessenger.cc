@@ -166,6 +166,56 @@ PrimaryGeneratorMessenger::PrimaryGeneratorMessenger(PrimaryGeneratorAction* pri
   fClearPrimariesCmd->SetGuidance("Clear the heterogeneous primary particle list");
   fClearPrimariesCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
 
+  // ---- Bomb mode --------------------------------------------------------
+  // Per event, fire N=Uniform[bombMin,bombMax] primaries drawn with
+  // replacement from a candidate pool. Each candidate carries a per-type
+  // energy range; directions are isotropic.
+
+  fBombClearCandidatesCmd = new G4UIcmdWithoutParameter("/gun/bombClearCandidates", this);
+  fBombClearCandidatesCmd->SetGuidance("Clear the bomb-mode candidate pool");
+  fBombClearCandidatesCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
+  fBombMinParticlesCmd = new G4UIcmdWithAnInteger("/gun/bombMinParticles", this);
+  fBombMinParticlesCmd->SetGuidance("Lower bound for per-event bomb multiplicity (inclusive)");
+  fBombMinParticlesCmd->SetParameterName("n", false);
+  fBombMinParticlesCmd->SetRange("n>=0");
+  fBombMinParticlesCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
+  fBombMaxParticlesCmd = new G4UIcmdWithAnInteger("/gun/bombMaxParticles", this);
+  fBombMaxParticlesCmd->SetGuidance("Upper bound for per-event bomb multiplicity (inclusive)");
+  fBombMaxParticlesCmd->SetParameterName("n", false);
+  fBombMaxParticlesCmd->SetRange("n>=0");
+  fBombMaxParticlesCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
+  fBombAddCandidateCmd = new G4UIcommand("/gun/bombAddCandidate", this);
+  fBombAddCandidateCmd->SetGuidance("Add a candidate to the bomb-mode pool");
+  fBombAddCandidateCmd->SetGuidance("Usage: /gun/bombAddCandidate [particleName] [minEnergy] [maxEnergy] [unit]");
+  fBombAddCandidateCmd->SetGuidance("Example: /gun/bombAddCandidate e- 0 3000 MeV");
+  {
+    auto* particleParam = new G4UIparameter("particleName", 's', false);
+    particleParam->SetGuidance("Particle name (e.g., mu-, pi+, e-, gamma)");
+    fBombAddCandidateCmd->SetParameter(particleParam);
+
+    auto* minEnergyParam = new G4UIparameter("minEnergy", 'd', false);
+    minEnergyParam->SetGuidance("Minimum kinetic energy");
+    fBombAddCandidateCmd->SetParameter(minEnergyParam);
+
+    auto* maxEnergyParam = new G4UIparameter("maxEnergy", 'd', false);
+    maxEnergyParam->SetGuidance("Maximum kinetic energy");
+    fBombAddCandidateCmd->SetParameter(maxEnergyParam);
+
+    auto* unitParam = new G4UIparameter("unit", 's', false);
+    unitParam->SetGuidance("Energy unit (eV, keV, MeV, GeV, TeV)");
+    unitParam->SetDefaultValue("MeV");
+    fBombAddCandidateCmd->SetParameter(unitParam);
+  }
+  fBombAddCandidateCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
+  fBombModeCmd = new G4UIcmdWithABool("/gun/bombMode", this);
+  fBombModeCmd->SetGuidance("Enable/disable bomb mode (resample multiplicity + types per event)");
+  fBombModeCmd->SetParameterName("on", false);
+  fBombModeCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
   // GENIE rooTracker primary injection
   fGenieInputCmd = new G4UIcmdWithAString("/gun/genieInput", this);
   fGenieInputCmd->SetGuidance("Path to a GENIE rooTracker ROOT file (gntpc -f rootracker output).");
@@ -198,6 +248,11 @@ PrimaryGeneratorMessenger::~PrimaryGeneratorMessenger()
   delete fAddPrimaryCmd;
   delete fAddPrimaryWithEnergyRangeCmd;
   delete fClearPrimariesCmd;
+  delete fBombClearCandidatesCmd;
+  delete fBombMinParticlesCmd;
+  delete fBombMaxParticlesCmd;
+  delete fBombAddCandidateCmd;
+  delete fBombModeCmd;
   delete fGenieInputCmd;
   delete fGenieIsotropicCmd;
   delete fGunDir;
@@ -278,6 +333,34 @@ void PrimaryGeneratorMessenger::SetNewValue(G4UIcommand* command, G4String newVa
   }
   else if (command == fClearPrimariesCmd) {
     fPrimaryGeneratorAction->ClearPrimaries();
+  }
+  else if (command == fBombClearCandidatesCmd) {
+    fPrimaryGeneratorAction->ClearBombCandidates();
+  }
+  else if (command == fBombMinParticlesCmd) {
+    fPrimaryGeneratorAction->SetBombMin(fBombMinParticlesCmd->GetNewIntValue(newValue));
+  }
+  else if (command == fBombMaxParticlesCmd) {
+    fPrimaryGeneratorAction->SetBombMax(fBombMaxParticlesCmd->GetNewIntValue(newValue));
+  }
+  else if (command == fBombAddCandidateCmd) {
+    std::istringstream iss(newValue);
+    G4String particleName;
+    G4double minEnergy, maxEnergy;
+    G4String unit;
+    iss >> particleName >> minEnergy >> maxEnergy >> unit;
+
+    G4double unitFactor = 1.0;
+    if (unit == "eV") unitFactor = eV;
+    else if (unit == "keV") unitFactor = keV;
+    else if (unit == "MeV") unitFactor = MeV;
+    else if (unit == "GeV") unitFactor = GeV;
+    else if (unit == "TeV") unitFactor = TeV;
+
+    fPrimaryGeneratorAction->AddBombCandidate(particleName, minEnergy * unitFactor, maxEnergy * unitFactor);
+  }
+  else if (command == fBombModeCmd) {
+    fPrimaryGeneratorAction->SetBombMode(fBombModeCmd->GetNewBoolValue(newValue));
   }
   else if (command == fGenieInputCmd) {
     fPrimaryGeneratorAction->SetGenieInput(newValue);
