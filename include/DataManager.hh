@@ -303,6 +303,10 @@ class DataManager
     // 1D ROOT histogram for wavelength distribution
     TH1D* fPhotonHist_Wavelength = nullptr;     // Photon wavelength distribution
 
+    // 1D distribution of s = |emission - primary vertex| per Cherenkov photon.
+    // Used to parametrise s_max(E, particle, material) for the SIREN surrogate.
+    TH1D* fPhotonHist_Distance = nullptr;
+
     // Output filename
     G4String fOutputFilename = "optical_photons.root";
 

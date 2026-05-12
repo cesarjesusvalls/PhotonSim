@@ -185,6 +185,13 @@ void DataManager::Initialize(const G4String& filename)
                                    "Photon Wavelength Distribution;Wavelength (nm);Counts",
                                    800, 0.0, 800.0);          // 0 to 800 nm
 
+  // 1D distance histogram: s = |emission - origin| per Cherenkov photon.
+  // Range matches the 500 m detector half-extent ceiling so 50 GeV mu-
+  // (~250 m range in water) is captured without overflow. 5 cm bins.
+  fPhotonHist_Distance = new TH1D("PhotonHist_Distance",
+                                  "Photon Distance from Origin;Distance s (mm);Photons",
+                                  10000, 0.0, 500000.0);
+
   G4cout << "ROOT file " << actualFilename << " created for optical photon data" << G4endl;
   G4cout << "2D histograms created: 500x500 bins for aggregated data analysis" << G4endl;
   G4cout << "1D wavelength histogram created: 800 bins from 0-800 nm" << G4endl;
@@ -230,6 +237,11 @@ void DataManager::Finalize()
         G4cout << "Photon wavelength histogram written with " << fPhotonHist_Wavelength->GetEntries() << " entries" << G4endl;
         fPhotonHist_Wavelength = nullptr;
       }
+      if (fPhotonHist_Distance) {
+        fPhotonHist_Distance->Write();
+        G4cout << "Photon distance (s) histogram written with " << fPhotonHist_Distance->GetEntries() << " entries" << G4endl;
+        fPhotonHist_Distance = nullptr;
+      }
 
       G4cout << "ROOT file closed with " << fTree->GetEntries() << " events" << G4endl;
 
@@ -262,6 +274,7 @@ void DataManager::Reset()
   fdEdxHist_Distance = nullptr;
   fPhotonHist_TimeDistance = nullptr;
   fPhotonHist_Wavelength = nullptr;
+  fPhotonHist_Distance = nullptr;
 
   // Clear output filename
   fOutputFilename = "output.root";
@@ -505,6 +518,11 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
     // Fill time vs distance histogram
     G4double time_ns = time / ns;
     fPhotonHist_TimeDistance->Fill(distance, time_ns);
+
+    // Fill 1D distance (s) histogram — input to s_max parametrisation.
+    if (fPhotonHist_Distance) {
+      fPhotonHist_Distance->Fill(distance);
+    }
   }
 
   // Fill wavelength histogram
@@ -760,6 +778,7 @@ DataManager::~DataManager()
   fdEdxHist_Distance = nullptr;
   fPhotonHist_TimeDistance = nullptr;
   fPhotonHist_Wavelength = nullptr;
+  fPhotonHist_Distance = nullptr;
   fTree = nullptr;
   fRootFile.reset();
 }
