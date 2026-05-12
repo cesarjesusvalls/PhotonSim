@@ -192,6 +192,23 @@ void DataManager::Initialize(const G4String& filename)
                                   "Photon Distance from Origin;Distance s (mm);Photons",
                                   10000, 0.0, 500000.0);
 
+  // Opening angle vs s/s_max — only booked when the macro set s_max via
+  // /output/smax. Photons with s/s_max > 1 fall into the ROOT overflow bin.
+  if (fSmaxMm > 0.0) {
+    fPhotonHist_AngleDistanceNorm = new TH2D(
+        "PhotonHist_AngleDistanceNorm",
+        "Photon Opening Angle vs s / s_max;Opening Angle (rad);s / s_max",
+        500, 0.0, M_PI,
+        500, 0.0, 1.0);
+    fdEdxHist_DistanceNorm = new TH2D(
+        "dEdxHist_DistanceNorm",
+        "dE/dx vs s / s_max;dE/dx (keV/mm);s / s_max",
+        500, 0.0, 1000.0,
+        500, 0.0, 1.0);
+    G4cout << "Booked AngleDistanceNorm + dEdxDistanceNorm (s_max = "
+           << fSmaxMm << " mm)" << G4endl;
+  }
+
   G4cout << "ROOT file " << actualFilename << " created for optical photon data" << G4endl;
   G4cout << "2D histograms created: 500x500 bins for aggregated data analysis" << G4endl;
   G4cout << "1D wavelength histogram created: 800 bins from 0-800 nm" << G4endl;
@@ -242,6 +259,19 @@ void DataManager::Finalize()
         G4cout << "Photon distance (s) histogram written with " << fPhotonHist_Distance->GetEntries() << " entries" << G4endl;
         fPhotonHist_Distance = nullptr;
       }
+      if (fPhotonHist_AngleDistanceNorm) {
+        fPhotonHist_AngleDistanceNorm->Write();
+        G4cout << "Photon AngleDistanceNorm histogram written with "
+               << fPhotonHist_AngleDistanceNorm->GetEntries() << " entries" << G4endl;
+        fPhotonHist_AngleDistanceNorm = nullptr;
+  fdEdxHist_DistanceNorm = nullptr;
+      }
+      if (fdEdxHist_DistanceNorm) {
+        fdEdxHist_DistanceNorm->Write();
+        G4cout << "dE/dx DistanceNorm histogram written with "
+               << fdEdxHist_DistanceNorm->GetEntries() << " entries" << G4endl;
+        fdEdxHist_DistanceNorm = nullptr;
+      }
 
       G4cout << "ROOT file closed with " << fTree->GetEntries() << " events" << G4endl;
 
@@ -275,6 +305,8 @@ void DataManager::Reset()
   fPhotonHist_TimeDistance = nullptr;
   fPhotonHist_Wavelength = nullptr;
   fPhotonHist_Distance = nullptr;
+  fPhotonHist_AngleDistanceNorm = nullptr;
+  fdEdxHist_DistanceNorm = nullptr;
 
   // Clear output filename
   fOutputFilename = "output.root";
@@ -523,6 +555,12 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
     if (fPhotonHist_Distance) {
       fPhotonHist_Distance->Fill(distance);
     }
+
+    // s/s_max-normalised analogue of AngleDistance — SIREN-input mode.
+    // Only filled when /output/smax was set (i.e. histogram exists).
+    if (fPhotonHist_AngleDistanceNorm) {
+      fPhotonHist_AngleDistanceNorm->Fill(opening_angle, distance / fSmaxMm);
+    }
   }
 
   // Fill wavelength histogram
@@ -585,6 +623,12 @@ void DataManager::AddEnergyDeposit(G4double x, G4double y, G4double z,
 
   // Fill histogram: X-axis is dE/dx, Y-axis is distance
   fdEdxHist_Distance->Fill(dEdx, distance);
+
+  // s/s_max-normalised analogue — SIREN-input mode (filled only when
+  // /output/smax was set, i.e. histogram exists).
+  if (fdEdxHist_DistanceNorm) {
+    fdEdxHist_DistanceNorm->Fill(dEdx, distance / fSmaxMm);
+  }
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -779,6 +823,8 @@ DataManager::~DataManager()
   fPhotonHist_TimeDistance = nullptr;
   fPhotonHist_Wavelength = nullptr;
   fPhotonHist_Distance = nullptr;
+  fPhotonHist_AngleDistanceNorm = nullptr;
+  fdEdxHist_DistanceNorm = nullptr;
   fTree = nullptr;
   fRootFile.reset();
 }

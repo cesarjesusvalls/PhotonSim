@@ -32,7 +32,9 @@
 #include "G4UIdirectory.hh"
 #include "G4UIcmdWithABool.hh"
 #include "G4UIcmdWithAString.hh"
+#include "G4UIcmdWithADoubleAndUnit.hh"
 #include "G4UImanager.hh"
+#include "G4SystemOfUnits.hh"
 #include "G4ApplicationState.hh"
 #include "G4ios.hh"
 
@@ -81,6 +83,16 @@ DataManagerMessenger::DataManagerMessenger()
   fFilenameCmd->SetParameterName("filename", false);
   fFilenameCmd->SetDefaultValue("optical_photons.root");
   fFilenameCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+
+  fSmaxCmd = new G4UIcmdWithADoubleAndUnit("/output/smax", this);
+  fSmaxCmd->SetGuidance("Set s_max for the PhotonHist_AngleDistanceNorm histogram");
+  fSmaxCmd->SetGuidance("(opening angle vs s/s_max). When > 0 the Norm histogram");
+  fSmaxCmd->SetGuidance("is booked and filled per Cherenkov photon; otherwise skipped.");
+  fSmaxCmd->SetParameterName("smax", false);
+  fSmaxCmd->SetUnitCategory("Length");
+  fSmaxCmd->SetDefaultUnit("mm");
+  fSmaxCmd->SetRange("smax >= 0");
+  fSmaxCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -93,6 +105,7 @@ DataManagerMessenger::~DataManagerMessenger()
   delete fStoreProcessNameCmd;
   delete fStreamPhotonsChunkedCmd;
   delete fFilenameCmd;
+  delete fSmaxCmd;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -120,6 +133,12 @@ void DataManagerMessenger::SetNewValue(G4UIcommand* command, G4String newValue)
   if (command == fFilenameCmd) {
     fDataManager->SetOutputFilename(newValue);
     G4cout << "Output filename set to: " << newValue << G4endl;
+  }
+
+  if (command == fSmaxCmd) {
+    G4double smax_mm = fSmaxCmd->GetNewDoubleValue(newValue) / mm;
+    fDataManager->SetSmaxMm(smax_mm);
+    G4cout << "s_max for AngleDistanceNorm set to: " << smax_mm << " mm" << G4endl;
   }
 }
 

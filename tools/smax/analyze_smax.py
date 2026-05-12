@@ -35,6 +35,10 @@ import uproot
 HIST_NAME = "PhotonHist_Distance"
 CELL_DIR_RE = re.compile(r"^(\d+)MeV$")
 
+# Where per-(material, particle) parametrization CSVs are written by default.
+# Resolves to <repo>/PhotonSim/data when run from PhotonSim/tools/smax/.
+DEFAULT_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+
 # Energy below which a particle is excluded from the linear s_max(E) fit —
 # basically a per-particle Cherenkov-threshold floor. Particles missing from
 # this dict default to no threshold (all points eligible).
@@ -42,7 +46,10 @@ DEFAULT_FIT_MIN_MEV = {
     "mu-":   500, "mu+":   500,
     "pi-":   500, "pi+":   500,
     "proton": 5000,
-    "e-": 0, "e+": 0, "gamma": 0,
+    # 10 MeV e± is too close to threshold + range-limited to give a clean
+    # point on the shower-extent curve; start the fit at 100 MeV.
+    "e-": 100, "e+": 100,
+    "gamma": 0,
 }
 
 # Detector is a 500 m cube (default in DetectorConstruction.hh). A particle
@@ -149,6 +156,86 @@ def print_table(stats: list[CellStat], quantile: float, out=sys.stdout) -> None:
               f"{s.smax_mm:>12.0f}", file=out)
 
 
+def write_parametrization(stats: list[CellStat],
+                          fits: dict[tuple[str, str], PowerLawFit],
+                          data_dir: Path,
+                          quantile: float, quantile_multiplier: float,
+                          world_half_mm: float, sat_frac: float) -> list[Path]:
+    """Write per-(material, particle) parametrization CSVs to data_dir.
+
+    Layout:
+        <data_dir>/<material>/<particle>/smax_data.csv   per-energy table
+        <data_dir>/<material>/<particle>/smax_fit.csv    1-row fit metadata
+
+    Two files instead of one keeps the table easy to consume row-by-row
+    and the fit metadata easy to parse without sniffing for header rows.
+    """
+    from datetime import datetime, timezone
+    generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    written: list[Path] = []
+    by_pm = _group_by_pm(stats)
+    for (material, particle), rows in sorted(by_pm.items()):
+        cell_dir = data_dir / material / particle
+        cell_dir.mkdir(parents=True, exist_ok=True)
+
+        data_path = cell_dir / "smax_data.csv"
+        with data_path.open("w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["energy_mev", "n_events", "entries",
+                        "mean_mm", "quantile_mm", "quantile_eff_mm",
+                        "smax_mm", "below_fit_threshold",
+                        "geometry_saturated"])
+            fit = fits.get((material, particle))
+            threshold = (DEFAULT_FIT_MIN_MEV.get(particle, 0)
+                         if fit is None else fit.e_min_mev)
+            for r in sorted(rows, key=lambda r: r.energy_mev):
+                q_eff = (r.quantile_mm * quantile_multiplier
+                         if np.isfinite(r.quantile_mm) else float("nan"))
+                sat = (np.isfinite(r.smax_mm)
+                       and r.smax_mm >= sat_frac * world_half_mm)
+                w.writerow([
+                    r.energy_mev,
+                    r.n_events if r.n_events is not None else "",
+                    f"{r.entries:.0f}",
+                    "" if not np.isfinite(r.mean_mm) else f"{r.mean_mm:.3f}",
+                    "" if not np.isfinite(r.quantile_mm) else f"{r.quantile_mm:.3f}",
+                    "" if not np.isfinite(q_eff) else f"{q_eff:.3f}",
+                    "" if not np.isfinite(r.smax_mm) else f"{r.smax_mm:.3f}",
+                    int(r.energy_mev < threshold),
+                    int(bool(sat)),
+                ])
+        written.append(data_path)
+
+        fit_path = cell_dir / "smax_fit.csv"
+        with fit_path.open("w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["material", "particle", "form",
+                        "A", "B",
+                        "fit_min_mev", "fit_max_mev",
+                        "n_used", "n_excluded_low", "n_excluded_saturated",
+                        "quantile", "quantile_multiplier",
+                        "min_fit_to_quantile_ratio", "min_ratio_e_mev",
+                        "generated_at_utc"])
+            if fit is None:
+                w.writerow([material, particle, "", "", "", "", "", "", "",
+                            "", quantile, quantile_multiplier, "", "",
+                            generated_at])
+            else:
+                chk = check_fit_above_quantile(rows, fit)
+                w.writerow([
+                    material, particle, "A*E^B",
+                    f"{fit.A:.6f}", f"{fit.B:.6f}",
+                    fit.e_min_mev, fit.e_max_mev,
+                    fit.n_used, fit.n_excluded_low, fit.n_excluded_saturated,
+                    quantile, quantile_multiplier,
+                    "" if chk.n_compared == 0 else f"{chk.min_ratio:.4f}",
+                    "" if chk.n_compared == 0 else chk.min_ratio_energy_mev,
+                    generated_at,
+                ])
+        written.append(fit_path)
+    return written
+
+
 def write_csv(stats: list[CellStat], path: Path, quantile: float) -> None:
     with path.open("w", newline="") as fh:
         w = csv.writer(fh)
@@ -220,9 +307,14 @@ class FitQuantileCheck:
 
 
 def check_fit_above_quantile(rows: list[CellStat], fit: PowerLawFit) -> FitQuantileCheck:
+    """Compare fit to quantile only for points the fit was actually trained on
+    (E ≥ fit.e_min_mev). Sub-threshold rows are pure extrapolation, where it
+    is OK and expected for the fit to drop below the local quantile."""
     ratios: list[tuple[int, float, float]] = []
     violations: list[tuple[int, float, float]] = []
     for r in rows:
+        if r.energy_mev < fit.e_min_mev:
+            continue
         if not np.isfinite(r.quantile_mm) or r.quantile_mm <= 0:
             continue
         f = float(fit.eval(r.energy_mev))
@@ -245,12 +337,14 @@ def check_fit_above_quantile(rows: list[CellStat], fit: PowerLawFit) -> FitQuant
 
 
 def fit_smax(rows: list[CellStat], particle: str,
+             quantile_multiplier: float,
              fit_min_overrides: dict[str, int] | None = None,
              world_half_mm: float = WORLD_HALF_MM,
              sat_frac: float = GEOMETRY_SAT_FRAC) -> PowerLawFit | None:
-    """Power-law fit s_max ≈ A · E^B in log-log space, using points with
-    E ≥ per-particle threshold and not geometry-saturated. Returns None if
-    fewer than 2 points survive (or any kept s_max is non-positive)."""
+    """Power-law fit (linear in log-log) of the *effective* s_max target,
+    quantile · quantile_multiplier (the bound that defines `s/s_max ≤ 1`
+    downstream). Uses points with E ≥ per-particle threshold and not
+    geometry-saturated. Returns None if fewer than 2 points survive."""
     threshold = (fit_min_overrides or {}).get(particle,
                   DEFAULT_FIT_MIN_MEV.get(particle, 0))
     n_low = sum(1 for r in rows if r.energy_mev < threshold)
@@ -258,131 +352,160 @@ def fit_smax(rows: list[CellStat], particle: str,
     n_sat = sum(1 for r in rows
                 if r.energy_mev >= threshold and np.isfinite(r.smax_mm)
                 and r.smax_mm >= sat_frac * world_half_mm)
-    keep = [r for r in keep if r.smax_mm > 0]
+    # Need a finite, positive quantile to take logs.
+    keep = [r for r in keep
+            if np.isfinite(r.quantile_mm) and r.quantile_mm > 0]
     if len(keep) < 2:
         return None
     E = np.array([r.energy_mev for r in keep], dtype=float)
-    y = np.array([r.smax_mm for r in keep], dtype=float)
+    y = np.array([r.quantile_mm * quantile_multiplier for r in keep], dtype=float)
     B, logA = np.polyfit(np.log(E), np.log(y), 1)
     return PowerLawFit(A=float(np.exp(logA)), B=float(B),
                        n_used=len(keep), e_min_mev=int(E.min()), e_max_mev=int(E.max()),
                        n_excluded_low=n_low, n_excluded_saturated=n_sat)
 
 
-def plot_smax_vs_energy(stats: list[CellStat], path: Path,
-                        quantile: float, quantile_multiplier: float,
-                        fits: dict[tuple[str, str], PowerLawFit] | None = None) -> None:
-    """Clean s_max(E) plot — one curve per (material, particle).
+def _group_by_material(stats: list[CellStat]) -> dict[str, dict[str, list[CellStat]]]:
+    """{material: {particle: [rows sorted by E, ...]}}"""
+    out: dict[str, dict[str, list[CellStat]]] = {}
+    for s in stats:
+        out.setdefault(s.material, {}).setdefault(s.particle, []).append(s)
+    for parts in out.values():
+        for rows in parts.values():
+            rows.sort(key=lambda r: r.energy_mev)
+    return out
 
-    Three series per (material, particle):
-      * s_max — last non-empty bin upper edge (observed)
-      * quantile — `quantile`-quantile of the s distribution
-      * effective s_max — quantile * quantile_multiplier (candidate cap)
+
+def _grid_layout(n: int) -> tuple[int, int]:
+    """Pick (nrows, ncols) for n subpanels — favour ≤3 columns for legibility."""
+    if n <= 1:
+        return 1, 1
+    if n <= 4:
+        return (n + 1) // 2, 2
+    ncols = 3
+    nrows = (n + ncols - 1) // ncols
+    return nrows, ncols
+
+
+def _draw_smax_panel(ax, rows: list[CellStat], particle: str, material: str,
+                     quantile: float, quantile_multiplier: float,
+                     fit: PowerLawFit | None) -> None:
+    E = np.array([r.energy_mev for r in rows])
+    smax = np.array([r.smax_mm for r in rows])
+    q = np.array([r.quantile_mm for r in rows])
+    q_eff = q * quantile_multiplier
+    ax.plot(E, smax, "o-", color="C0", lw=1.8, ms=5, label="s_max", zorder=5)
+    ax.plot(E, q, "x--", color="C0", lw=1.0, ms=5,
+            label=f"{quantile*100:g}% quantile", zorder=4)
+    ax.plot(E, q_eff, "s:", color="C0", lw=1.4, ms=4,
+            label=f"{quantile*100:g}% × {quantile_multiplier:g}", zorder=4)
+    if fit is not None:
+        xs = np.geomspace(fit.e_min_mev, fit.e_max_mev, 64)
+        ax.plot(xs, fit.eval(xs), "-", color="crimson", lw=2.2, zorder=10,
+                label=f"fit: {fit.A:.3g}·E^{fit.B:.3f}")
+        valid_E = E[np.isfinite(smax)]
+        if len(valid_E) and float(valid_E.min()) < fit.e_min_mev:
+            xs_ex = np.geomspace(float(valid_E.min()), fit.e_min_mev, 32)
+            ax.plot(xs_ex, fit.eval(xs_ex), "--", color="crimson",
+                    lw=1.8, alpha=0.85, zorder=9, label="fit (extrap.)")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("E [MeV]")
+    ax.set_ylabel("s [mm]")
+    ax.set_title(f"{particle} in {material}")
+    ax.grid(True, which="both", alpha=0.25)
+    ax.legend(fontsize=8, loc="lower right")
+
+
+def plot_smax_vs_energy(stats: list[CellStat], output_dir: Path,
+                        quantile: float, quantile_multiplier: float,
+                        fits: dict[tuple[str, str], PowerLawFit] | None = None
+                        ) -> list[Path]:
+    """One figure per material, one subpanel per particle.
+
+    Returns the list of files written.
     """
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    by_pm = _group_by_pm(stats)
-    fig, ax = plt.subplots(figsize=(7, 5))
-    for (material, particle), rows in sorted(by_pm.items()):
-        E = np.array([r.energy_mev for r in rows])
-        smax = np.array([r.smax_mm for r in rows])
-        q = np.array([r.quantile_mm for r in rows])
-        q_eff = q * quantile_multiplier
-        label = f"{particle} / {material}"
-        line, = ax.plot(E, smax, "o-", lw=2, ms=6, label=f"{label}  s_max")
-        ax.plot(E, q, "x--", color=line.get_color(), lw=1.2, ms=5,
-                label=f"{label}  {quantile*100:g}% quantile")
-        ax.plot(E, q_eff, "s:", color=line.get_color(), lw=1.6, ms=5,
-                label=f"{label}  {quantile*100:g}% × {quantile_multiplier:g}  (eff. s_max)")
-
-        fit = (fits or {}).get((material, particle))
-        if fit is not None:
-            # Fitted-range portion: solid crimson, drawn on top.
-            xs = np.geomspace(fit.e_min_mev, fit.e_max_mev, 64)
-            ax.plot(xs, fit.eval(xs), "-", color="crimson", lw=2.2,
-                    alpha=1.0, zorder=10,
-                    label=(f"{label}  fit: {fit.A:.2f}·E^{fit.B:.3f} mm "
-                           f"(E ≥ {fit.e_min_mev} MeV, n={fit.n_used})"))
-            # Extrapolation below the per-particle threshold (sub-Cherenkov
-            # regime). Dashed so it's visually distinct from the fit region.
-            # Stop at the lowest energy with a meaningful (non-NaN) s_max —
-            # there's no point drawing the fit past energies where no
-            # Cherenkov was emitted at all.
-            valid_E = E[np.isfinite(smax)]
-            if len(valid_E) and float(valid_E.min()) < fit.e_min_mev:
-                e_data_min = float(valid_E.min())
-                xs_ex = np.geomspace(e_data_min, fit.e_min_mev, 32)
-                ax.plot(xs_ex, fit.eval(xs_ex), "--", color="crimson",
-                        lw=2.0, alpha=0.85, zorder=9,
-                        label=f"{label}  fit (extrapolated)")
-
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel("Kinetic energy [MeV]")
-    ax.set_ylabel("s [mm]")
-    ax.set_title("Cherenkov emission s_max(E)")
-    ax.grid(True, which="both", alpha=0.3)
-    ax.legend(fontsize=9)
-    fig.tight_layout()
-    fig.savefig(path, dpi=140)
-    plt.close(fig)
+    written: list[Path] = []
+    by_mat = _group_by_material(stats)
+    for material, particles in sorted(by_mat.items()):
+        names = sorted(particles.keys())
+        nrows, ncols = _grid_layout(len(names))
+        fig, axes = plt.subplots(nrows, ncols,
+                                 figsize=(4.8 * ncols, 3.8 * nrows),
+                                 squeeze=False)
+        for i, particle in enumerate(names):
+            ax = axes[i // ncols][i % ncols]
+            fit = (fits or {}).get((material, particle))
+            _draw_smax_panel(ax, particles[particle], particle, material,
+                             quantile, quantile_multiplier, fit)
+        for j in range(len(names), nrows * ncols):
+            axes[j // ncols][j % ncols].set_visible(False)
+        fig.suptitle(f"Cherenkov emission s_max(E) — {material}", y=1.0)
+        fig.tight_layout()
+        path = output_dir / f"smax_vs_energy_{material}.png"
+        fig.savefig(path, dpi=130)
+        plt.close(fig)
+        written.append(path)
+    return written
 
 
-def plot_distributions(stats: list[CellStat], path: Path) -> None:
-    """Overlay of PhotonHist_Distance distributions, one panel per particle."""
+def plot_distributions(stats: list[CellStat], output_dir: Path) -> list[Path]:
+    """One figure per material, one subpanel per particle. Each subpanel
+    overlays the per-energy PhotonHist_Distance, viridis-coloured by E."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.cm import viridis
     from matplotlib.colors import LogNorm
 
-    by_pm = _group_by_pm(stats)
-    panels = sorted(by_pm.keys())
-    if not panels:
-        return
+    written: list[Path] = []
+    by_mat = _group_by_material(stats)
+    for material, particles in sorted(by_mat.items()):
+        names = sorted(particles.keys())
+        nrows, ncols = _grid_layout(len(names))
+        fig, axes = plt.subplots(nrows, ncols,
+                                 figsize=(5.5 * ncols, 3.8 * nrows),
+                                 squeeze=False)
+        # Shared colormap across panels so the legend reads consistently.
+        all_rows = [r for rows in particles.values() for r in rows]
+        e_min = min(r.energy_mev for r in all_rows)
+        e_max = max(r.energy_mev for r in all_rows)
+        norm = LogNorm(vmin=max(e_min, 1), vmax=e_max)
 
-    ncols = min(2, len(panels))
-    nrows = (len(panels) + ncols - 1) // ncols
-    fig, axes = plt.subplots(
-        nrows, ncols, figsize=(7 * ncols, 4.5 * nrows), squeeze=False)
+        for i, particle in enumerate(names):
+            ax = axes[i // ncols][i % ncols]
+            x_max = 0.0
+            for r in particles[particle]:
+                if r.counts is None or r.edges is None or not r.counts.sum():
+                    continue
+                centers = 0.5 * (r.edges[:-1] + r.edges[1:])
+                mask = r.counts > 0
+                ax.step(centers[mask], r.counts[mask], where="mid",
+                        color=viridis(norm(r.energy_mev)), lw=1.0,
+                        label=f"{r.energy_mev} MeV")
+                if np.isfinite(r.smax_mm):
+                    x_max = max(x_max, r.smax_mm)
+            ax.set_xlim(0, x_max * 1.05 if x_max else None)
+            ax.set_yscale("log")
+            ax.set_xlabel("s = |emission - vertex|  [mm]")
+            ax.set_ylabel("photons / bin")
+            ax.set_title(f"{particle} in {material}")
+            ax.grid(True, which="both", alpha=0.25)
+            ax.legend(fontsize=7, loc="upper right", ncol=2)
 
-    # Shared colormap across panels so the legend reads consistently.
-    e_min = min(r.energy_mev for rows in by_pm.values() for r in rows)
-    e_max = max(r.energy_mev for rows in by_pm.values() for r in rows)
-    norm = LogNorm(vmin=max(e_min, 1), vmax=e_max)
-
-    for ax_idx, (material, particle) in enumerate(panels):
-        ax = axes[ax_idx // ncols][ax_idx % ncols]
-        rows = by_pm[(material, particle)]
-        x_max = 0.0
-        for r in rows:
-            if r.counts is None or r.edges is None or not r.counts.sum():
-                continue
-            centers = 0.5 * (r.edges[:-1] + r.edges[1:])
-            mask = r.counts > 0
-            color = viridis(norm(r.energy_mev))
-            ax.step(centers[mask], r.counts[mask], where="mid",
-                    color=color, lw=1.2,
-                    label=f"{r.energy_mev} MeV")
-            x_max = max(x_max, r.smax_mm)
-        ax.set_xlim(0, x_max * 1.05 if x_max else None)
-        ax.set_yscale("log")
-        ax.set_xlabel("s = |emission - vertex|  [mm]")
-        ax.set_ylabel("photons / bin (1 cm)")
-        ax.set_title(f"{particle} in {material}")
-        ax.grid(True, which="both", alpha=0.25)
-        ax.legend(fontsize=8, loc="upper right", ncol=2)
-
-    # Hide any unused axes
-    for i in range(len(panels), nrows * ncols):
-        axes[i // ncols][i % ncols].set_visible(False)
-
-    fig.suptitle("PhotonHist_Distance per (particle, energy)", y=1.0)
-    fig.tight_layout()
-    fig.savefig(path, dpi=130)
-    plt.close(fig)
+        for j in range(len(names), nrows * ncols):
+            axes[j // ncols][j % ncols].set_visible(False)
+        fig.suptitle(f"PhotonHist_Distance — {material}", y=1.0)
+        fig.tight_layout()
+        path = output_dir / f"s_distributions_{material}.png"
+        fig.savefig(path, dpi=130)
+        plt.close(fig)
+        written.append(path)
+    return written
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -397,18 +520,25 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Restrict to these materials (default: all found).")
     p.add_argument("--particles", nargs="+", default=None,
                    help="Restrict to these particles (default: all found).")
-    p.add_argument("--quantile", type=float, default=0.99,
-                   help="Quantile reported (default: 0.99).")
+    p.add_argument("--quantile", type=float, default=0.999,
+                   help="Quantile used as the fit target (default: 0.999). "
+                        "5× stats per cell give 10–10⁵ photons in the 0.1 %% "
+                        "tail, plenty for a stable per-bin quantile.")
     p.add_argument("--quantile-multiplier", type=float, default=1.1,
                    help="Multiplier applied to the quantile to produce the "
-                        "'effective s_max' line in the plot (default: 1.1).")
+                        "'effective s_max' that the fit targets (default: 1.1).")
     p.add_argument("--csv", type=Path, default=None,
                    help="Optional CSV output path (default: <output-dir>/smax_summary.csv).")
-    p.add_argument("--smax-plot", type=Path, default=None,
-                   help="Output path for s_max(E) plot (default: <output-dir>/smax_vs_energy.png).")
-    p.add_argument("--dist-plot", type=Path, default=None,
-                   help="Output path for histogram-distribution overlay (default: <output-dir>/s_distributions.png).")
-    p.add_argument("--no-csv", action="store_true", help="Skip CSV emission.")
+    p.add_argument("--plots-dir", type=Path, default=None,
+                   help="Directory for per-material PNGs (default: --output-dir). "
+                        "Files written: smax_vs_energy_<material>.png and "
+                        "s_distributions_<material>.png per material.")
+    p.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR,
+                   help="Root for per-particle parametrization CSVs "
+                        "(default: PhotonSim/data, alongside this script).")
+    p.add_argument("--no-csv", action="store_true", help="Skip summary CSV.")
+    p.add_argument("--no-data-export", action="store_true",
+                   help="Skip writing per-particle parametrization CSVs to --data-dir.")
     p.add_argument("--no-plot", action="store_true", help="Skip all plots.")
     return p.parse_args(argv)
 
@@ -445,10 +575,12 @@ def main(argv: list[str] | None = None) -> int:
     # geometry-saturated points.
     by_pm = _group_by_pm(stats)
     fits: dict[tuple[str, str], PowerLawFit] = {}
-    print("\npower-law fits  s_max ≈ A · E^B  (linear in log-log; E in MeV, s_max in mm):",
+    print(f"\npower-law fits to effective s_max ({args.quantile*100:g}% × "
+          f"{args.quantile_multiplier:g}) ≈ A · E^B  "
+          f"(linear in log-log; E in MeV, s_max in mm):",
           file=sys.stderr)
     for (material, particle), rows in sorted(by_pm.items()):
-        fit = fit_smax(rows, particle)
+        fit = fit_smax(rows, particle, args.quantile_multiplier)
         if fit is None:
             print(f"  {particle:<6s} / {material:<10s}  insufficient points",
                   file=sys.stderr)
@@ -490,15 +622,22 @@ def main(argv: list[str] | None = None) -> int:
         write_csv(stats, csv_path, args.quantile)
         print(f"\nwrote {csv_path}", file=sys.stderr)
 
-    if not args.no_plot:
-        smax_path = args.smax_plot or (args.output_dir / "smax_vs_energy.png")
-        plot_smax_vs_energy(stats, smax_path, args.quantile,
-                            args.quantile_multiplier, fits=fits)
-        print(f"wrote {smax_path}", file=sys.stderr)
+    if not args.no_data_export:
+        written = write_parametrization(
+            stats, fits, args.data_dir,
+            args.quantile, args.quantile_multiplier,
+            WORLD_HALF_MM, GEOMETRY_SAT_FRAC)
+        print(f"wrote {len(written)} parametrization file(s) under {args.data_dir}",
+              file=sys.stderr)
 
-        dist_path = args.dist_plot or (args.output_dir / "s_distributions.png")
-        plot_distributions(stats, dist_path)
-        print(f"wrote {dist_path}", file=sys.stderr)
+    if not args.no_plot:
+        plots_dir = args.plots_dir or args.output_dir
+        plots_dir.mkdir(parents=True, exist_ok=True)
+        for p in plot_smax_vs_energy(stats, plots_dir, args.quantile,
+                                     args.quantile_multiplier, fits=fits):
+            print(f"wrote {p}", file=sys.stderr)
+        for p in plot_distributions(stats, plots_dir):
+            print(f"wrote {p}", file=sys.stderr)
 
     return 0
 

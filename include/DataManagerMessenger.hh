@@ -35,6 +35,7 @@
 class G4UIdirectory;
 class G4UIcmdWithABool;
 class G4UIcmdWithAString;
+class G4UIcmdWithADoubleAndUnit;
 class G4UIcommand;
 
 namespace PhotonSim
@@ -49,6 +50,7 @@ class DataManager;
 /// - /photon/storeProcessName [true/false]
 /// - /photon/streamPhotonsChunked [true/false]
 /// - /output/filename [filename.root]
+/// - /output/smax [value unit]   (sets s_max for PhotonHist_AngleDistanceNorm)
 
 class DataManagerMessenger: public G4UImessenger
 {
@@ -67,6 +69,7 @@ class DataManagerMessenger: public G4UImessenger
     G4UIcmdWithABool*              fStoreProcessNameCmd = nullptr;
     G4UIcmdWithABool*              fStreamPhotonsChunkedCmd = nullptr;
     G4UIcmdWithAString*            fFilenameCmd = nullptr;
+    G4UIcmdWithADoubleAndUnit*     fSmaxCmd = nullptr;
 };
 
 }  // namespace PhotonSim

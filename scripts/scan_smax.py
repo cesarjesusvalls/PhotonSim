@@ -40,16 +40,19 @@ DEFAULT_EVENT_BASE = 100        # events used at and below the anchor energy
 DEFAULT_EVENT_ANCHOR_MEV = 1000  # halve events per doubling above this
 
 
-def default_events_for(energy_mev: int) -> int:
-    """Energy-dependent event count.
+def default_events_for(energy_mev: int, multiplier: float = 1.0) -> int:
+    """Energy-dependent event count, optionally scaled by `multiplier`.
 
-    Flat at DEFAULT_EVENT_BASE (=100) at and below the anchor (=1 GeV);
-    halved per doubling above; floored at DEFAULT_EVENT_FLOOR (=10).
+    Flat at DEFAULT_EVENT_BASE (=100) × multiplier at and below the anchor
+    (=1 GeV); halved per doubling above; floored at DEFAULT_EVENT_FLOOR
+    (=10) × multiplier.
     """
+    base = DEFAULT_EVENT_BASE * multiplier
+    floor = DEFAULT_EVENT_FLOOR * multiplier
     if energy_mev <= DEFAULT_EVENT_ANCHOR_MEV:
-        return DEFAULT_EVENT_BASE
-    raw = DEFAULT_EVENT_BASE * DEFAULT_EVENT_ANCHOR_MEV / energy_mev
-    return max(DEFAULT_EVENT_FLOOR, int(round(raw)))
+        return max(int(round(floor)), int(round(base)))
+    raw = base * DEFAULT_EVENT_ANCHOR_MEV / energy_mev
+    return max(int(round(floor)), int(round(raw)))
 
 
 def _decay_disable_block(particle: str) -> str:
@@ -180,6 +183,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
              "Pass an int to force a fixed count for every cell.",
     )
     p.add_argument(
+        "--events-multiplier", type=float, default=1.0,
+        help="Scale the energy-dependent schedule by this factor "
+             "(default: 1.0). Ignored when --events is set.",
+    )
+    p.add_argument(
         "--output-dir", type=Path,
         default=Path("/Users/cjesus/Desktop/INTERM/OUTPUT/smax"),
         help="Host output directory (bind-mounted to /out inside container).",
@@ -223,14 +231,22 @@ def main(argv: list[str] | None = None) -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     cells = [(p, e) for p in args.particles for e in args.energies]
-    sched = ("fixed=" + str(args.events)) if args.events is not None else "energy-dependent"
+    if args.events is not None:
+        sched = f"fixed={args.events}"
+    elif args.events_multiplier != 1.0:
+        sched = f"energy-dependent × {args.events_multiplier:g}"
+    else:
+        sched = "energy-dependent"
     print(f"scan_smax: {len(cells)} cells "
           f"({len(args.particles)} particles × {len(args.energies)} energies; events: {sched}) "
           f"-> {args.output_dir / args.material}")
 
     failures: list[str] = []
     for i, (particle, energy) in enumerate(cells, 1):
-        events = args.events if args.events is not None else default_events_for(energy)
+        if args.events is not None:
+            events = args.events
+        else:
+            events = default_events_for(energy, args.events_multiplier)
         label = f"[{i:>3d}/{len(cells)}] {particle:>6s}  {energy:>6d} MeV  ({events:>4d} evt)"
         ok, msg = run_cell(
             material=args.material,

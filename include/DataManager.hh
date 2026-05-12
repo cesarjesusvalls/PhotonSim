@@ -158,6 +158,12 @@ class DataManager
     void SetOutputFilename(const G4String& filename) { fOutputFilename = filename; }
     G4String GetOutputFilename() const { return fOutputFilename; }
 
+    // s_max (mm) for PhotonHist_AngleDistanceNorm. Setting to 0 (default)
+    // skips the normalised histogram entirely. Must be set before
+    // /run/initialize so Initialize() sees it when booking histograms.
+    void SetSmaxMm(G4double smax_mm) { fSmaxMm = smax_mm; }
+    G4double GetSmaxMm() const { return fSmaxMm; }
+
   private:
     DataManager() = default;
     ~DataManager();
@@ -306,6 +312,19 @@ class DataManager
     // 1D distribution of s = |emission - primary vertex| per Cherenkov photon.
     // Used to parametrise s_max(E, particle, material) for the SIREN surrogate.
     TH1D* fPhotonHist_Distance = nullptr;
+
+    // Opening angle vs s/s_max — the s/s_max-normalised analogue of
+    // PhotonHist_AngleDistance. Booked and filled only when fSmaxMm > 0;
+    // SIREN consumes this once the refactor is wired up.
+    TH2D* fPhotonHist_AngleDistanceNorm = nullptr;
+
+    // dE/dx vs s/s_max — the s/s_max-normalised analogue of dEdxHist_Distance.
+    // Same conditional booking as fPhotonHist_AngleDistanceNorm.
+    TH2D* fdEdxHist_DistanceNorm = nullptr;
+
+    // Per-job s_max set via /output/smax (mm). 0 means the Norm histogram
+    // is not built — keeps legacy macros unchanged.
+    G4double fSmaxMm = 0.0;
 
     // Output filename
     G4String fOutputFilename = "optical_photons.root";
