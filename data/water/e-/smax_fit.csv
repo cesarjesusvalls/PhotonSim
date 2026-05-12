@@ -1,0 +1,2 @@
+material,particle,form,A,B,fit_min_mev,fit_max_mev,n_used,n_excluded_low,n_excluded_saturated,quantile,quantile_multiplier,min_fit_to_quantile_ratio,min_ratio_e_mev,generated_at_utc
+water,e-,A*E^B,3438.454234,0.085697,100,50000,8,1,0,0.999,1.1,0.9993,2000,2026-05-12T11:53:56+00:00

@@ -64,8 +64,15 @@ energy_scan_macros/
 # Generated lookup tables
 3d_lookup_table/
 
-# Local data directory (contains copied ROOT files)
-data/
+# Local data directory (contains copied ROOT files) — except the s_max
+# parametrisations, which are the canonical PhotonSim → SIREN handoff.
+data/*
+!data/*/
+data/*/*
+!data/*/*/
+data/*/*/*
+!data/*/*/smax_fit.csv
+!data/*/*/smax_data.csv
 
 # S3DF cluster-specific user configuration (contains local paths)
 s3df_scripts/user_paths.sh
