@@ -206,7 +206,10 @@ void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event)
 
     const G4int nLo = std::max(0, fBombMin);
     const G4int nHi = std::max(nLo, fBombMax);
-    const G4int n = nLo + static_cast<G4int>((nHi - nLo + 1) * G4UniformRand());
+    G4int n = nLo + static_cast<G4int>((nHi - nLo + 1) * G4UniformRand());
+    // Floating-point safety: if G4UniformRand() ever rounds up to ~1.0,
+    // the cast would yield nHi+1. Clamp.
+    if (n > nHi) n = nHi;
 
     G4double sum_ke = 0.0;
     for (G4int i = 0; i < n; ++i) {
@@ -220,7 +223,10 @@ void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event)
       }
       fParticleGun->SetParticleDefinition(particle);
 
-      const G4double energy = spec.minEnergy + (spec.maxEnergy - spec.minEnergy) * G4UniformRand();
+      G4double energy = spec.minEnergy + (spec.maxEnergy - spec.minEnergy) * G4UniformRand();
+      // G4ParticleGun rejects exact 0 KE for massive species; floor to 1 eV
+      // so user-friendly "0 to N MeV" candidate ranges still work.
+      if (energy <= 0.0) energy = 1.0 * eV;
       fParticleGun->SetParticleEnergy(energy);
       sum_ke += energy;
 
