@@ -520,10 +520,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Restrict to these materials (default: all found).")
     p.add_argument("--particles", nargs="+", default=None,
                    help="Restrict to these particles (default: all found).")
-    p.add_argument("--quantile", type=float, default=0.999,
-                   help="Quantile used as the fit target (default: 0.999). "
-                        "5× stats per cell give 10–10⁵ photons in the 0.1 %% "
-                        "tail, plenty for a stable per-bin quantile.")
+    p.add_argument("--quantile", type=float, default=0.9999,
+                   help="Quantile used as the fit target (default: 0.9999). "
+                        "Heavy stats per cell (10k+ events at low E) give "
+                        "enough photons in the 0.01 %% tail for a stable "
+                        "per-bin quantile, and using a deeper tail makes the "
+                        "fit a tighter upper bound on emission distance.")
     p.add_argument("--quantile-multiplier", type=float, default=1.1,
                    help="Multiplier applied to the quantile to produce the "
                         "'effective s_max' that the fit targets (default: 1.1).")
