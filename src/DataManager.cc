@@ -186,11 +186,11 @@ void DataManager::Initialize(const G4String& filename)
                                    800, 0.0, 800.0);          // 0 to 800 nm
 
   // 1D distance histogram: s = |emission - origin| per Cherenkov photon.
-  // Range matches the 500 m detector half-extent ceiling so 50 GeV mu-
-  // (~250 m range in water) is captured without overflow. 5 cm bins.
+  // Range matches the 500 m detector half-extent (= 1 km cube) so high-E mu-
+  // (~480 m range in water at 100 GeV) is captured without overflow. 10 cm bins.
   fPhotonHist_Distance = new TH1D("PhotonHist_Distance",
                                   "Photon Distance from Origin;Distance s (mm);Photons",
-                                  10000, 0.0, 500000.0);
+                                  10000, 0.0, 1000000.0);
 
   // Opening angle vs s/s_max — only booked when the macro set s_max via
   // /output/smax. Photons with s/s_max > 1 fall into the ROOT overflow bin.

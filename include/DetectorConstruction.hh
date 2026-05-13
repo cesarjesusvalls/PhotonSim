@@ -70,9 +70,9 @@ class DetectorConstruction : public G4VUserDetectorConstruction
     G4LogicalVolume* fDetectorLogical = nullptr;
 
     // Detector parameters
-    G4double fDetectorSizeX = 500.0*CLHEP::m;
-    G4double fDetectorSizeY = 500.0*CLHEP::m;
-    G4double fDetectorSizeZ = 500.0*CLHEP::m;
+    G4double fDetectorSizeX = 1000.0*CLHEP::m;
+    G4double fDetectorSizeY = 1000.0*CLHEP::m;
+    G4double fDetectorSizeZ = 1000.0*CLHEP::m;
     G4String fDetectorMaterialName = "Water";
 
     // Materials

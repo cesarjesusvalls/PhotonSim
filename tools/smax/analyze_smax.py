@@ -52,11 +52,11 @@ DEFAULT_FIT_MIN_MEV = {
     "gamma": 0,
 }
 
-# Detector is a 500 m cube (default in DetectorConstruction.hh). A particle
-# fired from origin along +Z can travel at most 250 m before exiting, so
+# Detector is a 1 km cube (default in DetectorConstruction.hh). A particle
+# fired from origin along +Z can travel at most 500 m before exiting, so
 # s_max values within `sat_frac` of that ceiling are geometry-limited and
 # excluded from the fit.
-WORLD_HALF_MM = 250_000.0
+WORLD_HALF_MM = 500_000.0
 GEOMETRY_SAT_FRAC = 0.95
 
 
