@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""Visualise PhotonHist_AngleDistanceNorm across a grid of energies.
+"""Visualise the SIREN-input *Norm histograms across a grid of energies.
 
-Walks <input-dir>/<material>/<particle>/<E>MeV/photonsim.root, reads
-PhotonHist_AngleDistanceNorm (opening angle × s/s_max), and writes one PNG
-per particle with a row of energy subpanels — a quick eyeball of how the
-Cherenkov cone shape evolves once the distance axis is normalised by the
+Walks <input-dir>/<material>/<particle>/<E>MeV/photonsim.root, reads the
+selected 2D histogram (defaults to PhotonHist_AngleDistanceNorm: opening
+angle × s/s_max), and writes one PNG per particle with a row of energy
+subpanels — a quick eyeball of how the Cherenkov cone shape (or dE/dx
+profile) evolves once the distance axis is normalised by the
 parametrised s_max.
+
+Two histogram variants share the same s/s_max y-axis:
+
+  --hist angle   PhotonHist_AngleDistanceNorm  (opening angle, default)
+  --hist dedx    dEdxHist_DistanceNorm         (dE/dx in keV/mm)
 
 Designed for inspecting scan_siren_inputs.py output. Host-native
 (uproot + numpy + matplotlib).
@@ -22,13 +28,21 @@ import numpy as np
 import uproot
 
 
-HIST_NAME = "PhotonHist_AngleDistanceNorm"
+# Hist-variant config. Each entry: (TKey in ROOT, x-axis label, output filename stem).
+HIST_VARIANTS = {
+    "angle": ("PhotonHist_AngleDistanceNorm", "opening angle [rad]",
+              "angle_distance_norm"),
+    "dedx":  ("dEdxHist_DistanceNorm",        "dE/dx [keV/mm]",
+              "dedx_distance_norm"),
+}
 CELL_DIR_RE = re.compile(r"^(\d+)MeV$")
 
 
 def discover_cells(root: Path, materials: list[str] | None,
                    particles: list[str] | None,
-                   energies: list[int] | None) -> dict[tuple[str, str], dict[int, Path]]:
+                   energies: list[int] | None,
+                   hist_name: str = HIST_VARIANTS["angle"][0],
+                   ) -> dict[tuple[str, str], dict[int, Path]]:
     """{(material, particle): {energy_mev: root_path, ...}}"""
     out: dict[tuple[str, str], dict[int, Path]] = {}
     if not root.exists():
@@ -53,7 +67,8 @@ def discover_cells(root: Path, materials: list[str] | None,
 
 
 def plot_particle_grid(material: str, particle: str,
-                       cells: dict[int, Path], out_path: Path) -> None:
+                       cells: dict[int, Path], out_path: Path,
+                       hist_name: str, xlabel: str) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -70,14 +85,16 @@ def plot_particle_grid(material: str, particle: str,
     # First pass: read everything to set a shared colour scale.
     panels = []
     vmin, vmax = np.inf, 0.0
+    xlim_max = 0.0
     for e in energies:
         with uproot.open(cells[e]) as f:
-            if HIST_NAME not in f:
+            if hist_name not in f:
                 panels.append((e, None, None, None))
                 continue
-            counts, xedges, yedges = f[HIST_NAME].to_numpy()
+            counts, xedges, yedges = f[hist_name].to_numpy()
             entries = counts.sum()
             panels.append((e, counts, xedges, yedges))
+            xlim_max = max(xlim_max, float(xedges[-1]))
             positive = counts[counts > 0]
             if positive.size:
                 vmin = min(vmin, float(positive.min()))
@@ -95,13 +112,13 @@ def plot_particle_grid(material: str, particle: str,
             continue
         im = ax.pcolormesh(xedges, yedges, counts.T, norm=norm,
                            cmap="viridis", shading="auto")
-        ax.set_title(f"{e} MeV  ({counts.sum():.2g} γ)", fontsize=9)
-        ax.set_xlim(0, np.pi)
+        ax.set_title(f"{e} MeV  ({counts.sum():.2g} entries)", fontsize=9)
+        ax.set_xlim(0, xlim_max)
         ax.set_ylim(0, 1)
 
     # Shared axis labels
     for c in range(ncols):
-        axes[nrows - 1][c].set_xlabel("opening angle [rad]")
+        axes[nrows - 1][c].set_xlabel(xlabel)
     for r in range(nrows):
         axes[r][0].set_ylabel("s / s_max")
 
@@ -110,10 +127,9 @@ def plot_particle_grid(material: str, particle: str,
         axes[j // ncols][j % ncols].set_visible(False)
 
     if im is not None:
-        fig.colorbar(im, ax=axes, fraction=0.025, pad=0.02, label="photons / bin")
+        fig.colorbar(im, ax=axes, fraction=0.025, pad=0.02, label="entries / bin")
 
-    fig.suptitle(f"PhotonHist_AngleDistanceNorm — {particle} in {material}",
-                 y=1.0)
+    fig.suptitle(f"{hist_name} — {particle} in {material}", y=1.0)
     fig.savefig(out_path, dpi=130, bbox_inches="tight")
     plt.close(fig)
 
@@ -130,6 +146,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--particles", nargs="+", default=None)
     p.add_argument("--energies", nargs="+", type=int, default=None,
                    help="Restrict to these energies (MeV).")
+    p.add_argument("--hist", choices=sorted(HIST_VARIANTS), default="angle",
+                   help="Which Norm histogram to render. 'angle' = "
+                        "PhotonHist_AngleDistanceNorm (default), 'dedx' = "
+                        "dEdxHist_DistanceNorm.")
     return p.parse_args(argv)
 
 
@@ -141,14 +161,19 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = args.output_dir or args.input_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    cells = discover_cells(args.input_dir, args.materials, args.particles, args.energies)
+    hist_name, xlabel, out_stem = HIST_VARIANTS[args.hist]
+
+    cells = discover_cells(args.input_dir, args.materials, args.particles,
+                           args.energies, hist_name=hist_name)
     if not cells:
-        print("error: no cells found matching filters", file=sys.stderr)
+        print(f"error: no cells found matching filters (looking for {hist_name})",
+              file=sys.stderr)
         return 1
 
     for (material, particle), per_e in sorted(cells.items()):
-        out_path = out_dir / f"angle_distance_norm_{material}_{particle}.png"
-        plot_particle_grid(material, particle, per_e, out_path)
+        out_path = out_dir / f"{out_stem}_{material}_{particle}.png"
+        plot_particle_grid(material, particle, per_e, out_path,
+                           hist_name=hist_name, xlabel=xlabel)
         print(f"wrote {out_path}  ({len(per_e)} energies)", file=sys.stderr)
     return 0
 
