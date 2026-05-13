@@ -264,7 +264,6 @@ void DataManager::Finalize()
         G4cout << "Photon AngleDistanceNorm histogram written with "
                << fPhotonHist_AngleDistanceNorm->GetEntries() << " entries" << G4endl;
         fPhotonHist_AngleDistanceNorm = nullptr;
-  fdEdxHist_DistanceNorm = nullptr;
       }
       if (fdEdxHist_DistanceNorm) {
         fdEdxHist_DistanceNorm->Write();
