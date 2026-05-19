@@ -46,9 +46,11 @@ DEFAULT_FIT_MIN_MEV = {
     "mu-":   500, "mu+":   500,
     "pi-":   500, "pi+":   500,
     "proton": 5000,
-    # 10 MeV e± is too close to threshold + range-limited to give a clean
-    # point on the shower-extent curve; start the fit at 100 MeV.
-    "e-": 100, "e+": 100,
+    # e± use the smooth two-power form (see PARTICLE_FORM below), which
+    # benefits from low-E data points. Floor at 2 MeV to drop only the
+    # 1 MeV cell whose 99.99% quantile lands in the first PhotonHist_Distance
+    # bin (100 mm) and is therefore resolution noise rather than physics.
+    "e-": 2, "e+": 2,
     "gamma": 0,
 }
 
@@ -58,6 +60,88 @@ DEFAULT_FIT_MIN_MEV = {
 # excluded from the fit.
 WORLD_HALF_MM = 500_000.0
 GEOMETRY_SAT_FRAC = 0.95
+
+
+# -----------------------------------------------------------------------------
+# Fit form registry — single source of truth for the parametric forms of
+# s_max(E) used in this repo. Each entry exposes:
+#   - params: tuple of param names (also the column names in smax_fit.csv)
+#   - eval(params_dict, E):   evaluate the form at E (array or scalar)
+#   - fit(E, y) -> dict|None: regress against (E, y); None on failure
+#   - label(params_dict):     short human-readable string for plot legends
+#
+# Consumers (siren_inputs/generate_jobs.py, build_tables.py, scan_siren_inputs.py)
+# carry tiny inline copies of the eval branch — keep all three in sync when
+# adding a new form.
+def _pl_eval(p, E):
+    return float(p["A"]) * np.asarray(E) ** float(p["B"])
+
+def _pl_fit(E, y):
+    if len(E) < 2:
+        return None
+    B, logA = np.polyfit(np.log(E), np.log(y), 1)
+    return {"A": float(np.exp(logA)), "B": float(B)}
+
+def _pl_label(p):
+    return f"{float(p['A']):.3g}·E^{float(p['B']):.3f}"
+
+def _stp_eval(p, E):
+    a, b1, b2, E0 = (float(p[k]) for k in ("a", "b1", "b2", "E0"))
+    E = np.asarray(E, dtype=float)
+    return a * E ** b1 / (1.0 + (E / E0) ** (b1 - b2))
+
+def _stp_fit(E, y):
+    # Fit in log-y space so each decade of E gets uniform weight — otherwise
+    # the high-E points (large y) dominate the residual and the low-E shape
+    # is mis-modelled. Seed taken from an offline fit on the water/e- 60-cell
+    # smax tree; the optimum is local-stable so curve_fit converges back from
+    # this neighbourhood. Bounds keep b1 > 0 (monotone), b2 free to be ≤ 0 if
+    # data ever flattens at high E, and E0 strictly positive.
+    from scipy.optimize import curve_fit
+    if len(E) < 4:
+        return None
+    p0     = (145.86, 1.369, 0.097, 13.08)
+    bounds = ([1e-3, 0.0, -2.0, 1e-3], [1e6, 5.0, 5.0, 1e6])
+    try:
+        popt, _ = curve_fit(
+            lambda e, a, b1, b2, E0: np.log(np.clip(
+                _stp_eval({"a": a, "b1": b1, "b2": b2, "E0": E0}, e),
+                1e-12, None)),
+            E, np.log(y), p0=p0, bounds=bounds, maxfev=20000)
+    except Exception:
+        return None
+    return dict(zip(("a", "b1", "b2", "E0"), map(float, popt)))
+
+def _stp_label(p):
+    a, b1, b2, E0 = (float(p[k]) for k in ("a", "b1", "b2", "E0"))
+    return f"{a:.2f}·E^{b1:.3f} / (1+(E/{E0:.2f})^{b1-b2:.3f})"
+
+FORMS: dict[str, dict] = {
+    "A*E^B": dict(
+        params=("A", "B"),
+        eval=_pl_eval, fit=_pl_fit, label=_pl_label),
+    "smooth_two_power": dict(
+        params=("a", "b1", "b2", "E0"),
+        eval=_stp_eval, fit=_stp_fit, label=_stp_label),
+}
+
+# Per-particle form dispatch. Particles not listed fall back to DEFAULT_FORM.
+PARTICLE_FORM: dict[str, str] = {
+    "e-":     "smooth_two_power",
+    "e+":     "smooth_two_power",
+    "mu-":    "A*E^B", "mu+":    "A*E^B",
+    "pi-":    "A*E^B", "pi+":    "A*E^B",
+    "proton": "A*E^B",
+    "gamma":  "A*E^B",
+}
+DEFAULT_FORM = "A*E^B"
+
+# Union of every param column across all forms — drives CSV header layout.
+ALL_PARAM_COLUMNS: tuple[str, ...] = ("A", "B", "a", "b1", "b2", "E0")
+
+
+def form_for(particle: str) -> str:
+    return PARTICLE_FORM.get(particle, DEFAULT_FORM)
 
 
 @dataclass
@@ -157,7 +241,7 @@ def print_table(stats: list[CellStat], quantile: float, out=sys.stdout) -> None:
 
 
 def write_parametrization(stats: list[CellStat],
-                          fits: dict[tuple[str, str], PowerLawFit],
+                          fits: dict[tuple[str, str], SmaxFit],
                           data_dir: Path,
                           quantile: float, quantile_multiplier: float,
                           world_half_mm: float, sat_frac: float) -> list[Path]:
@@ -209,22 +293,35 @@ def write_parametrization(stats: list[CellStat],
         fit_path = cell_dir / "smax_fit.csv"
         with fit_path.open("w", newline="") as fh:
             w = csv.writer(fh)
+            # Schema: form column discriminates which param columns are filled.
+            # Power-law fills A,B; smooth_two_power fills a,b1,b2,E0. Unused
+            # param columns are left blank. Consumers must dispatch on `form`.
             w.writerow(["material", "particle", "form",
-                        "A", "B",
+                        *ALL_PARAM_COLUMNS,
                         "fit_min_mev", "fit_max_mev",
                         "n_used", "n_excluded_low", "n_excluded_saturated",
                         "quantile", "quantile_multiplier",
                         "min_fit_to_quantile_ratio", "min_ratio_e_mev",
                         "generated_at_utc"])
             if fit is None:
-                w.writerow([material, particle, "", "", "", "", "", "", "",
-                            "", quantile, quantile_multiplier, "", "",
+                # No fit produced — record the form that *would* have been
+                # used so consumers don't have to guess on an empty row.
+                form = form_for(particle)
+                w.writerow([material, particle, form,
+                            *("" for _ in ALL_PARAM_COLUMNS),
+                            "", "", "", "", "",
+                            quantile, quantile_multiplier, "", "",
                             generated_at])
             else:
                 chk = check_fit_above_quantile(rows, fit)
+                params_active = set(FORMS[fit.form]["params"])
+                param_cells = [
+                    f"{float(fit.params[c]):.6f}" if c in params_active else ""
+                    for c in ALL_PARAM_COLUMNS
+                ]
                 w.writerow([
-                    material, particle, "A*E^B",
-                    f"{fit.A:.6f}", f"{fit.B:.6f}",
+                    material, particle, fit.form,
+                    *param_cells,
                     fit.e_min_mev, fit.e_max_mev,
                     fit.n_used, fit.n_excluded_low, fit.n_excluded_saturated,
                     quantile, quantile_multiplier,
@@ -259,14 +356,14 @@ def _group_by_pm(stats: list[CellStat]) -> dict[tuple[str, str], list[CellStat]]
 
 
 @dataclass
-class PowerLawFit:
-    """Power-law fit s_max ≈ A · E^B (least squares in log-log space).
+class SmaxFit:
+    """Form-agnostic s_max(E) fit result.
 
-    A is the prefactor with units of mm · MeV^(-B); B is the exponent.
-    Linear in log-log means a straight line on the existing plot axes.
+    `form` is the key in FORMS that produced this fit; `params` is the dict
+    of parameter values (keys match FORMS[form]["params"]).
     """
-    A: float
-    B: float
+    form: str
+    params: dict
     n_used: int
     e_min_mev: int
     e_max_mev: int
@@ -274,7 +371,7 @@ class PowerLawFit:
     n_excluded_saturated: int
 
     def eval(self, energy_mev: np.ndarray | float) -> np.ndarray | float:
-        return self.A * np.asarray(energy_mev) ** self.B
+        return FORMS[self.form]["eval"](self.params, energy_mev)
 
 
 def _eligible_for_fit(rows: list[CellStat], min_mev: int,
@@ -306,7 +403,7 @@ class FitQuantileCheck:
     violations: list[tuple[int, float, float]]  # (E, fit, q) where fit < q
 
 
-def check_fit_above_quantile(rows: list[CellStat], fit: PowerLawFit) -> FitQuantileCheck:
+def check_fit_above_quantile(rows: list[CellStat], fit: SmaxFit) -> FitQuantileCheck:
     """Compare fit to quantile only for points the fit was actually trained on
     (E ≥ fit.e_min_mev). Sub-threshold rows are pure extrapolation, where it
     is OK and expected for the fit to drop below the local quantile."""
@@ -340,11 +437,11 @@ def fit_smax(rows: list[CellStat], particle: str,
              quantile_multiplier: float,
              fit_min_overrides: dict[str, int] | None = None,
              world_half_mm: float = WORLD_HALF_MM,
-             sat_frac: float = GEOMETRY_SAT_FRAC) -> PowerLawFit | None:
-    """Power-law fit (linear in log-log) of the *effective* s_max target,
-    quantile · quantile_multiplier (the bound that defines `s/s_max ≤ 1`
-    downstream). Uses points with E ≥ per-particle threshold and not
-    geometry-saturated. Returns None if fewer than 2 points survive."""
+             sat_frac: float = GEOMETRY_SAT_FRAC) -> SmaxFit | None:
+    """Fit the *effective* s_max target (quantile · quantile_multiplier) using
+    the form assigned to `particle` by PARTICLE_FORM. Uses points with
+    E ≥ per-particle threshold and not geometry-saturated. Returns None if
+    fewer than the form's minimum surviving points remain."""
     threshold = (fit_min_overrides or {}).get(particle,
                   DEFAULT_FIT_MIN_MEV.get(particle, 0))
     n_low = sum(1 for r in rows if r.energy_mev < threshold)
@@ -352,17 +449,21 @@ def fit_smax(rows: list[CellStat], particle: str,
     n_sat = sum(1 for r in rows
                 if r.energy_mev >= threshold and np.isfinite(r.smax_mm)
                 and r.smax_mm >= sat_frac * world_half_mm)
-    # Need a finite, positive quantile to take logs.
+    # Need a finite, positive quantile to take logs / fit.
     keep = [r for r in keep
             if np.isfinite(r.quantile_mm) and r.quantile_mm > 0]
     if len(keep) < 2:
         return None
     E = np.array([r.energy_mev for r in keep], dtype=float)
     y = np.array([r.quantile_mm * quantile_multiplier for r in keep], dtype=float)
-    B, logA = np.polyfit(np.log(E), np.log(y), 1)
-    return PowerLawFit(A=float(np.exp(logA)), B=float(B),
-                       n_used=len(keep), e_min_mev=int(E.min()), e_max_mev=int(E.max()),
-                       n_excluded_low=n_low, n_excluded_saturated=n_sat)
+    form = form_for(particle)
+    params = FORMS[form]["fit"](E, y)
+    if params is None:
+        return None
+    return SmaxFit(form=form, params=params,
+                   n_used=len(keep),
+                   e_min_mev=int(E.min()), e_max_mev=int(E.max()),
+                   n_excluded_low=n_low, n_excluded_saturated=n_sat)
 
 
 def _group_by_material(stats: list[CellStat]) -> dict[str, dict[str, list[CellStat]]]:
@@ -389,7 +490,7 @@ def _grid_layout(n: int) -> tuple[int, int]:
 
 def _draw_smax_panel(ax, rows: list[CellStat], particle: str, material: str,
                      quantile: float, quantile_multiplier: float,
-                     fit: PowerLawFit | None) -> None:
+                     fit: SmaxFit | None) -> None:
     E = np.array([r.energy_mev for r in rows])
     smax = np.array([r.smax_mm for r in rows])
     q = np.array([r.quantile_mm for r in rows])
@@ -401,8 +502,9 @@ def _draw_smax_panel(ax, rows: list[CellStat], particle: str, material: str,
             label=f"{quantile*100:g}% × {quantile_multiplier:g}", zorder=4)
     if fit is not None:
         xs = np.geomspace(fit.e_min_mev, fit.e_max_mev, 64)
+        label = f"fit: {FORMS[fit.form]['label'](fit.params)}"
         ax.plot(xs, fit.eval(xs), "-", color="crimson", lw=2.2, zorder=10,
-                label=f"fit: {fit.A:.3g}·E^{fit.B:.3f}")
+                label=label)
         valid_E = E[np.isfinite(smax)]
         if len(valid_E) and float(valid_E.min()) < fit.e_min_mev:
             xs_ex = np.geomspace(float(valid_E.min()), fit.e_min_mev, 32)
@@ -419,7 +521,7 @@ def _draw_smax_panel(ax, rows: list[CellStat], particle: str, material: str,
 
 def plot_smax_vs_energy(stats: list[CellStat], output_dir: Path,
                         quantile: float, quantile_multiplier: float,
-                        fits: dict[tuple[str, str], PowerLawFit] | None = None
+                        fits: dict[tuple[str, str], SmaxFit] | None = None
                         ) -> list[Path]:
     """One figure per material, one subpanel per particle.
 
@@ -573,13 +675,12 @@ def main(argv: list[str] | None = None) -> int:
     stats.sort(key=lambda s: (s.material, s.particle, s.energy_mev))
     print_table(stats, args.quantile)
 
-    # Per-(material, particle) linear fits, excluding sub-threshold and
-    # geometry-saturated points.
+    # Per-(material, particle) form-dispatched fits, excluding sub-threshold
+    # and geometry-saturated points. Form per particle comes from PARTICLE_FORM.
     by_pm = _group_by_pm(stats)
-    fits: dict[tuple[str, str], PowerLawFit] = {}
-    print(f"\npower-law fits to effective s_max ({args.quantile*100:g}% × "
-          f"{args.quantile_multiplier:g}) ≈ A · E^B  "
-          f"(linear in log-log; E in MeV, s_max in mm):",
+    fits: dict[tuple[str, str], SmaxFit] = {}
+    print(f"\nform-dispatched fits to effective s_max ({args.quantile*100:g}% × "
+          f"{args.quantile_multiplier:g})  (E in MeV, s_max in mm):",
           file=sys.stderr)
     for (material, particle), rows in sorted(by_pm.items()):
         fit = fit_smax(rows, particle, args.quantile_multiplier)
@@ -594,9 +695,10 @@ def main(argv: list[str] | None = None) -> int:
         if fit.n_excluded_saturated:
             notes.append(f"-{fit.n_excluded_saturated} geom-saturated")
         note = (" [" + ", ".join(notes) + "]") if notes else ""
-        print(f"  {particle:<6s} / {material:<10s}  "
-              f"A = {fit.A:9.4f}   B = {fit.B:6.4f} "
-              f"  n_fit={fit.n_used}  (E={fit.e_min_mev}–{fit.e_max_mev} MeV){note}",
+        label = FORMS[fit.form]["label"](fit.params)
+        print(f"  {particle:<6s} / {material:<10s}  form={fit.form:<17s}  "
+              f"{label}  n_fit={fit.n_used}  "
+              f"(E={fit.e_min_mev}–{fit.e_max_mev} MeV){note}",
               file=sys.stderr)
 
         # Validation: the fit should sit above the 99% quantile at every

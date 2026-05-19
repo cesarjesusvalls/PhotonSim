@@ -3,7 +3,8 @@
 
 For each (material, particle, energy) cell:
   1. Reads PhotonSim/data/<material>/<particle>/smax_fit.csv (produced by
-     tools/smax/analyze_smax.py) — the power-law fit s_max ≈ A·E^B.
+     tools/smax/analyze_smax.py) — the per-particle fit (form indicated by
+     the row's `form` column; currently "A*E^B" or "smooth_two_power").
   2. Evaluates s_max(E_gun) and bakes /output/smax <val> mm into the macro.
   3. Runs PhotonSim. Output ROOT contains the full set of normal
      histograms plus the new PhotonHist_AngleDistanceNorm (angle vs s/s_max).
@@ -28,8 +29,8 @@ DEFAULT_ENERGIES_MEV = [100, 200, 500, 1000, 2000, 5000, 10000]
 DEFAULT_DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 
-def load_fit(material: str, particle: str, data_dir: Path) -> tuple[float, float, int]:
-    """Return (A, B, fit_min_mev) from smax_fit.csv. Errors if missing."""
+def load_smax_row(material: str, particle: str, data_dir: Path) -> tuple[dict, int]:
+    """Return (csv_row_dict, fit_min_mev) from smax_fit.csv. Errors if missing."""
     path = data_dir / material / particle / "smax_fit.csv"
     if not path.exists():
         raise FileNotFoundError(
@@ -38,13 +39,24 @@ def load_fit(material: str, particle: str, data_dir: Path) -> tuple[float, float
     with path.open() as fh:
         reader = csv.DictReader(fh)
         row = next(reader, None)
-    if row is None or not row.get("A") or not row.get("B"):
+    if row is None or not row.get("form"):
         raise ValueError(f"Parametrisation at {path} is empty/incomplete.")
-    return float(row["A"]), float(row["B"]), int(row["fit_min_mev"])
+    return row, int(row["fit_min_mev"])
 
 
-def smax_at(A: float, B: float, energy_mev: int) -> float:
-    return A * (energy_mev ** B)
+def smax_at(row: dict, energy_mev: int) -> float:
+    """Evaluate s_max(E) for a CSV row.  Keep in sync with the eval branches
+    in PhotonSim/tools/smax/analyze_smax.py (canonical source) and the
+    consumer shims in LUCiD's siren_inputs/generate_jobs.py + build_tables.py.
+    """
+    form = row["form"]
+    if form == "A*E^B":
+        A, B = float(row["A"]), float(row["B"])
+        return A * energy_mev ** B
+    if form == "smooth_two_power":
+        a, b1, b2, E0 = (float(row[k]) for k in ("a", "b1", "b2", "E0"))
+        return a * energy_mev ** b1 / (1.0 + (energy_mev / E0) ** (b1 - b2))
+    raise ValueError(f"unknown smax form: {form!r}")
 
 
 def macro_text(material: str, particle: str, energy_mev: int,
@@ -158,10 +170,10 @@ def main(argv: list[str] | None = None) -> int:
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    fits: dict[str, tuple[float, float, int]] = {}
+    fits: dict[str, tuple[dict, int]] = {}
     for particle in args.particles:
         try:
-            fits[particle] = load_fit(args.material, particle, args.data_dir)
+            fits[particle] = load_smax_row(args.material, particle, args.data_dir)
         except (FileNotFoundError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
@@ -173,13 +185,13 @@ def main(argv: list[str] | None = None) -> int:
 
     failures: list[str] = []
     for i, (particle, energy) in enumerate(cells, 1):
-        A, B, fit_min = fits[particle]
+        row, fit_min = fits[particle]
         below_fit = energy < fit_min
         if below_fit and not args.ignore_fit_threshold:
             print(f"[{i:>3d}/{len(cells)}] {particle:>6s}  {energy:>6d} MeV  "
                   f"SKIP (E < fit_min={fit_min} MeV; pass --ignore-fit-threshold to force)")
             continue
-        smax = smax_at(A, B, energy)
+        smax = smax_at(row, energy)
         label = (f"[{i:>3d}/{len(cells)}] {particle:>6s}  {energy:>6d} MeV "
                  f"({args.events:>3d} evt, s_max={smax:>7.0f} mm"
                  f"{', extrap' if below_fit else ''})")
