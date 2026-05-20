@@ -66,23 +66,13 @@ def discover_cells(root: Path, materials: list[str] | None,
     return out
 
 
-def plot_particle_grid(material: str, particle: str,
-                       cells: dict[int, Path], out_path: Path,
-                       hist_name: str, xlabel: str) -> None:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from matplotlib.colors import LogNorm
+def _read_panels(cells: dict[int, Path], energies: list[int], hist_name: str):
+    """Read histograms once; return (panels, vmin, vmax, xlim_max).
 
-    energies = sorted(cells.keys())
-    n = len(energies)
-    ncols = min(5, n)
-    nrows = (n + ncols - 1) // ncols
-    fig, axes = plt.subplots(nrows, ncols,
-                             figsize=(3.0 * ncols, 2.8 * nrows),
-                             squeeze=False, sharex=True, sharey=True)
-
-    # First pass: read everything to set a shared colour scale.
+    Reading is the same cost whether we render in 1 figure or N, but we want
+    a *shared* colour scale across all chunks of the same (material, particle)
+    so panels are comparable. So we read everything up front.
+    """
     panels = []
     vmin, vmax = np.inf, 0.0
     xlim_max = 0.0
@@ -92,20 +82,31 @@ def plot_particle_grid(material: str, particle: str,
                 panels.append((e, None, None, None))
                 continue
             counts, xedges, yedges = f[hist_name].to_numpy()
-            entries = counts.sum()
             panels.append((e, counts, xedges, yedges))
             xlim_max = max(xlim_max, float(xedges[-1]))
             positive = counts[counts > 0]
             if positive.size:
                 vmin = min(vmin, float(positive.min()))
                 vmax = max(vmax, float(positive.max()))
-    if not np.isfinite(vmin) or vmax == 0:
-        plt.close(fig)
-        return
-    norm = LogNorm(vmin=max(vmin, 1.0), vmax=vmax)
+    return panels, vmin, vmax, xlim_max
+
+
+def _render_chunk(material: str, particle: str, hist_name: str, xlabel: str,
+                  chunk: list, norm, xlim_max: float, out_path: Path,
+                  page_idx: int, n_pages: int) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    n = len(chunk)
+    ncols = min(5, n)
+    nrows = (n + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols,
+                             figsize=(3.0 * ncols, 2.8 * nrows),
+                             squeeze=False, sharex=True, sharey=True)
 
     im = None
-    for i, (e, counts, xedges, yedges) in enumerate(panels):
+    for i, (e, counts, xedges, yedges) in enumerate(chunk):
         ax = axes[i // ncols][i % ncols]
         if counts is None:
             ax.set_title(f"{e} MeV — missing")
@@ -116,22 +117,57 @@ def plot_particle_grid(material: str, particle: str,
         ax.set_xlim(0, xlim_max)
         ax.set_ylim(0, 1)
 
-    # Shared axis labels
     for c in range(ncols):
         axes[nrows - 1][c].set_xlabel(xlabel)
     for r in range(nrows):
         axes[r][0].set_ylabel("s / s_max")
 
-    # Hide unused panels
     for j in range(n, nrows * ncols):
         axes[j // ncols][j % ncols].set_visible(False)
 
     if im is not None:
         fig.colorbar(im, ax=axes, fraction=0.025, pad=0.02, label="entries / bin")
 
-    fig.suptitle(f"{hist_name} — {particle} in {material}", y=1.0)
+    suffix = f"  (page {page_idx + 1}/{n_pages})" if n_pages > 1 else ""
+    fig.suptitle(f"{hist_name} — {particle} in {material}{suffix}", y=1.0)
     fig.savefig(out_path, dpi=130, bbox_inches="tight")
     plt.close(fig)
+
+
+def plot_particle_grid(material: str, particle: str,
+                       cells: dict[int, Path], out_stem_path: Path,
+                       hist_name: str, xlabel: str,
+                       max_panels_per_fig: int = 50) -> list[Path]:
+    """Write one PNG per chunk of `max_panels_per_fig` cells.
+
+    `out_stem_path` is the bare path without extension; for an N-page split
+    we write `<stem>_p01.png ... <stem>_pNN.png`. With a single page we keep
+    the simple `<stem>.png` name for backward compatibility.
+
+    Returns the list of files written.
+    """
+    from matplotlib.colors import LogNorm
+
+    energies = sorted(cells.keys())
+    panels, vmin, vmax, xlim_max = _read_panels(cells, energies, hist_name)
+    if not np.isfinite(vmin) or vmax == 0:
+        return []
+    norm = LogNorm(vmin=max(vmin, 1.0), vmax=vmax)
+
+    chunks = [panels[i:i + max_panels_per_fig]
+              for i in range(0, len(panels), max_panels_per_fig)]
+    n_pages = len(chunks)
+    written: list[Path] = []
+    for idx, chunk in enumerate(chunks):
+        if n_pages == 1:
+            out_path = out_stem_path.with_suffix(".png")
+        else:
+            out_path = out_stem_path.with_name(
+                f"{out_stem_path.name}_p{idx + 1:02d}.png")
+        _render_chunk(material, particle, hist_name, xlabel,
+                      chunk, norm, xlim_max, out_path, idx, n_pages)
+        written.append(out_path)
+    return written
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -150,6 +186,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Which Norm histogram to render. 'angle' = "
                         "PhotonHist_AngleDistanceNorm (default), 'dedx' = "
                         "dEdxHist_DistanceNorm.")
+    p.add_argument("--max-panels-per-fig", type=int, default=50,
+                   help="Split into multiple PNGs when the energy grid is "
+                        "larger than this many cells (default: 50). "
+                        "Each chunk uses the same colour scale so panels "
+                        "remain visually comparable across pages.")
     return p.parse_args(argv)
 
 
@@ -171,10 +212,18 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     for (material, particle), per_e in sorted(cells.items()):
-        out_path = out_dir / f"{out_stem}_{material}_{particle}.png"
-        plot_particle_grid(material, particle, per_e, out_path,
-                           hist_name=hist_name, xlabel=xlabel)
-        print(f"wrote {out_path}  ({len(per_e)} energies)", file=sys.stderr)
+        out_stem_path = out_dir / f"{out_stem}_{material}_{particle}"
+        written = plot_particle_grid(material, particle, per_e, out_stem_path,
+                                      hist_name=hist_name, xlabel=xlabel,
+                                      max_panels_per_fig=args.max_panels_per_fig)
+        if not written:
+            print(f"skip {material}/{particle}: empty histograms",
+                  file=sys.stderr)
+            continue
+        for p in written:
+            print(f"wrote {p}", file=sys.stderr)
+        print(f"  ({len(per_e)} energies across {len(written)} page(s))",
+              file=sys.stderr)
     return 0
 
 
