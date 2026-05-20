@@ -13,6 +13,7 @@
   "store_individual_photons": true,
   "run_lucid": false,
   "disable_decays": true,
+  "fixed_direction_z": true,
 
   "particles": [
     {
