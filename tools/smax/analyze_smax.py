@@ -46,13 +46,88 @@ DEFAULT_FIT_MIN_MEV = {
     "mu-":   500, "mu+":   500,
     "pi-":   500, "pi+":   500,
     "proton": 5000,
-    # e± use the smooth two-power form (see PARTICLE_FORM below), which
-    # benefits from low-E data points. Floor at 2 MeV to drop only the
-    # 1 MeV cell whose 99.99% quantile lands in the first PhotonHist_Distance
-    # bin (100 mm) and is therefore resolution noise rather than physics.
-    "e-": 2, "e+": 2,
+    # e± use the smooth two-power form (see PARTICLE_FORM below). The 1-9 MeV
+    # cells of the current scan all pin to the 100 mm first bin of the
+    # PhotonHist_Distance histogram (e- range in water is <1 cm at those
+    # energies, so the entire Cherenkov tube fits in one bin). That's a
+    # binning resolution artifact, not physics — exclude from the fit.
+    "e-": 10, "e+": 10,
     "gamma": 0,
 }
+
+# Per-particle quantile schedule for s_max derivation. Each entry is a list of
+# (energy_mev_excl, quantile) pairs, evaluated in order against each cell's
+# energy: the first entry whose `energy_mev_excl` is None or strictly greater
+# than the cell energy wins. Use this when the bulk of the photon distribution
+# is concentrated and very-low-statistics tails would otherwise pull the high
+# quantile to anomalous values (e- below ~100 MeV).
+#
+# Particles missing from this dict use the global --quantile CLI value
+# (default 0.9999) for every cell.
+PARTICLE_QUANTILE_SCHEDULE: dict[str, list[tuple[int | None, float]]] = {
+    "e-": [(20, 0.995), (100, 0.999), (None, 0.9999)],
+    "e+": [(20, 0.995), (100, 0.999), (None, 0.9999)],
+}
+
+# Per-particle energy ranges [lo_incl, hi_excl) to exclude from the s_max(E)
+# least-squares fit even when otherwise eligible. Cells in the excluded band
+# are still observed and recorded in smax_data.csv, but the fit form is not
+# constrained to pass through them. Useful when PARTICLE_QUANTILE_SCHEDULE
+# introduces a discontinuity at a boundary that no smooth functional form can
+# follow: excluding the transition band lets the fit smooth across it.
+PARTICLE_FIT_EXCLUDE_RANGES: dict[str, list[tuple[int, int]]] = {
+    "e-": [(20, 100)],
+    "e+": [(20, 100)],
+}
+
+
+# Per-particle piecewise-fit join energy. When set, the s_max(E) fit is
+# constructed as two smooth_two_power pieces meeting at `e_join_mev` with
+# both value (C⁰) and slope (C¹) continuity:
+#   * the HIGH piece (E ≥ e_join) is taken VERBATIM from
+#     PARTICLE_PIECEWISE_HIGH (legacy single-form parametrisation), so
+#     existing per-cell photonsim.root files for E ≥ e_join — which were
+#     baked with those exact params — remain consistent with this fit.
+#   * the LOW piece (E < e_join) is fitted on low-E data with `a` and `E0`
+#     derived from C⁰+C¹ constraints at e_join (see _stp_fit_c0c1), so only
+#     (b1, b2) are free.
+# The resulting smax_fit.csv carries form="piecewise" plus the join energy
+# and a second set of parameter columns (a_hi, b1_hi, b2_hi, E0_hi).
+# Particles not listed use the single-form path.
+PARTICLE_PIECEWISE_JOIN_MEV: dict[str, int] = {
+    "e-": 500,
+    "e+": 500,
+}
+
+# Frozen high-energy piece (used verbatim for the HIGH side of the
+# piecewise fit). Values come from the canonical 99.99%-quantile,
+# all-cells single-form fit that produced the existing siren_inputs
+# scans at E ≥ join. Keep these in lockstep with the photonsim.root tree
+# they were baked into — changing them would invalidate the high-E cells.
+PARTICLE_PIECEWISE_HIGH: dict[str, dict] = {
+    "e-": {"a": 145.864074, "b1": 1.369110, "b2": 0.096865, "E0": 13.077515},
+    "e+": {"a": 145.864074, "b1": 1.369110, "b2": 0.096865, "E0": 13.077515},
+}
+
+
+def quantile_for_cell(particle: str, energy_mev: int,
+                      default_quantile: float) -> float:
+    """Resolve the per-cell quantile via PARTICLE_QUANTILE_SCHEDULE,
+    falling back to ``default_quantile`` for particles without a schedule."""
+    schedule = PARTICLE_QUANTILE_SCHEDULE.get(particle)
+    if not schedule:
+        return default_quantile
+    for e_max, q in schedule:
+        if e_max is None or energy_mev < e_max:
+            return q
+    return default_quantile
+
+
+def _in_excluded_range(particle: str, energy_mev: int) -> bool:
+    for lo, hi in PARTICLE_FIT_EXCLUDE_RANGES.get(particle, ()):
+        if lo <= energy_mev < hi:
+            return True
+    return False
 
 # Detector is a 1 km cube (default in DetectorConstruction.hh). A particle
 # fired from origin along +Z can travel at most 500 m before exiting, so
@@ -90,6 +165,68 @@ def _stp_eval(p, E):
     E = np.asarray(E, dtype=float)
     return a * E ** b1 / (1.0 + (E / E0) ** (b1 - b2))
 
+
+def _stp_derivative(p, E):
+    """Closed-form df/dE for the smooth_two_power family."""
+    a, b1, b2, E0 = (float(p[k]) for k in ("a", "b1", "b2", "E0"))
+    E = np.asarray(E, dtype=float)
+    u = (E / E0) ** (b1 - b2)
+    return a * E ** (b1 - 1.0) * (b1 + b2 * u) / (1.0 + u) ** 2
+
+
+def _stp_fit_c0c1(E, y, y_join: float, yp_join: float, E_join: float):
+    """Fit smooth_two_power to (E, y) with the value and slope at E_join
+    pinned to (y_join, yp_join).
+
+    The constraints reduce the 4-parameter family to 2 free parameters:
+    given (b1, b2), the C¹ ratio R = y'·E/y |_{E_join} = (b1 + b2·s)/(1+s)
+    determines s = (E_join/E0)^(b1-b2) = (b1-R)/(R-b2), from which E0 and
+    then a follow in closed form. So we only LSQ-optimize (b1, b2) over
+    the low-E data; both join conditions are satisfied exactly by
+    construction. Returns params dict or None on failure.
+    """
+    R = yp_join * E_join / y_join
+
+    def derive_aE0(b1, b2):
+        num = b1 - R
+        den = R - b2
+        if num <= 0 or den <= 0 or (b1 - b2) <= 0:
+            return None
+        s = num / den
+        try:
+            E0 = E_join / np.exp(np.log(s) / (b1 - b2))
+        except (ValueError, OverflowError):
+            return None
+        a = y_join * (1.0 + s) / E_join ** b1
+        if a <= 0 or E0 <= 0 or not (np.isfinite(a) and np.isfinite(E0)):
+            return None
+        return a, E0
+
+    def residuals(p):
+        b1, b2 = p
+        aE0 = derive_aE0(b1, b2)
+        if aE0 is None:
+            return 1e6 * np.ones_like(y)
+        a, E0 = aE0
+        pred = a * E ** b1 / (1.0 + (E / E0) ** (b1 - b2))
+        if np.any(pred <= 0):
+            return 1e6 * np.ones_like(y)
+        return np.log(y) - np.log(pred)
+
+    from scipy.optimize import least_squares
+    try:
+        res = least_squares(residuals, (1.5, 0.05),
+                            bounds=([R + 1e-3, -2.0], [5.0, R - 1e-3]),
+                            max_nfev=2000)
+    except Exception:
+        return None
+    b1, b2 = res.x
+    aE0 = derive_aE0(b1, b2)
+    if aE0 is None:
+        return None
+    a, E0 = aE0
+    return {"a": float(a), "b1": float(b1), "b2": float(b2), "E0": float(E0)}
+
 def _stp_fit(E, y):
     # Fit in log-y space so each decade of E gets uniform weight — otherwise
     # the high-E points (large y) dominate the residual and the low-E shape
@@ -116,6 +253,19 @@ def _stp_label(p):
     a, b1, b2, E0 = (float(p[k]) for k in ("a", "b1", "b2", "E0"))
     return f"{a:.2f}·E^{b1:.3f} / (1+(E/{E0:.2f})^{b1-b2:.3f})"
 
+def _piecewise_eval(p, E):
+    ej = float(p["e_join_mev"])
+    E = np.asarray(E, dtype=float)
+    lo = _stp_eval(p["low"], E)
+    hi = _stp_eval(p["high"], E)
+    return np.where(E < ej, lo, hi)
+
+
+def _piecewise_label(p):
+    ej = float(p["e_join_mev"])
+    return f"piecewise@{ej:.0f}MeV: lo {_stp_label(p['low'])} | hi {_stp_label(p['high'])}"
+
+
 FORMS: dict[str, dict] = {
     "A*E^B": dict(
         params=("A", "B"),
@@ -123,6 +273,11 @@ FORMS: dict[str, dict] = {
     "smooth_two_power": dict(
         params=("a", "b1", "b2", "E0"),
         eval=_stp_eval, fit=_stp_fit, label=_stp_label),
+    # `piecewise` has no .fit (constructed by fit_smax directly when a
+    # particle is listed in PARTICLE_PIECEWISE_JOIN_MEV) and its params is a
+    # nested dict {"low", "high", "e_join_mev"} rather than a flat set.
+    "piecewise": dict(
+        params=(), eval=_piecewise_eval, fit=None, label=_piecewise_label),
 }
 
 # Per-particle form dispatch. Particles not listed fall back to DEFAULT_FORM.
@@ -174,10 +329,13 @@ def discover_cells(root: Path) -> list[Path]:
     return cells
 
 
-def analyse_cell(root_path: Path, quantile: float) -> CellStat:
+def analyse_cell(root_path: Path, default_quantile: float) -> CellStat:
     energy_mev = int(CELL_DIR_RE.match(root_path.parent.name).group(1))
     particle = root_path.parent.parent.name
     material = root_path.parent.parent.parent.name
+
+    # Per-particle schedules override the global default for low-E e±.
+    quantile = quantile_for_cell(particle, energy_mev, default_quantile)
 
     with uproot.open(root_path) as f:
         if HIST_NAME not in f:
@@ -266,9 +424,10 @@ def write_parametrization(stats: list[CellStat],
         with data_path.open("w", newline="") as fh:
             w = csv.writer(fh)
             w.writerow(["energy_mev", "n_events", "entries",
-                        "mean_mm", "quantile_mm", "quantile_eff_mm",
+                        "mean_mm", "quantile_used", "quantile_mm",
+                        "quantile_eff_mm",
                         "smax_mm", "below_fit_threshold",
-                        "geometry_saturated"])
+                        "in_fit_exclude_band", "geometry_saturated"])
             fit = fits.get((material, particle))
             threshold = (DEFAULT_FIT_MIN_MEV.get(particle, 0)
                          if fit is None else fit.e_min_mev)
@@ -277,15 +436,18 @@ def write_parametrization(stats: list[CellStat],
                          if np.isfinite(r.quantile_mm) else float("nan"))
                 sat = (np.isfinite(r.smax_mm)
                        and r.smax_mm >= sat_frac * world_half_mm)
+                q_used = quantile_for_cell(r.particle, r.energy_mev, quantile)
                 w.writerow([
                     r.energy_mev,
                     r.n_events if r.n_events is not None else "",
                     f"{r.entries:.0f}",
                     "" if not np.isfinite(r.mean_mm) else f"{r.mean_mm:.3f}",
+                    q_used,
                     "" if not np.isfinite(r.quantile_mm) else f"{r.quantile_mm:.3f}",
                     "" if not np.isfinite(q_eff) else f"{q_eff:.3f}",
                     "" if not np.isfinite(r.smax_mm) else f"{r.smax_mm:.3f}",
                     int(r.energy_mev < threshold),
+                    int(_in_excluded_range(r.particle, r.energy_mev)),
                     int(bool(sat)),
                 ])
         written.append(data_path)
@@ -296,11 +458,30 @@ def write_parametrization(stats: list[CellStat],
             # Schema: form column discriminates which param columns are filled.
             # Power-law fills A,B; smooth_two_power fills a,b1,b2,E0. Unused
             # param columns are left blank. Consumers must dispatch on `form`.
+            # `quantile` column holds the asymptotic (high-E) quantile for
+            # particles with a PARTICLE_QUANTILE_SCHEDULE; for particles
+            # without a schedule it's the global --quantile CLI value.
+            # `quantile_schedule` is the full per-energy schedule serialized
+            # (e.g. "0.995<20|0.999<100|0.9999"), empty when none defined.
+            sched = PARTICLE_QUANTILE_SCHEDULE.get(particle)
+            asymptotic_q = sched[-1][1] if sched else quantile
+            schedule_str = (
+                "|".join(f"{q}<{e}" if e is not None else f"{q}"
+                         for e, q in sched)
+                if sched else "")
+            excl_str = ",".join(f"{lo}-{hi}"
+                                for lo, hi in PARTICLE_FIT_EXCLUDE_RANGES.get(particle, ()))
+            # Piecewise columns: for form="piecewise", standard a/b1/b2/E0
+            # hold the LOW piece; e_join_mev + *_hi hold the HIGH piece.
+            # Empty for non-piecewise forms (backward-compatible).
             w.writerow(["material", "particle", "form",
                         *ALL_PARAM_COLUMNS,
+                        "e_join_mev", "a_hi", "b1_hi", "b2_hi", "E0_hi",
                         "fit_min_mev", "fit_max_mev",
                         "n_used", "n_excluded_low", "n_excluded_saturated",
-                        "quantile", "quantile_multiplier",
+                        "n_excluded_band", "fit_exclude_ranges",
+                        "quantile", "quantile_schedule",
+                        "quantile_multiplier",
                         "min_fit_to_quantile_ratio", "min_ratio_e_mev",
                         "generated_at_utc"])
             if fit is None:
@@ -310,21 +491,44 @@ def write_parametrization(stats: list[CellStat],
                 w.writerow([material, particle, form,
                             *("" for _ in ALL_PARAM_COLUMNS),
                             "", "", "", "", "",
-                            quantile, quantile_multiplier, "", "",
+                            "", "", "", "", "",
+                            "", excl_str,
+                            asymptotic_q, schedule_str, quantile_multiplier,
+                            "", "",
                             generated_at])
             else:
                 chk = check_fit_above_quantile(rows, fit)
-                params_active = set(FORMS[fit.form]["params"])
-                param_cells = [
-                    f"{float(fit.params[c]):.6f}" if c in params_active else ""
-                    for c in ALL_PARAM_COLUMNS
-                ]
+                # Resolve param cells for either piecewise or single-form.
+                if fit.form == "piecewise":
+                    low = fit.params["low"]
+                    high = fit.params["high"]
+                    ej   = float(fit.params["e_join_mev"])
+                    # The standard a/b1/b2/E0 columns are the LOW piece.
+                    active_low = {"a", "b1", "b2", "E0"}
+                    param_cells = [
+                        f"{float(low[c]):.6f}" if c in active_low else ""
+                        for c in ALL_PARAM_COLUMNS
+                    ]
+                    piecewise_cells = [
+                        f"{ej:.3f}",
+                        f"{float(high['a']):.6f}", f"{float(high['b1']):.6f}",
+                        f"{float(high['b2']):.6f}", f"{float(high['E0']):.6f}",
+                    ]
+                else:
+                    params_active = set(FORMS[fit.form]["params"])
+                    param_cells = [
+                        f"{float(fit.params[c]):.6f}" if c in params_active else ""
+                        for c in ALL_PARAM_COLUMNS
+                    ]
+                    piecewise_cells = ["", "", "", "", ""]
                 w.writerow([
                     material, particle, fit.form,
                     *param_cells,
+                    *piecewise_cells,
                     fit.e_min_mev, fit.e_max_mev,
                     fit.n_used, fit.n_excluded_low, fit.n_excluded_saturated,
-                    quantile, quantile_multiplier,
+                    fit.n_excluded_band, excl_str,
+                    asymptotic_q, schedule_str, quantile_multiplier,
                     "" if chk.n_compared == 0 else f"{chk.min_ratio:.4f}",
                     "" if chk.n_compared == 0 else chk.min_ratio_energy_mev,
                     generated_at,
@@ -369,8 +573,16 @@ class SmaxFit:
     e_max_mev: int
     n_excluded_low: int
     n_excluded_saturated: int
+    n_excluded_band: int = 0
 
     def eval(self, energy_mev: np.ndarray | float) -> np.ndarray | float:
+        if self.form == "piecewise":
+            ej = float(self.params["e_join_mev"])
+            e_arr = np.asarray(energy_mev, dtype=float)
+            lo = _stp_eval(self.params["low"], e_arr)
+            hi = _stp_eval(self.params["high"], e_arr)
+            out = np.where(e_arr < ej, lo, hi)
+            return float(out) if np.isscalar(energy_mev) else out
         return FORMS[self.form]["eval"](self.params, energy_mev)
 
 
@@ -383,6 +595,8 @@ def _eligible_for_fit(rows: list[CellStat], min_mev: int,
         if not np.isfinite(r.smax_mm):
             continue
         if r.smax_mm >= sat_frac * world_half_mm:
+            continue
+        if _in_excluded_range(r.particle, r.energy_mev):
             continue
         keep.append(r)
     return keep
@@ -449,6 +663,9 @@ def fit_smax(rows: list[CellStat], particle: str,
     n_sat = sum(1 for r in rows
                 if r.energy_mev >= threshold and np.isfinite(r.smax_mm)
                 and r.smax_mm >= sat_frac * world_half_mm)
+    n_band = sum(1 for r in rows
+                 if r.energy_mev >= threshold
+                 and _in_excluded_range(r.particle, r.energy_mev))
     # Need a finite, positive quantile to take logs / fit.
     keep = [r for r in keep
             if np.isfinite(r.quantile_mm) and r.quantile_mm > 0]
@@ -456,6 +673,39 @@ def fit_smax(rows: list[CellStat], particle: str,
         return None
     E = np.array([r.energy_mev for r in keep], dtype=float)
     y = np.array([r.quantile_mm * quantile_multiplier for r in keep], dtype=float)
+
+    join_mev = PARTICLE_PIECEWISE_JOIN_MEV.get(particle)
+    if join_mev is not None:
+        # Piecewise smooth_two_power with C⁰+C¹ continuity at join_mev.
+        # HIGH piece: taken verbatim from PARTICLE_PIECEWISE_HIGH (frozen
+        # so the existing per-cell photonsim.root files at E ≥ join
+        # remain consistent). LOW piece: fitted on (E < join) data with
+        # value+slope at join pinned to the HIGH piece.
+        high_params = PARTICLE_PIECEWISE_HIGH.get(particle)
+        if high_params is None:
+            print(f"warn: {particle} has PARTICLE_PIECEWISE_JOIN_MEV but no "
+                  f"PARTICLE_PIECEWISE_HIGH entry; skipping piecewise fit",
+                  file=sys.stderr)
+        else:
+            mask_lo = E < join_mev
+            if mask_lo.sum() < 2:
+                return None
+            y_join  = float(_stp_eval(high_params, join_mev))
+            yp_join = float(_stp_derivative(high_params, join_mev))
+            low_params = _stp_fit_c0c1(E[mask_lo], y[mask_lo],
+                                       y_join, yp_join, float(join_mev))
+            if low_params is None:
+                return None
+            return SmaxFit(
+                form="piecewise",
+                params={"low": low_params, "high": dict(high_params),
+                        "e_join_mev": float(join_mev)},
+                n_used=len(keep),
+                e_min_mev=int(E.min()), e_max_mev=int(E.max()),
+                n_excluded_low=n_low, n_excluded_saturated=n_sat,
+                n_excluded_band=n_band,
+            )
+
     form = form_for(particle)
     params = FORMS[form]["fit"](E, y)
     if params is None:
@@ -463,7 +713,8 @@ def fit_smax(rows: list[CellStat], particle: str,
     return SmaxFit(form=form, params=params,
                    n_used=len(keep),
                    e_min_mev=int(E.min()), e_max_mev=int(E.max()),
-                   n_excluded_low=n_low, n_excluded_saturated=n_sat)
+                   n_excluded_low=n_low, n_excluded_saturated=n_sat,
+                   n_excluded_band=n_band)
 
 
 def _group_by_material(stats: list[CellStat]) -> dict[str, dict[str, list[CellStat]]]:
@@ -623,11 +874,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--particles", nargs="+", default=None,
                    help="Restrict to these particles (default: all found).")
     p.add_argument("--quantile", type=float, default=0.9999,
-                   help="Quantile used as the fit target (default: 0.9999). "
-                        "Heavy stats per cell (10k+ events at low E) give "
-                        "enough photons in the 0.01 %% tail for a stable "
-                        "per-bin quantile, and using a deeper tail makes the "
-                        "fit a tighter upper bound on emission distance.")
+                   help="Default quantile used as the fit target (default: "
+                        "0.9999). Particles listed in PARTICLE_QUANTILE_SCHEDULE "
+                        "override this with a per-energy schedule (e.g. e- "
+                        "uses 0.995/0.999/0.9999 below 20/100/above 100 MeV).")
     p.add_argument("--quantile-multiplier", type=float, default=1.1,
                    help="Multiplier applied to the quantile to produce the "
                         "'effective s_max' that the fit targets (default: 1.1).")

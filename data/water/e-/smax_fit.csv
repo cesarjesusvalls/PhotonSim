@@ -1,2 +1,2 @@
-material,particle,form,A,B,a,b1,b2,E0,fit_min_mev,fit_max_mev,n_used,n_excluded_low,n_excluded_saturated,quantile,quantile_multiplier,min_fit_to_quantile_ratio,min_ratio_e_mev,generated_at_utc
-water,e-,smooth_two_power,,,145.864074,1.369110,0.096865,13.077515,2,100000,60,1,0,0.9999,1.1,0.7112,3,2026-05-19T14:55:31+00:00
+material,particle,form,A,B,a,b1,b2,E0,e_join_mev,a_hi,b1_hi,b2_hi,E0_hi,fit_min_mev,fit_max_mev,n_used,n_excluded_low,n_excluded_saturated,n_excluded_band,fit_exclude_ranges,quantile,quantile_schedule,quantile_multiplier,min_fit_to_quantile_ratio,min_ratio_e_mev,generated_at_utc
+water,e-,piecewise,,,7.021325,1.850682,0.091481,36.708075,500.000,145.864074,1.369110,0.096865,13.077515,10,100000,322,9,0,8,20-100,0.9999,0.995<20|0.999<100|0.9999,1.1,0.7034,20,2026-05-21T13:18:26+00:00

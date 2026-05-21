@@ -56,6 +56,13 @@ def smax_at(row: dict, energy_mev: int) -> float:
     if form == "smooth_two_power":
         a, b1, b2, E0 = (float(row[k]) for k in ("a", "b1", "b2", "E0"))
         return a * energy_mev ** b1 / (1.0 + (energy_mev / E0) ** (b1 - b2))
+    if form == "piecewise":
+        ej = float(row["e_join_mev"])
+        if energy_mev < ej:
+            a, b1, b2, E0 = (float(row[k]) for k in ("a", "b1", "b2", "E0"))
+        else:
+            a, b1, b2, E0 = (float(row[k]) for k in ("a_hi", "b1_hi", "b2_hi", "E0_hi"))
+        return a * energy_mev ** b1 / (1.0 + (energy_mev / E0) ** (b1 - b2))
     raise ValueError(f"unknown smax form: {form!r}")
 
 
