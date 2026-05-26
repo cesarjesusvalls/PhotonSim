@@ -168,10 +168,13 @@ void DataManager::Initialize(const G4String& filename)
                                       500, 0.0, M_PI,           // 0 to π radians (all possible angles)
                                       500, 0.0, 10000.0);       // 0 to 10 meters in mm
 
-  // dE/dx histogram: dE/dx (0-1000 keV/mm) vs Distance (0-10 m)
-  // Format matches PhotonHist_AngleDistance: X-axis is the observable, Y-axis is distance
+  // dE/dx histogram: dE/dx (0-1000 keV/mm) vs Distance (0-10 m). Bin
+  // contents are *edep-weighted* (each segment adds its edep in MeV as
+  // the bin weight via the third TH2D::Fill argument), so bin values
+  // are MeV deposited at that (dE/dx, distance), not segment counts.
   fdEdxHist_Distance = new TH2D("dEdxHist_Distance",
-                                "dE/dx vs Distance from Origin;dE/dx (keV/mm);Distance (mm)",
+                                "dE/dx vs Distance from Origin (edep-weighted, MeV);"
+                                "dE/dx (keV/mm);Distance (mm)",
                                 500, 0.0, 1000.0,           // 0 to 1000 keV/mm
                                 500, 0.0, 10000.0);         // 0 to 10 meters in mm
 
@@ -203,7 +206,7 @@ void DataManager::Initialize(const G4String& filename)
         500, 0.0, 1.0);
     fdEdxHist_DistanceNorm = new TH2D(
         "dEdxHist_DistanceNorm",
-        "dE/dx vs s / s_max;dE/dx (keV/mm);s / s_max",
+        "dE/dx vs s / s_max (edep-weighted, MeV);dE/dx (keV/mm);s / s_max",
         500, 0.0, 1000.0,
         500, 0.0, 1.0);
     G4cout << "Booked AngleDistanceNorm + dEdxDistanceNorm (s_max = "
@@ -621,13 +624,19 @@ void DataManager::AddEnergyDeposit(G4double x, G4double y, G4double z,
   G4double stepLength_mm = stepLength / mm;
   G4double dEdx = (energy / keV) / stepLength_mm;
 
-  // Fill histogram: X-axis is dE/dx, Y-axis is distance
-  fdEdxHist_Distance->Fill(dEdx, distance);
+  // Each segment contributes its own edep (in MeV) as the bin weight, not
+  // one entry per call. This makes the histogram step-size invariant — the
+  // same physical 1 cm of track gives the same total weight whether Geant4
+  // takes one step or many — and gives bins a direct physical meaning
+  // (MeV of energy deposited at this (dE/dx, s)), which is what the
+  // scintillation surrogate's Birks math wants.
+  const G4double w = energy / MeV;
+  fdEdxHist_Distance->Fill(dEdx, distance, w);
 
   // s/s_max-normalised analogue — SIREN-input mode (filled only when
   // /output/smax was set, i.e. histogram exists).
   if (fdEdxHist_DistanceNorm) {
-    fdEdxHist_DistanceNorm->Fill(dEdx, distance / fSmaxMm);
+    fdEdxHist_DistanceNorm->Fill(dEdx, distance / fSmaxMm, w);
   }
 }
 
