@@ -123,6 +123,11 @@ class DataManager
                          G4double energy, G4double stepLength,
                          const G4String& particleName);
 
+    // One entry per G4 event = sum of step Edep across the event. Fills
+    // `TotalEdepHistogram`. LUCiD reads its per-energy mean to fit
+    // E_dep(E) for the scintillation-emission photon count.
+    void FillTotalEdep(G4double edepEvent);
+
     // Track registry — kinematics + process name only. Categorization
     // moved to LUCiD; C++ no longer assigns categories or sub-IDs.
     void RegisterTrack(G4int trackID, const G4String& particleName, G4int parentID,
@@ -312,6 +317,11 @@ class DataManager
     // 1D distribution of s = |emission - primary vertex| per Cherenkov photon.
     // Used to parametrise s_max(E, particle, material) for the SIREN surrogate.
     TH1D* fPhotonHist_Distance = nullptr;
+
+    // Per-event total energy deposit (in MeV). Written as the `Edep` branch
+    // on the per-event OpticalPhotons TTree — one entry per G4 event so the
+    // full distribution survives for diagnostics + the E_dep(E) fit.
+    G4double fEdepEvent = 0.0;
 
     // Opening angle vs s/s_max — the s/s_max-normalised analogue of
     // PhotonHist_AngleDistance. Booked and filled only when fSmaxMm > 0;

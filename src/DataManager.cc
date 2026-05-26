@@ -83,6 +83,7 @@ void DataManager::Initialize(const G4String& filename)
   fTree->Branch("EventID", &fEventID, "EventID/I");
   fTree->Branch("PrimaryEnergy", &fPrimaryEnergy, "PrimaryEnergy/D");
   fTree->Branch("NOpticalPhotons", &fNOpticalPhotons, "NOpticalPhotons/I");
+  fTree->Branch("Edep", &fEdepEvent, "Edep/D");
 
   // GENIE provenance: -1 / 0 / 0.0 for particle-gun events. LUCiD v5
   // reads these to populate per_interaction/neutrino_pdg and
@@ -632,6 +633,13 @@ void DataManager::AddEnergyDeposit(G4double x, G4double y, G4double z,
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
+void DataManager::FillTotalEdep(G4double edepEvent)
+{
+  fEdepEvent = edepEvent / MeV;
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 void DataManager::RegisterTrack(G4int trackID, const G4String& particleName, G4int parentID,
                                const G4ThreeVector& position, const G4ThreeVector& momentum,
                                G4double energy, G4double time, G4int pdgCode,
@@ -764,6 +772,7 @@ void DataManager::ClearEventData()
   fEventPhotonCount = 0;
   fPhotonsInChunk = 0;
   fChunkStartID = 0;
+  fEdepEvent = 0.0;
 
   // Clear temporary track segment storage
   fAllTrackSegments.clear();

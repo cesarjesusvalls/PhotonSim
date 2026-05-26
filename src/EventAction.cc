@@ -79,6 +79,7 @@ void EventAction::EndOfEventAction(const G4Event* event)
 
   // Notify DataManager about the end of the event
   DataManager* dataManager = DataManager::GetInstance();
+  dataManager->FillTotalEdep(fEdep);
   dataManager->EndEvent();
 
   // Progress reporting
