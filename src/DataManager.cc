@@ -33,6 +33,7 @@
 #include "TH2D.h"
 #include "TH1D.h"
 #include "G4SystemOfUnits.hh"
+#include "G4PhysicalConstants.hh"
 #include "G4ios.hh"
 #include <cmath>
 #include <algorithm>
@@ -189,9 +190,9 @@ void DataManager::Initialize(const G4String& filename)
         500, 0.0, 1.0);
     fPhotonHist_TimeDistanceNorm = new TH2D(
         "PhotonHist_TimeDistanceNorm",
-        "Photon Time vs s / s_max;s / s_max;Time (ns)",
+        "Photon Delay vs s / s_max;s / s_max;Delay  t - d/c  (ns)",
         500, 0.0, 1.0,
-        500, 0.0, 50.0);
+        500, -0.5, 2.5);
     G4cout << "Booked AngleDistanceNorm + dEdxDistanceNorm + TimeDistanceNorm"
            << " (s_max = " << fSmaxMm << " mm)" << G4endl;
   }
@@ -522,10 +523,14 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
     fPhotonHist_AngleDistanceNorm->Fill(opening_angle, distance / fSmaxMm);
   }
 
-  // (s/s_max, time) — t0 parametrisation input. Same gate as the other Norm
-  // histograms (smax must be set).
+  // (s/s_max, delay) — t0 parametrisation input. delay = t - d/c (vacuum c),
+  // i.e. how much later the photon was emitted vs an idealised light-speed
+  // propagator. Stays bounded over all energies (unlike raw t), which is why
+  // the y-range can be a tight ±few ns window. Same /output/smax gate as the
+  // other Norm histograms.
   if (fPhotonHist_TimeDistanceNorm) {
-    fPhotonHist_TimeDistanceNorm->Fill(distance / fSmaxMm, time / ns);
+    fPhotonHist_TimeDistanceNorm->Fill(distance / fSmaxMm,
+                                       (time - distance / c_light) / ns);
   }
 
   // Fill wavelength histogram
