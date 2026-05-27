@@ -1,20 +1,59 @@
 #!/usr/bin/env python3
 """
-Generate macro files for energy scan from 10 MeV to 2000 MeV.
-This script creates Geant4 macro files for different muon energies.
+Generate Geant4 macro files for the t0 energy scan (mu-/water).
+
+Each macro bakes in /output/smax <s_max(E) mm> so PhotonSim books and fills
+the s/s_max-normalised PhotonHist_TimeDistanceNorm — the histogram the
+new t0 fit reads. s_max(E) is read from PhotonSim/data/water/mu-/smax_fit.csv,
+the canonical source produced by tools/smax/analyze_smax.py.
 """
 
+import csv
 import os
 from pathlib import Path
 
-def create_macro_file(energy_mev, output_dir):
-    """Create a macro file for the specified energy."""
-    
-    macro_content = f"""# Macro for {energy_mev} MeV muons - Energy scan
-# 100 events with individual photon storage disabled for histograms only
 
-# Set output filename before initialization
+def _load_smax_row(data_dir, material, particle):
+    """Return (csv_row_dict, fit_min_mev) from smax_fit.csv. Errors if missing."""
+    path = data_dir / material / particle / "smax_fit.csv"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"No s_max parametrisation at {path}. Run tools/smax/analyze_smax.py first."
+        )
+    with path.open() as fh:
+        row = next(csv.DictReader(fh), None)
+    if row is None or not row.get("form"):
+        raise ValueError(f"Parametrisation at {path} is empty/incomplete.")
+    return row, int(row["fit_min_mev"])
+
+
+def _eval_smax(row, energy_mev):
+    """Evaluate s_max(E) for a CSV row. Branches mirror analyze_smax.py /
+    scripts/scan_siren_inputs.py — keep in sync."""
+    form = row["form"]
+    if form == "A*E^B":
+        return float(row["A"]) * energy_mev ** float(row["B"])
+    if form == "smooth_two_power":
+        a, b1, b2, E0 = (float(row[k]) for k in ("a", "b1", "b2", "E0"))
+        return a * energy_mev ** b1 / (1.0 + (energy_mev / E0) ** (b1 - b2))
+    if form == "piecewise":
+        ej = float(row["e_join_mev"])
+        keys = ("a", "b1", "b2", "E0") if energy_mev < ej else ("a_hi", "b1_hi", "b2_hi", "E0_hi")
+        a, b1, b2, E0 = (float(row[k]) for k in keys)
+        return a * energy_mev ** b1 / (1.0 + (energy_mev / E0) ** (b1 - b2))
+    raise ValueError(f"unknown smax form: {form!r}")
+
+
+def create_macro_file(energy_mev, smax_mm, output_dir):
+    """Create a macro file for the specified energy + s_max."""
+
+    macro_content = f"""# Macro for {energy_mev} MeV muons - Energy scan
+# 100 events with individual photon storage disabled for histograms only.
+# /output/smax bakes s_max(E) in mm so PhotonHist_*Norm histograms get booked.
+
+# Set output filename and s_max before initialization
 /output/filename muons_{energy_mev}MeV_scan.root
+/output/smax {smax_mm:.6f} mm
 
 /run/initialize
 
@@ -38,27 +77,37 @@ def create_macro_file(energy_mev, output_dir):
 # Run 100 events
 /run/beamOn 100
 """
-    
+
     macro_file = output_dir / f"muons_{energy_mev}MeV_scan.mac"
     with open(macro_file, 'w') as f:
         f.write(macro_content)
-    
-    print(f"Created: {macro_file}")
+
+    print(f"Created: {macro_file}  (s_max = {smax_mm:.1f} mm)")
     return macro_file
 
 def main():
     """Generate all macro files for the energy scan."""
-    
+
     # Output dir lives next to this script; run_energy_scan.py picks it up from the same path.
     output_dir = Path(__file__).parent / "energy_scan_macros"
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Hardcoded for the muon-in-water t0 scan; extend if/when we need other
+    # (material, particle) targets.
+    material = "water"
+    particle = "mu-"
+    data_dir = Path(__file__).resolve().parents[2] / "data"
+
+    smax_row, fit_min_mev = _load_smax_row(data_dir, material, particle)
+    print(f"Loaded s_max parametrisation: form={smax_row['form']}, "
+          f"fit_min={fit_min_mev} MeV  ({material}/{particle})")
 
     # Define energy ranges
     energies = range(100, 2100, 100)
 
     print(f"Generating macro files for energies: {energies}")
     print(f"Output directory: {output_dir}")
-    
+
     # Generate macro files
     created_files = []
     for energy in energies:
@@ -67,10 +116,14 @@ def main():
         if macro_file.exists():
             print(f"Skipping {energy} MeV (file already exists)")
             continue
-            
-        macro_file = create_macro_file(energy, output_dir)
+
+        smax_mm = _eval_smax(smax_row, energy)
+        if energy < fit_min_mev:
+            print(f"  warning: {energy} MeV is below fit_min={fit_min_mev} MeV — "
+                  f"s_max extrapolated")
+        macro_file = create_macro_file(energy, smax_mm, output_dir)
         created_files.append(macro_file)
-    
+
     print(f"\nGenerated {len(created_files)} new macro files.")
     
     # Create a convenience batch script. The canonical runner is run_energy_scan.py;
