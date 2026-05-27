@@ -161,29 +161,6 @@ void DataManager::Initialize(const G4String& filename)
   // streaming bound). 50 MB target tree-wide.
   fRawTree->SetAutoFlush(-50000000LL);
 
-  // Create 2D histograms for aggregated data (500x500 bins)
-  // Photon histogram: Opening angle (0-π rad) vs Distance (0-10 m)
-  fPhotonHist_AngleDistance = new TH2D("PhotonHist_AngleDistance",
-                                      "Photon Opening Angle vs Distance from Origin;Opening Angle (rad);Distance (mm)",
-                                      500, 0.0, M_PI,           // 0 to π radians (all possible angles)
-                                      500, 0.0, 10000.0);       // 0 to 10 meters in mm
-
-  // dE/dx histogram: dE/dx (0-1000 keV/mm) vs Distance (0-10 m). Bin
-  // contents are *edep-weighted* (each segment adds its edep in MeV as
-  // the bin weight via the third TH2D::Fill argument), so bin values
-  // are MeV deposited at that (dE/dx, distance), not segment counts.
-  fdEdxHist_Distance = new TH2D("dEdxHist_Distance",
-                                "dE/dx vs Distance from Origin (edep-weighted, MeV);"
-                                "dE/dx (keV/mm);Distance (mm)",
-                                500, 0.0, 1000.0,           // 0 to 1000 keV/mm
-                                500, 0.0, 10000.0);         // 0 to 10 meters in mm
-
-  // Photon time vs distance histogram: Distance (0-10 m) vs Time (0-50 ns)
-  fPhotonHist_TimeDistance = new TH2D("PhotonHist_TimeDistance",
-                                     "Photon Time vs Distance from Origin;Distance (mm);Time (ns)",
-                                     500, 0.0, 10000.0,        // 0 to 10 meters in mm
-                                     500, 0.0, 50.0);          // 0 to 50 ns
-
   // Photon wavelength histogram: Wavelength (0-800 nm, full range)
   fPhotonHist_Wavelength = new TH1D("PhotonHist_Wavelength",
                                    "Photon Wavelength Distribution;Wavelength (nm);Counts",
@@ -214,7 +191,6 @@ void DataManager::Initialize(const G4String& filename)
   }
 
   G4cout << "ROOT file " << actualFilename << " created for optical photon data" << G4endl;
-  G4cout << "2D histograms created: 500x500 bins for aggregated data analysis" << G4endl;
   G4cout << "1D wavelength histogram created: 800 bins from 0-800 nm" << G4endl;
 }
 
@@ -238,21 +214,6 @@ void DataManager::Finalize()
       }
 
       // Write histograms
-      if (fPhotonHist_AngleDistance) {
-        fPhotonHist_AngleDistance->Write();
-        G4cout << "Photon histogram written with " << fPhotonHist_AngleDistance->GetEntries() << " entries" << G4endl;
-        fPhotonHist_AngleDistance = nullptr;
-      }
-      if (fdEdxHist_Distance) {
-        fdEdxHist_Distance->Write();
-        G4cout << "dE/dx histogram written with " << fdEdxHist_Distance->GetEntries() << " entries" << G4endl;
-        fdEdxHist_Distance = nullptr;
-      }
-      if (fPhotonHist_TimeDistance) {
-        fPhotonHist_TimeDistance->Write();
-        G4cout << "Photon time histogram written with " << fPhotonHist_TimeDistance->GetEntries() << " entries" << G4endl;
-        fPhotonHist_TimeDistance = nullptr;
-      }
       if (fPhotonHist_Wavelength) {
         fPhotonHist_Wavelength->Write();
         G4cout << "Photon wavelength histogram written with " << fPhotonHist_Wavelength->GetEntries() << " entries" << G4endl;
@@ -303,9 +264,6 @@ void DataManager::Reset()
   fFinalized = false;
   fTree = nullptr;
   fRootFile.reset();
-  fPhotonHist_AngleDistance = nullptr;
-  fdEdxHist_Distance = nullptr;
-  fPhotonHist_TimeDistance = nullptr;
   fPhotonHist_Wavelength = nullptr;
   fPhotonHist_Distance = nullptr;
   fPhotonHist_AngleDistanceNorm = nullptr;
@@ -537,33 +495,18 @@ void DataManager::AddOpticalPhoton(G4double x, G4double y, G4double z,
                                   const G4String& process,
                                   G4int immediateParentTrackID)
 {
-  // Always fill the 2D histogram for aggregated data
-  if (fPhotonHist_AngleDistance) {
-    // Calculate distance from origin
-    G4double distance = std::sqrt(x*x + y*y + z*z) / mm;  // Convert to mm
+  // Calculate distance from origin (mm). Always needed: fPhotonHist_Distance
+  // is unconditional, AngleDistanceNorm is gated on smax.
+  G4double distance = std::sqrt(x*x + y*y + z*z) / mm;
 
-    // Calculate opening angle with respect to muon direction (0,0,1)
-    // Assume muon travels along +Z axis
-    G4double muon_z = 1.0;  // Unit vector in Z direction
-    G4double dot_product = dz * muon_z;
-    G4double opening_angle = std::acos(std::max(-1.0, std::min(1.0, dot_product)));
+  // 1D distance (s) histogram — input to s_max parametrisation, always on.
+  fPhotonHist_Distance->Fill(distance);
 
-    fPhotonHist_AngleDistance->Fill(opening_angle, distance);
-
-    // Fill time vs distance histogram
-    G4double time_ns = time / ns;
-    fPhotonHist_TimeDistance->Fill(distance, time_ns);
-
-    // Fill 1D distance (s) histogram — input to s_max parametrisation.
-    if (fPhotonHist_Distance) {
-      fPhotonHist_Distance->Fill(distance);
-    }
-
-    // s/s_max-normalised analogue of AngleDistance — SIREN-input mode.
-    // Only filled when /output/smax was set (i.e. histogram exists).
-    if (fPhotonHist_AngleDistanceNorm) {
-      fPhotonHist_AngleDistanceNorm->Fill(opening_angle, distance / fSmaxMm);
-    }
+  // (opening_angle, s/s_max) — SIREN-input mode. Only when /output/smax set.
+  // Opening angle is taken with respect to the muon direction (0,0,1).
+  if (fPhotonHist_AngleDistanceNorm) {
+    G4double opening_angle = std::acos(std::max(-1.0, std::min(1.0, dz)));
+    fPhotonHist_AngleDistanceNorm->Fill(opening_angle, distance / fSmaxMm);
   }
 
   // Fill wavelength histogram
@@ -614,8 +557,8 @@ void DataManager::AddEnergyDeposit(G4double x, G4double y, G4double z,
                                   const G4String& particleName)
 {
   // Histogram-only. Skip photons (gamma and opticalphoton) - dE/dx is
-  // not meaningful for them.
-  if (!fdEdxHist_Distance) return;
+  // not meaningful for them. Skip entirely when no consumer is booked.
+  if (!fdEdxHist_DistanceNorm) return;
   if (particleName == "gamma" || particleName == "opticalphoton") return;
   // Only fill if step length is positive to avoid division by zero.
   if (stepLength <= 0.0) return;
@@ -630,12 +573,11 @@ void DataManager::AddEnergyDeposit(G4double x, G4double y, G4double z,
   // takes one step or many — and gives bins a direct physical meaning
   // (MeV of energy deposited at this (dE/dx, s)), which is what the
   // scintillation surrogate's Birks math wants.
-  const G4double w = energy / MeV;
-  fdEdxHist_Distance->Fill(dEdx, distance, w);
-
-  // s/s_max-normalised analogue — SIREN-input mode (filled only when
-  // /output/smax was set, i.e. histogram exists).
+  //
+  // Gated on the s/s_max-normalised histogram existing — i.e. /output/smax
+  // was set. Without smax there's no consumer for this data.
   if (fdEdxHist_DistanceNorm) {
+    const G4double w = energy / MeV;
     fdEdxHist_DistanceNorm->Fill(dEdx, distance / fSmaxMm, w);
   }
 }
@@ -835,9 +777,6 @@ DataManager::~DataManager()
   }
 
   // Clean up ROOT objects - histograms are already handled by Finalize().
-  fPhotonHist_AngleDistance = nullptr;
-  fdEdxHist_Distance = nullptr;
-  fPhotonHist_TimeDistance = nullptr;
   fPhotonHist_Wavelength = nullptr;
   fPhotonHist_Distance = nullptr;
   fPhotonHist_AngleDistanceNorm = nullptr;

@@ -306,11 +306,6 @@ class DataManager
     // active streamed-vector memory.
     static constexpr Long64_t fPhotonChunkSize = 100000;
 
-    // 2D ROOT histograms for aggregated data (500x500 bins)
-    TH2D* fPhotonHist_AngleDistance = nullptr;  // Opening angle vs distance
-    TH2D* fdEdxHist_Distance = nullptr;         // dE/dx vs distance
-    TH2D* fPhotonHist_TimeDistance = nullptr;   // Photon time vs distance
-
     // 1D ROOT histogram for wavelength distribution
     TH1D* fPhotonHist_Wavelength = nullptr;     // Photon wavelength distribution
 
@@ -323,14 +318,10 @@ class DataManager
     // full distribution survives for diagnostics + the E_dep(E) fit.
     G4double fEdepEvent = 0.0;
 
-    // Opening angle vs s/s_max — the s/s_max-normalised analogue of
-    // PhotonHist_AngleDistance. Booked and filled only when fSmaxMm > 0;
-    // SIREN consumes this once the refactor is wired up.
-    TH2D* fPhotonHist_AngleDistanceNorm = nullptr;
-
-    // dE/dx vs s/s_max — the s/s_max-normalised analogue of dEdxHist_Distance.
-    // Same conditional booking as fPhotonHist_AngleDistanceNorm.
-    TH2D* fdEdxHist_DistanceNorm = nullptr;
+    // 2D ROOT histograms (500x500 bins, s/s_max-normalised on the distance
+    // axis). All gated on fSmaxMm > 0 — i.e. macro must set /output/smax.
+    TH2D* fPhotonHist_AngleDistanceNorm = nullptr;  // Opening angle vs s/s_max
+    TH2D* fdEdxHist_DistanceNorm = nullptr;         // dE/dx vs s/s_max
 
     // Per-job s_max set via /output/smax (mm). 0 means the Norm histogram
     // is not built — keeps legacy macros unchanged.
