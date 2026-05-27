@@ -322,6 +322,7 @@ class DataManager
     // axis). All gated on fSmaxMm > 0 — i.e. macro must set /output/smax.
     TH2D* fPhotonHist_AngleDistanceNorm = nullptr;  // Opening angle vs s/s_max
     TH2D* fdEdxHist_DistanceNorm = nullptr;         // dE/dx vs s/s_max
+    TH2D* fPhotonHist_TimeDistanceNorm = nullptr;   // Photon time vs s/s_max
 
     // Per-job s_max set via /output/smax (mm). 0 means the Norm histogram
     // is not built — keeps legacy macros unchanged.
