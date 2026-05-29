@@ -21,7 +21,8 @@ to convert the histogram x-axis back to physical distance is read from
 macros bake in.
 
 Outputs (written to --out-dir, default = scan directory):
-    timing_parameters.json     — the cubic trend coefficients + per-E fits
+    timing_parameters.json     — the cubic trend coefficients (per-energy
+                                 fit diagnostics live in the PNG plots)
     pred_vs_data.png           — all-energies overlay, data + per-E fit
     pred_vs_data_examples.png  — same, for a few representative energies
     trends.png                 — A(E), λ(E), β(E) with their fit lines
@@ -292,14 +293,6 @@ def build_t0_json(trends, particle, material, per_energy, scan_dir):
             "energy_range_mev": [int(min(r["E"] for r in per_energy)),
                                  int(max(r["E"] for r in per_energy))],
         },
-        "per_energy_fits": [
-            {"energy_mev": int(r["E"]),
-             "A_ns": float(r["popt"][0]),
-             "lambda_mm": float(r["popt"][1]),
-             "beta": float(r["popt"][2]),
-             "rms_ps": float(r["rms_ns"] * 1000)}
-            for r in per_energy
-        ],
     }
 
 
@@ -350,6 +343,14 @@ def main():
             d_mm, delay = load_profile(fp, smax)
         except (KeyError, ValueError) as exc:
             print(f"  skip {E} MeV: {exc}")
+            continue
+        # The per-energy fit only uses points beyond MIN_D_MM; a low-energy
+        # track (e.g. few-MeV e-) can be entirely shorter than that, leaving
+        # nothing to fit. Skip those like an empty histogram.
+        n_fit = int((d_mm > MIN_D_MM).sum())
+        if n_fit < 4:
+            print(f"  skip {E} MeV: only {n_fit} point(s) beyond "
+                  f"{MIN_D_MM:.0f} mm (track too short to fit)")
             continue
         profiles.append({"E": E, "d": d_mm, "delay": delay, "smax_mm": smax})
 
